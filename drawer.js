@@ -41,7 +41,7 @@ document.addEventListener('textlayerrendered', function (e) {
   pageView.drawerLayer = $drawerLayer.get(0);
   window.pdfViewer = PDFViewerApplication.pdfViewer;
 
-  init($drawerLayer);
+  init( $drawerLayer );
 
 }, true);
 
@@ -60,6 +60,7 @@ var PageObj = (function(){
     },
     set context(val){
       var n = $(val).data('page-number');
+      if(!n)return;
       this.number = n;
     },
     get curPageNumber(){
@@ -99,7 +100,6 @@ function init (context) {
 
   curPage = new PageObj(context);
 
-  setTool('curve');
   var pos = $('svg.canvas', context).offset();
 
   //$('.svgCon').css({ left:pos.left+'px', top:pos.top+'px' }).attr({width: pos.width+'px', height: pos.height+'px'});
@@ -115,6 +115,9 @@ function init (context) {
 }
 //init();
 $(function  () {
+
+  setTool('curve');
+
   startWindowEvent();
 
   $('button').on(downE, function  (e) {
@@ -122,6 +125,8 @@ $(function  () {
     var evt = /touch/.test(e.type) ? e.touches[0] : e;
     eval(evt.target.dataset.onclick);
   } );
+
+
 });
 
 
@@ -563,10 +568,7 @@ var svgns = "http://www.w3.org/2000/svg";
 
       var buttonDown = ( !isTouch? e.which>0 : e.touches.length>0 );
 
-      if(!buttonDown) return;
       //if( ! $(evt.target).closest('.canvas').size() ) return;
-
-      e.preventDefault();
 
       var canvas = $(evt.target).closest('.drawerLayer');
       var context = $(canvas).closest('.drawerLayer').get(0);
@@ -601,6 +603,8 @@ var svgns = "http://www.w3.org/2000/svg";
         isText = $(targetEl).closest('.textWrap').size()>0;
       }
 
+      if(!isText) e.preventDefault();
+      
       var dist = downX&&downY && calcDist([downX, downY], [x,y]) || 0;
 
       var isHandler = $(evt.target).hasClass('handler');

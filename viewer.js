@@ -3551,6 +3551,8 @@ var PDFPageView = (function PDFPageViewClosure() {
     this.div = div;
 
     container.appendChild(div);
+
+    this.drawView = new DrawView(options, this);
   }
 
   PDFPageView.prototype = {
@@ -3582,6 +3584,8 @@ var PDFPageView = (function PDFPageViewClosure() {
       var div = this.div;
       div.style.width = Math.floor(this.viewport.width) + 'px';
       div.style.height = Math.floor(this.viewport.height) + 'px';
+
+      this.drawView.reset();
 
       var childNodes = div.childNodes;
       var currentZoomLayer = this.zoomLayer || null;
@@ -3658,6 +3662,7 @@ var PDFPageView = (function PDFPageViewClosure() {
         this.cssTransform(this.zoomLayer.firstChild);
       }
       this.reset(true);
+
     },
 
     /**
@@ -3736,6 +3741,8 @@ var PDFPageView = (function PDFPageViewClosure() {
       if (redrawAnnotations && this.annotationLayer) {
         this.annotationLayer.setupAnnotations(this.viewport);
       }
+
+
     },
 
     get width() {

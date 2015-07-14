@@ -1,3 +1,98 @@
+
+
+var DrawView  = (function () {
+
+
+  function DrawView (options, pageView) {
+    this.pageView = pageView;
+    var container = options.container;
+    var id = options.id;
+    var scale = options.scale;
+
+    this.id = id;
+    this.container = container;
+
+    var drawCon = $(container).next().size() ? $(container).next() : $('<div id="drawViewer" class="drawViewer">').appendTo( $(container).parent() );
+
+    this.rotation = 0;
+    this.scale = scale || 1.0;
+
+    this.resume = null;
+
+    this.onBeforeDraw = null;
+    this.onAfterDraw = null;
+
+    this.textLayer = null;
+
+    this.zoomLayer = null;
+
+    this.annotationLayer = null;
+
+    var div = document.createElement('div');
+    div.id = 'drawerLayer' + this.id;
+    div.className = 'page drawerLayer';
+    div.style.width = '0px';
+    div.style.height = '0px';
+    div.setAttribute('data-page-number', this.id);
+    this.div = div;
+
+    drawCon.append(div);
+  }
+
+  DrawView.prototype = {
+
+    destroy: function () {
+      this.zoomLayer = null;
+      this.reset();
+    },
+
+    reset: function () {
+
+      var div = this.div;
+      div.style.width = Math.floor(this.pageView.viewport.width) + 'px';
+      div.style.height = Math.floor(this.pageView.viewport.height) + 'px';
+
+    },
+
+    update: function (scale, rotation) {
+
+
+
+    },
+    updatePosition: function () {
+
+    },
+
+    cssTransform: function (transform) {
+      // Scale canvas, canvas wrapper, and page container.
+      var div = this.div;
+      div.style.width = Math.floor(this.pageView.viewport.width) + 'px';
+      div.style.height = Math.floor(this.pageView.viewport.height) + 'px';
+    },
+
+    get width() {
+      return this.viewport.width;
+    },
+
+    get height() {
+      return this.viewport.height;
+    },
+
+    getPagePoint: function (x, y) {
+      return this.viewport.convertToPdfPoint(x, y);
+    },
+
+    draw: function () {
+
+    }
+
+  }
+
+  return DrawView;
+})();
+
+
+
 document.addEventListener('textlayerrendered', function (e) {
   var pageIndex = e.detail.pageNumber - 1;
   var pageView = PDFViewerApplication.pdfViewer.getPageView(pageIndex);
@@ -5,9 +100,9 @@ document.addEventListener('textlayerrendered', function (e) {
 
   var viewPort = pageView;
 
-  var $div = $(pageView.div);
-  var $drawerLayer = $('<div class="drawerLayer"></div>');
-  $div.append($drawerLayer);
+  pageView.drawLayer = pageView.drawView.div;
+
+  var $drawerLayer = $(pageView.drawLayer);
 
   var str = `<div class="svgCon" style="padding-top:0px;">
 
@@ -41,9 +136,12 @@ document.addEventListener('textlayerrendered', function (e) {
   pageView.drawerLayer = $drawerLayer.get(0);
   window.pdfViewer = PDFViewerApplication.pdfViewer;
 
+  window.curScale = window.pdfViewer.currentScale;
+
   init( $drawerLayer );
 
 }, true);
+
 
 
 window.pdfViewer = null;
@@ -142,6 +240,7 @@ var svgns = "http://www.w3.org/2000/svg";
 
     var curPage = null;
     var curContext = null;
+    var curScale = 1;
 
     //dot distance
     var DOT_DISTANCE=10;
@@ -604,7 +703,7 @@ var svgns = "http://www.w3.org/2000/svg";
       }
 
       if(!isText) e.preventDefault();
-      
+
       var dist = downX&&downY && calcDist([downX, downY], [x,y]) || 0;
 
       var isHandler = $(evt.target).hasClass('handler');
@@ -713,7 +812,7 @@ var svgns = "http://www.w3.org/2000/svg";
 
   	      if(L && calcDist(rPath[L-1], [x, y])<DOT_DISTANCE )return;
           var el = makeShape("circle", { class:"hint", cx:x, cy:y, r:3, fill:"red" });
-  	      context.querySelector('svg.canvas').appendChild( el );
+  	      curContext.querySelector('svg.canvas').appendChild( el );
 
   	      rPath.push( [x, y] );
 
@@ -727,7 +826,7 @@ var svgns = "http://www.w3.org/2000/svg";
           }
           if(!drawing)return;
 
-          var line = context.querySelector('[data-id="'+ curShapeID +'"]');
+          var line = curContext.querySelector('[data-id="'+ curShapeID +'"]');
           createLine([downX, downY], [x,y], line);
 
 
@@ -741,7 +840,7 @@ var svgns = "http://www.w3.org/2000/svg";
           }
           if(!drawing)return;
 
-          var rect = context.querySelector('[data-id="'+ curShapeID +'"]');
+          var rect = curContext.querySelector('[data-id="'+ curShapeID +'"]');
           createRect([downX, downY], [x,y], rect);
 
 
@@ -755,7 +854,7 @@ var svgns = "http://www.w3.org/2000/svg";
           }
           if(!drawing)return;
 
-          var circle = context.querySelector('[data-id="'+ curShapeID +'"]');
+          var circle = curContext.querySelector('[data-id="'+ curShapeID +'"]');
           createCircle([downX, downY], [x,y], circle);
 
         }
@@ -767,7 +866,7 @@ var svgns = "http://www.w3.org/2000/svg";
           }
           if(!drawing)return;
 
-          var text = context.querySelector('[data-id="'+ curShapeID +'"]');
+          var text = curContext.querySelector('[data-id="'+ curShapeID +'"]');
           createTextRect([downX, downY], [x,y], text);
         }
 
@@ -1229,7 +1328,7 @@ var svgns = "http://www.w3.org/2000/svg";
       var offset = $('.textarea').offset();
       $('.editing').css( {width:offset.width, height:offset.height} );
 
-      var th = $text.prop('scrollHeight'),  tw = $text.prop('offsetWidth');
+      var th = $text.prop('scrollHeight'),  tw = $text.prop('scrollWidth');
       offset.width = tw;
       offset.height = th;
 

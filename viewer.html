@@ -430,7 +430,27 @@ See https://github.com/adobe-type-tools/cmap-resources
 
 <style type="text/css">
 
-  .drawerLayer{
+.drawViewer{
+	direction: ltr;
+	width: 100%;
+	height: 100%;
+	position: absolute;
+	left: 0;
+	top:0;
+	overflow: visible;
+}
+
+.drawerLayer {
+  direction: ltr;
+  margin: 1px auto -8px auto;
+  position: relative;
+  overflow: visible;
+  border: 9px solid transparent;
+  background-color: rgba(255,0,0,0.5);
+}
+
+
+  .drawerLayer00{
     position: absolute;
     top:0;
     bottom: 0;
@@ -525,6 +545,7 @@ See https://github.com/adobe-type-tools/cmap-resources
     word-wrap: break-word; /* Internet Explorer 5.5+ */
     overflow: hidden;
     padding-left:3px;
+    display: inline-block;
   }
   .drawerLayer .bbox{
     position: absolute;

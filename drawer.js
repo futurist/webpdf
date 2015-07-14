@@ -8,14 +8,15 @@ var DrawView  = (function () {
     var container = options.container;
     var id = options.id;
     var scale = options.scale;
+    var defaultViewport = options.defaultViewport;
 
     this.id = id;
     this.container = container;
 
-    var drawCon = $(container).next().size() ? $(container).next() : $('<div id="drawViewer" class="drawViewer">').appendTo( $(container).parent() );
 
     this.rotation = 0;
     this.scale = scale || 1.0;
+    this.viewport = defaultViewport;
 
     this.resume = null;
 
@@ -31,12 +32,56 @@ var DrawView  = (function () {
     var div = document.createElement('div');
     div.id = 'drawerLayer' + this.id;
     div.className = 'page drawerLayer';
-    div.style.width = '0px';
-    div.style.height = '0px';
+    div.style.width = Math.floor(this.viewport.width) + 'px';
+    div.style.height = Math.floor(this.viewport.height) + 'px';
     div.setAttribute('data-page-number', this.id);
     this.div = div;
 
-    drawCon.append(div);
+    var $drawCon = $(container).next().size()
+              ? $(container).next()
+              : $('<div id="drawViewer" class="drawViewer">').appendTo( $(container).parent() );
+
+    $drawCon.append(div);
+
+
+    var viewBox = pageView.viewport.viewBox;
+
+    var $drawerLayer = $(this.div);
+
+    var str = `<div class="svgCon" style="padding-top:0px;">
+
+    <svg viewBox="0 0 {{width}} {{height}}" preserveAspectRatio="xMidYMid meet" class="canvas" xmlns="http://www.w3.org/2000/svg" version="1.1">
+      <defs>
+      <marker id="triangle" preserveAspectRatio="xMinYMin meet"
+        viewBox="0 0 100 100" refX="50" refY="50"
+        markerUnits="userSpaceOnUse"
+        stroke="#f00"
+        fill="#f00"
+        stroke-linecap="round"
+        stroke-width="10"
+        stroke-linejoin="bevel"
+        markerWidth="40" markerHeight="30"
+        orient="auto">
+        <path d="M 0 0 L 100 50 L 0 100 L 30 50 z" />
+      </marker>
+      </defs>
+      <rect class="selrect" style="display:none; stroke:#999; stroke-width:1; stroke-dasharray:10,5; fill:none;" />
+
+      </svg>
+    </div>
+
+    <div class="textCon" class="canvas">
+    </div>`;
+
+    str = str.replace('{{width}}', viewBox[2]).replace('{{height}}', viewBox[3]);
+
+    $drawerLayer.empty().append(str).data('page-number', this.id);
+
+    pageView.drawerLayer = $drawerLayer.get(0);
+    window.pdfViewer = PDFViewerApplication.pdfViewer;
+
+    init( $drawerLayer );
+
   }
 
   DrawView.prototype = {
@@ -51,7 +96,7 @@ var DrawView  = (function () {
       var div = this.div;
       div.style.width = Math.floor(this.pageView.viewport.width) + 'px';
       div.style.height = Math.floor(this.pageView.viewport.height) + 'px';
-
+      console.log('reset');
     },
 
     update: function (scale, rotation) {
@@ -68,6 +113,7 @@ var DrawView  = (function () {
       var div = this.div;
       div.style.width = Math.floor(this.pageView.viewport.width) + 'px';
       div.style.height = Math.floor(this.pageView.viewport.height) + 'px';
+      console.log('cssTransform');
     },
 
     get width() {
@@ -98,47 +144,11 @@ document.addEventListener('textlayerrendered', function (e) {
   var pageView = PDFViewerApplication.pdfViewer.getPageView(pageIndex);
     console.log(pageView);
 
-  var viewPort = pageView;
 
-  pageView.drawLayer = pageView.drawView.div;
 
-  var $drawerLayer = $(pageView.drawLayer);
+  window.curScale = pageView.viewport.scale;
+  $('.textCon').css({'transform': 'scale('+curScale+')' });
 
-  var str = `<div class="svgCon" style="padding-top:0px;">
-
-  <svg width="{{width}}" height="{{height}}" class="canvas" xmlns="http://www.w3.org/2000/svg" version="1.1">
-    <defs>
-    <marker id="triangle" preserveAspectRatio="xMinYMin meet"
-      viewBox="0 0 100 100" refX="50" refY="50"
-      markerUnits="userSpaceOnUse"
-      stroke="#f00"
-      fill="#f00"
-      stroke-linecap="round"
-      stroke-width="10"
-      stroke-linejoin="bevel"
-      markerWidth="40" markerHeight="30"
-      orient="auto">
-      <path d="M 0 0 L 100 50 L 0 100 L 30 50 z" />
-    </marker>
-    </defs>
-    <rect class="selrect" style="display:none; stroke:#999; stroke-width:1; stroke-dasharray:10,5; fill:none;" />
-
-    </svg>
-  </div>
-
-  <div class="textCon" class="canvas">
-  </div>`;
-
-  str = str.replace('{{width}}', viewPort.width).replace('{{height}}', viewPort.height);
-
-  $drawerLayer.append(str).data('page-number', pageIndex+1);
-
-  pageView.drawerLayer = $drawerLayer.get(0);
-  window.pdfViewer = PDFViewerApplication.pdfViewer;
-
-  window.curScale = window.pdfViewer.currentScale;
-
-  init( $drawerLayer );
 
 }, true);
 
@@ -195,8 +205,6 @@ $(window).on(
 
 // init function
 function init (context) {
-
-  curPage = new PageObj(context);
 
   var pos = $('svg.canvas', context).offset();
 
@@ -551,6 +559,9 @@ var svgns = "http://www.w3.org/2000/svg";
       var x = evt.pageX-$(canvas).offset().left;
       var y = evt.pageY-$(canvas).offset().top;
 
+      x/=curScale;
+      y/=curScale;
+
       downX = x;
       downY = y;
       clearTimeout(downTimer);
@@ -561,7 +572,7 @@ var svgns = "http://www.w3.org/2000/svg";
       var targetEl = isText? $(evt.target).closest('.textWrap') : evt.target;
 
       var context = $(canvas).closest('.drawerLayer').get(0);
-      curPage.context = context;
+
       curContext = context;
 
       // targetEl = document.elementFromPoint(x,y);
@@ -579,8 +590,8 @@ var svgns = "http://www.w3.org/2000/svg";
 
       if(isHandler){
         $('.handler').addClass('dragHandler');
-        $('.textarea').data('offset', JSON.stringify( $('.textarea').offset() ) );
-        $('.handler').data('offset', JSON.stringify( $('.handler').offset() ) );
+        $('.textarea').data('offset', JSON.stringify( $('.textarea').position() ) );
+        $('.handler').data('offset', JSON.stringify( $('.handler').position() ) );
         dragging = true;
         return;
       }
@@ -669,23 +680,33 @@ var svgns = "http://www.w3.org/2000/svg";
 
       //if( ! $(evt.target).closest('.canvas').size() ) return;
 
-      var canvas = $(evt.target).closest('.drawerLayer');
-      var context = $(canvas).closest('.drawerLayer').get(0);
-
-      if( !curContext || ( $(context).size() && context!=curContext )
-          || ( !$(context).size() && (dragging||selecting) )
-        ) {
-        selecting = false;
-        dragging = false;
-        $('svg.canvas').removeClass('selectState');
-        $('.selrect').hide();
-        upFunc(e);
-        return;
-      }
-
 
       var x = evt.pageX-$(curContext).offset().left;
       var y = evt.pageY-$(curContext).offset().top;
+
+      var canvas = $(evt.target).closest('.drawerLayer');
+      var context = $(canvas).closest('.drawerLayer').get(0);
+
+      function checkMoveOut(){
+        if( !curContext || ( $(context).size() && context!=curContext )
+            || ( !$(context).size() && (dragging||selecting) )
+          ) {
+          selecting = false;
+          dragging = false;
+          $('svg.canvas').removeClass('selectState');
+          $('.selrect').hide();
+          upFunc(e);
+          return true;
+        }
+        return false;
+      }
+
+      if( checkMoveOut() ) return;
+
+
+      x/=curScale;
+      y/=curScale;
+
       var dx = x-downX;
       var dy = y-downY;
       var isShape = $(evt.target).hasClass('shape');
@@ -715,16 +736,25 @@ var svgns = "http://www.w3.org/2000/svg";
 
         var dataoffset = $('.handler').data('offset') ;
 
+        dataoffset.left/=curScale;
+        dataoffset.top/=curScale;
+
         dataoffset.left += dx;
         dataoffset.top += dy;
-        $('.handler').offset(dataoffset);
+        $('.handler').css({left:dataoffset.left, top: dataoffset.top});
 
         dataoffset2 = $('.textarea').data('offset') ;
 
+        dataoffset2.left/=curScale;
+        dataoffset2.top/=curScale;
+
         dataoffset2.width = dataoffset.left - dataoffset2.left;
         dataoffset2.height = dataoffset.top - dataoffset2.top;
+
+
         $('.textarea').css({ width:dataoffset2.width, height:dataoffset2.height });
 
+        dragging = true;
       }
 
       if( $('.editing').size() ){
@@ -891,6 +921,8 @@ var svgns = "http://www.w3.org/2000/svg";
 
       var x = evt.pageX-$(curContext).offset().left;
       var y = evt.pageY-$(curContext).offset().top;
+      x/=curScale;
+      y/=curScale;
 
       var dx = x-downX;
       var dy = y-downY;
@@ -1373,8 +1405,8 @@ var svgns = "http://www.w3.org/2000/svg";
       $(targetEl).addClass('editing').hide();
       var box = $(targetEl).data('bbox');
       var offset = pointsToRect(box[0], box[1], getTranslateXY(targetEl) );
-     $(curContext).append('<textarea class="text textarea" wrap="hard"></textarea>');
-     $(curContext).append('<div class="handler"></div>');
+     $(curContext).find('.textCon').append('<textarea class="text textarea" wrap="hard"></textarea>');
+     $(curContext).find('.textCon').append('<div class="handler"></div>');
 
      var offset2 = { left:offset.left+offset.width, top:offset.top+offset.height } ;
 

@@ -445,8 +445,7 @@ See https://github.com/adobe-type-tools/cmap-resources
   margin: 1px auto -8px auto;
   position: relative;
   overflow: visible;
-  border: 9px solid transparent;
-  background-color: rgba(255,0,0,0.5);
+  border: 9px solid rgba(255,0,0,0.5);
 }
 
 
@@ -491,8 +490,8 @@ See https://github.com/adobe-type-tools/cmap-resources
   #drawTool{
     position: fixed;
     z-index: 100;
-    bottom: 0;
-    left: 0;
+    bottom: 10px;
+    left: 0px;
     height: 30px;
     width: 100%;
     overflow: visible;
@@ -507,16 +506,18 @@ See https://github.com/adobe-type-tools/cmap-resources
     height:44px;
     width:88px;
   }
-  .drawerLayer #textCon{
+  .drawerLayer .textCon{
     position: absolute;
     overflow: visible;
     z-index: 99999;
+    transform-origin: left top;
+    transform:translate3d(0,0,0);
   }
-  .drawerLayer #textCon .text{
+  .drawerLayer .textCon .text{
     position: absolute;
   }
 
-  .drawerLayer #canvasCon, #svgCon{
+  .drawerLayer .canvasCon, .svgCon{
     position: absolute;
     z-index: 10;
     top:0;

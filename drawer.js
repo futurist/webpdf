@@ -96,7 +96,6 @@ var DrawView  = (function () {
       var div = this.div;
       div.style.width = Math.floor(this.pageView.viewport.width) + 'px';
       div.style.height = Math.floor(this.pageView.viewport.height) + 'px';
-      console.log('reset');
     },
 
     update: function (scale, rotation) {
@@ -138,17 +137,23 @@ var DrawView  = (function () {
 })();
 
 
+window.addEventListener('scalechange', function scalechange(evt) {
+
+  $('.textCon').hide();
+
+});
+
+document.addEventListener('pagerendered', function (e) {
+  var pageIndex = e.detail.pageNumber - 1;
+  var pageView = PDFViewerApplication.pdfViewer.getPageView(pageIndex);
+  window.curScale = pageView.viewport.scale;
+  $('.textCon').css({'transform': 'scale('+curScale+')' }).show();
+
+});
 
 document.addEventListener('textlayerrendered', function (e) {
   var pageIndex = e.detail.pageNumber - 1;
   var pageView = PDFViewerApplication.pdfViewer.getPageView(pageIndex);
-    console.log(pageView);
-
-
-
-  window.curScale = pageView.viewport.scale;
-  $('.textCon').css({'transform': 'scale('+curScale+')' });
-
 
 }, true);
 
@@ -680,6 +685,7 @@ var svgns = "http://www.w3.org/2000/svg";
 
       //if( ! $(evt.target).closest('.canvas').size() ) return;
 
+      if(!curContext) return;
 
       var x = evt.pageX-$(curContext).offset().left;
       var y = evt.pageY-$(curContext).offset().top;
@@ -741,20 +747,26 @@ var svgns = "http://www.w3.org/2000/svg";
 
         dataoffset.left += dx;
         dataoffset.top += dy;
-        $('.handler').css({left:dataoffset.left, top: dataoffset.top});
 
         dataoffset2 = $('.textarea').data('offset') ;
 
         dataoffset2.left/=curScale;
         dataoffset2.top/=curScale;
 
-        dataoffset2.width = dataoffset.left - dataoffset2.left;
-        dataoffset2.height = dataoffset.top - dataoffset2.top;
+        var w = dataoffset.left - dataoffset2.left;
+        var h = dataoffset.top - dataoffset2.top;
 
-
-        $('.textarea').css({ width:dataoffset2.width, height:dataoffset2.height });
-
-        dragging = true;
+        if(w>10 && h>10){
+          $('.textarea').css({ width:w, height:h });
+          $('.handler').css({left:dataoffset.left, top: dataoffset.top});
+          dragging = true;
+        }else{
+          if(w<10) w=11;
+          if(h<10) h=11;
+          $('.textarea').css({ width:w, height:h });
+          dragging = false;
+          upFunc(e);
+        }
       }
 
       if( $('.editing').size() ){
@@ -1049,6 +1061,8 @@ var svgns = "http://www.w3.org/2000/svg";
             v.parentNode.removeChild(v);
           });
 
+         svgHistory.update();
+
         }
 
         if(curTool=='text'){
@@ -1059,10 +1073,10 @@ var svgns = "http://www.w3.org/2000/svg";
           $('.textrect').remove();
           createText( startPoint, endPoint );
 
+          $('.textarea').focus();
         }
 
 
-         svgHistory.update();
 
       }
 
@@ -1139,7 +1153,7 @@ var svgns = "http://www.w3.org/2000/svg";
     this.update = function( _status ) {
 
         $('.selrect').hide();
-
+        
         var status = _status;
 
         //this variable will be saved in the undo function's closure
@@ -1170,8 +1184,8 @@ var svgns = "http://www.w3.org/2000/svg";
 
               $('.drawerLayer').each(function  (i,v) {
                 var i = $(v).data('page-number');
-                if(newHtml[i]) $('.svgCon',v).html(newHtml[i]);
-                if(newTextHtml[i]) $('.textCon',v).html(newTextHtml[i]);
+                if(newHtml[i]) $('.svgCon',v).html(newHtml[i]  );
+                if(newTextHtml[i]) $('.textCon',v).html(newTextHtml[i] );
               });
 
             },
@@ -1191,6 +1205,8 @@ var svgns = "http://www.w3.org/2000/svg";
                 if(oldHtml[i]) $('.svgCon',v).html(oldHtml[i]);
                 if(oldTextHtml[i]) $('.textCon',v).html(oldTextHtml[i]);
               });
+
+              $('[data-hl]').attr('data-hl',null);
             }
 
         );
@@ -1353,6 +1369,15 @@ var svgns = "http://www.w3.org/2000/svg";
       var $text = $('.editing').find('.text');
       var val = $('.textarea').val();
       var prevVal = $text.html();
+
+      if(val==""){
+          try{
+            $('.editing').remove();
+           $('.textarea').remove();
+           $('.handler').remove();
+         }catch(e){}
+         return;
+      }
 
       $text.html( val );
       $('.editing').show();

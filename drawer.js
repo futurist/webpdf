@@ -1,5 +1,13 @@
 
-
+/****
+* in viewer.js File, line 3555, add This line to join:
+* function PDFPageView(options) {
+*   LINE 3555:   this.drawView = new DrawView(options, this);
+*
+* reset: function PDFPageView_reset(keepAnnotations) {
+*   LINE 3588:  this.drawView.reset();
+*
+*/
 var DrawView  = (function () {
 
 
@@ -48,31 +56,7 @@ var DrawView  = (function () {
 
     var $drawerLayer = $(this.div);
 
-    var str = `<div class="svgCon" style="padding-top:0px;">
-
-    <svg viewBox="0 0 {{width}} {{height}}" preserveAspectRatio="xMidYMid meet" class="canvas" xmlns="http://www.w3.org/2000/svg" version="1.1">
-      <defs>
-      <marker id="triangle" preserveAspectRatio="xMinYMin meet"
-        viewBox="0 0 100 100" refX="50" refY="50"
-        markerUnits="userSpaceOnUse"
-        stroke="#f00"
-        fill="#f00"
-        stroke-linecap="round"
-        stroke-width="10"
-        stroke-linejoin="bevel"
-        markerWidth="40" markerHeight="30"
-        orient="auto">
-        <path d="M 0 0 L 100 50 L 0 100 L 30 50 z" />
-      </marker>
-      </defs>
-      <rect class="selrect" style="display:none; stroke:#999; stroke-width:1; stroke-dasharray:10,5; fill:none;" />
-
-      </svg>
-    </div>
-
-    <div class="textCon" class="canvas">
-    </div>`;
-
+    var str = '<div class="svgCon" style="padding-top:0px;"> <svg viewBox="0 0 {{width}} {{height}}" preserveAspectRatio="xMidYMid meet" class="canvas" xmlns="http://www.w3.org/2000/svg" version="1.1"> <defs> <marker id="triangle" preserveAspectRatio="xMinYMin meet"viewBox="0 0 100 100" refX="50" refY="50"markerUnits="userSpaceOnUse"stroke="#f00"fill="#f00"stroke-linecap="round"stroke-width="10"stroke-linejoin="bevel"markerWidth="40" markerHeight="30"orient="auto"> <path d="M 0 0 L 100 50 L 0 100 L 30 50 z" /> </marker> </defs> <rect class="selrect" style="display:none; stroke:#999; stroke-width:1; stroke-dasharray:10,5; fill:none;" /> </svg> </div> <div class="textCon" class="canvas"> </div>';
     str = str.replace('{{width}}', viewBox[2]).replace('{{height}}', viewBox[3]);
 
     $drawerLayer.empty().append(str).data('page-number', this.id);
@@ -93,6 +77,9 @@ var DrawView  = (function () {
 
     reset: function () {
 
+      console.log(this.pageView.viewport);
+      var scale = this.pageView.viewport.scale;
+      var rotation = this.pageView.viewport.rotation;
       var div = this.div;
       div.style.width = Math.floor(this.pageView.viewport.width) + 'px';
       div.style.height = Math.floor(this.pageView.viewport.height) + 'px';
@@ -146,10 +133,84 @@ window.addEventListener('scalechange', function scalechange(evt) {
 document.addEventListener('pagerendered', function (e) {
   var pageIndex = e.detail.pageNumber - 1;
   var pageView = PDFViewerApplication.pdfViewer.getPageView(pageIndex);
+  var oldRotation = window.curRotation||0;
   window.curScale = pageView.viewport.scale;
+  window.curRotation = pageView.viewport.rotation;
+  var viewBox = pageView.viewport.viewBox;
+  var W = viewBox[2];
+  var H = viewBox[3];
   $('.textCon').css({'transform': 'scale('+curScale+')' }).show();
+  //$('svg.canvas *').css({'transform-origin':'0% 0%', 'transform': 'rotate('+curRotation+'deg)' }).show();
+
+  //change direction
+  if(curRotation == oldRotation) return;
+
+  var rotClock =  (curRotation==0&&oldRotation==270) ? true :  ( (curRotation==270&&oldRotation==0) ? false :  (curRotation - oldRotation > 0) );
+
+  if(curRotation == 0) {
+  	$('svg.canvas').attr('viewBox', '0 0 '+W+' '+H);
+  }
+  if(curRotation == 90){
+    $('svg.canvas').attr('viewBox', '0 0 '+H+' '+W);
+    //$('svg.canvas rect').attr('transform', 'matrix(0,1,1,0,0,0)');
+  }
+  if(curRotation == 180){
+  	$('svg.canvas').attr('viewBox', '0 0 '+W+' '+H);
+  }
+  if(curRotation == 270){
+  	$('svg.canvas').attr('viewBox', '0 0 '+H+' '+W);
+  }
+
+  var box = $('svg.canvas').attr('viewBox').split(/\s+/g).map(function(v){return parseInt(v)});
+  var bw = box[2];
+  var bh = box[3];
+
+    $('svg.canvas rect').each(function(i,v){
+    	var trans = getTranslateXY(v);
+    	var oldRotation = getRotation(v);
+    	var newRotate = ( oldRotation + (rotClock?90:-90) + 3600 ) % 360;
+
+    	switch(newRotate) {
+    		case 0: rotClock ? trans[0]+=bw : trans[1]+= bh; break;
+    		case 90: rotClock ? trans[1]+=-bw : trans[0]+= bh; break;
+    		case 180: rotClock ? trans[0]+=-bw : trans[1]+= -bh; break;
+    		case 270: rotClock ? trans[1]+=bw : trans[0]+= -bh; break;
+    	}
+
+    	$(v).attr('transform', 'rotate('+newRotate+') translate('+(trans[0])+','+(trans[1])+')');
+    });
+
 
 });
+
+function getRotation (obj) {
+	if(!obj) return [0,0];
+   if(obj.size) obj=obj.get(0);
+    var style = obj.style;
+    var transform = style.transform || style.webkitTransform || style.mozTransform;
+    var transformAttr =obj.getAttribute('transform');
+    transform = (!transformAttr) ? transform :  transformAttr;
+    if(!transform ) return 0;
+	var zT = transform.match(/rotate\(\s*([0-9.-]+)\s*\)/);
+    return zT ? parseInt(zT[1]) : 0;
+}
+
+function getRotateTranslate (obj, x,y) {
+	var rotate = getRotation(obj);
+	if(rotate == 0) {
+		return [x,y];
+	}
+	if(rotate == 90){
+		return [y,-x];
+	}
+	if(rotate == 180){
+		return [-x,-y];
+	}
+	if(rotate == 270){
+		return [-y,x];
+	}
+	return [x,y];
+}
 
 document.addEventListener('textlayerrendered', function (e) {
   var pageIndex = e.detail.pageNumber - 1;
@@ -234,7 +295,7 @@ $(function  () {
   $('button').on(downE, function  (e) {
     e.stopPropagation();
     var evt = /touch/.test(e.type) ? e.touches[0] : e;
-    eval(evt.target.dataset.onclick);
+    eval( $(evt.target).data('onclick') );
   } );
 
 
@@ -409,8 +470,8 @@ var svgns = "http://www.w3.org/2000/svg";
 
       var isDirty = false;
       shapeA.forEach(function  (v) {
-        var oldOptions = v.dataset.options;
-        var newOptions = oldOptions ? JSON.parse( oldOptions ) : ToolSet[tool];
+        var oldOptions = $(v).data('options');
+        var newOptions = oldOptions ? ( oldOptions ) : ToolSet[tool];
 
         getOptions(newOptions, options );
 
@@ -420,22 +481,22 @@ var svgns = "http://www.w3.org/2000/svg";
 
         //if( tool!=v.dataset.tool ) return true;
 
-        var path = v.dataset.path;
-        var start = v.dataset.startpoint;
-        var end = v.dataset.endpoint;
-        var vTool = v.dataset.tool;
+        var path = $(v).data('path');
+        var start = $(v).data('startpoint');
+        var end = $(v).data('endpoint');
+        var vTool =$(v).data('tool');
 
         if( path)
         if(vTool=='curve' ){
-          var rPath = JSON.parse(path);
+          var rPath = (path);
           createPath(rPath, v, newOptions);
         }
 
         if( start && end )
         if(vTool=='line' ){
 
-          var startPoint = JSON.parse(start);
-          var endPoint = JSON.parse(end);
+          var startPoint = (start);
+          var endPoint = (end);
           createLine(startPoint, endPoint, v, newOptions);
 
         }
@@ -443,8 +504,8 @@ var svgns = "http://www.w3.org/2000/svg";
         if( start && end )
         if(vTool=='rect' ){
 
-          var startPoint = JSON.parse(start);
-          var endPoint = JSON.parse(end);
+          var startPoint = (start);
+          var endPoint = (end);
           createRect(startPoint, endPoint, v, newOptions);
 
         }
@@ -452,8 +513,8 @@ var svgns = "http://www.w3.org/2000/svg";
         if( start && end )
         if(vTool=='circle' ){
 
-          var startPoint = JSON.parse(start);
-          var endPoint = JSON.parse(end);
+          var startPoint = (start);
+          var endPoint = (end);
           createCircle(startPoint, endPoint, v, newOptions);
 
         }
@@ -461,8 +522,8 @@ var svgns = "http://www.w3.org/2000/svg";
         if( start && end )
         if(vTool=='text' ){
 
-          var startPoint = JSON.parse(start);
-          var endPoint = JSON.parse(end);
+          var startPoint = (start);
+          var endPoint = (end);
           createText(startPoint, endPoint, v, newOptions);
 
         }
@@ -709,16 +770,17 @@ var svgns = "http://www.w3.org/2000/svg";
 
       if( checkMoveOut() ) return;
 
+      var isShape = $(evt.target).hasClass('shape');
+      var isText = $(evt.target).closest('.textWrap').size()>0;
+
+      var targetEl = isText? $(evt.target).closest('.textWrap') : evt.target;
 
       x/=curScale;
       y/=curScale;
 
       var dx = x-downX;
       var dy = y-downY;
-      var isShape = $(evt.target).hasClass('shape');
-      var isText = $(evt.target).closest('.textWrap').size()>0;
 
-      var targetEl = isText? $(evt.target).closest('.textWrap') : evt.target;
 
 
       //FIX for iPad which cannot select TextElement
@@ -827,13 +889,16 @@ var svgns = "http://www.w3.org/2000/svg";
   	      	$('[data-hl]').each(function  (i,v) {
               var oldTrans = $(v).attr('data-oldTrans');
               oldTrans= !oldTrans?[0,0]:oldTrans.split(',');
+
+		      var rotXY = getRotateTranslate(v,dx,dy);
+		      dx = rotXY[0];
+		      dy = rotXY[1];
+
               var tx = dx+ ~~oldTrans[0];
               var ty = dy+ ~~oldTrans[1];
 
-              $(v).attr("transform", "translate("+ tx +","+ ty +")");
 
-              $(v).css({ "-webkit-transform": "translate("+ tx +"px,"+ ty +"px)" });
-              $(v).css({ "transform": "translate("+ tx +"px,"+ ty +"px)" });
+              setTranslateXY(v, tx, ty);
 
             });
 
@@ -1153,7 +1218,7 @@ var svgns = "http://www.w3.org/2000/svg";
     this.update = function( _status ) {
 
         $('.selrect').hide();
-        
+
         var status = _status;
 
         //this variable will be saved in the undo function's closure
@@ -1667,7 +1732,7 @@ var svgns = "http://www.w3.org/2000/svg";
 
     function updateToolBox () {
       var theTool, maxt=0, tool={};
-      $('[data-hl]').each( function(){ var t= this.dataset.tool; tool[t] = tool[t]?tool[t]+1:1; } );
+      $('[data-hl]').each( function(){ var t= $(this).data('tool'); tool[t] = tool[t]?tool[t]+1:1; } );
       for(var i in tool){
         if(tool[i]>maxt){
           maxt = tool[i];
@@ -1681,15 +1746,31 @@ var svgns = "http://www.w3.org/2000/svg";
     {
         if(!obj) return [0,0];
        if(obj.size) obj=obj.get(0);
-        var style = obj.style,
-        transform = style.transform || style.webkitTransform || style.mozTransform;
+        var style = obj.style;
+        var transform = style.transform || style.webkitTransform || style.mozTransform;
         var transformAttr =obj.getAttribute('transform');
         transform = (!transformAttr) ? transform :  transformAttr;
         if(!transform ) return [0,0];
 		var zT = transform.match(/translate\(\s*([0-9.-]+[\w%]*)\s*,\s*([0-9.-]+[\w%]*)\s*\)/);
         return zT ? [ parseInt(zT[1]), parseInt(zT[2]) ] : [0,0];
     }
-
+    function setTranslateXY(obj, x, y){
+    	 if(!obj) return [0,0];
+       if(obj.size) obj=obj.get(0);
+        var style = obj.style;
+        var transform = style.transform || style.webkitTransform || style.mozTransform;
+        var transformAttr =obj.getAttribute('transform');
+        transform = (!transformAttr) ? transform :  transformAttr;
+        if(!transform ) transform="translate(0,0)";
+        var re = /translate\(\s*([0-9.-]+[\w%]*)\s*,\s*([0-9.-]+[\w%]*)\s*\)/ig;
+       if($(obj).closest('svg').size() ) {
+	        var newTransform = transform.replace(re, 'translate('+x + ','+ y + ')'  );
+       		$(obj).attr('transform', newTransform  );
+       }else{
+	        var newTransform = transform.replace(re, 'translate('+x+'px,'+y +'px)');
+       		$(obj).css('transform', newTransform  );
+       }
+    }
     function calcInterpo (rPath, tension) {
       //interpolation using Curve to close the path.
       //https://github.com/epistemex/cardinal-spline-js

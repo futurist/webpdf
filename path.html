@@ -405,8 +405,8 @@
 
       var isDirty = false;
       shapeA.forEach(function  (v) {
-        var oldOptions = v.dataset.options;
-        var newOptions = oldOptions ? JSON.parse( oldOptions ) : ToolSet[tool];
+        var oldOptions = $(v).data('options');
+        var newOptions = oldOptions ? ( oldOptions ) : ToolSet[tool];
 
         getOptions(newOptions, options );
 
@@ -416,22 +416,22 @@
 
         //if( tool!=v.dataset.tool ) return true;
 
-        var path = v.dataset.path;
-        var start = v.dataset.startpoint;
-        var end = v.dataset.endpoint;
-        var vTool = v.dataset.tool;
+        var path = $(v).data('path');
+        var start = $(v).data('startpoint');
+        var end = $(v).data('endpoint');
+        var vTool =$(v).data('tool');
 
         if( path)
         if(vTool=='curve' ){
-          var rPath = JSON.parse(path);
+          var rPath = (path);
           createPath(rPath, v, newOptions);
         }
 
         if( start && end )
         if(vTool=='line' ){
 
-          var startPoint = JSON.parse(start);
-          var endPoint = JSON.parse(end);
+          var startPoint = (start);
+          var endPoint = (end);
           createLine(startPoint, endPoint, v, newOptions);
 
         }
@@ -439,8 +439,8 @@
         if( start && end )
         if(vTool=='rect' ){
 
-          var startPoint = JSON.parse(start);
-          var endPoint = JSON.parse(end);
+          var startPoint = (start);
+          var endPoint = (end);
           createRect(startPoint, endPoint, v, newOptions);
 
         }
@@ -448,8 +448,8 @@
         if( start && end )
         if(vTool=='circle' ){
 
-          var startPoint = JSON.parse(start);
-          var endPoint = JSON.parse(end);
+          var startPoint = (start);
+          var endPoint = (end);
           createCircle(startPoint, endPoint, v, newOptions);
 
         }
@@ -457,8 +457,8 @@
         if( start && end )
         if(vTool=='text' ){
 
-          var startPoint = JSON.parse(start);
-          var endPoint = JSON.parse(end);
+          var startPoint = (start);
+          var endPoint = (end);
           createText(startPoint, endPoint, v, newOptions);
 
         }
@@ -479,7 +479,7 @@
     $('button').on(downE, function  (e) {
       e.stopPropagation();
       var evt = /touch/.test(e.type) ? e.touches[0] : e;
-      eval(evt.target.dataset.onclick);
+      eval( $(evt.target).data('onclick') );
     } )
 
     function startWindowEvent(){
@@ -678,6 +678,14 @@
 
       var context = $(evt.target).closest('.canvas')
       if(!context.size()) context = $('.editing').closest('.canvas');
+      if(!context){
+          selecting = false;
+          dragging = false;
+          $('svg.canvas').removeClass('selectState');
+          $('.selrect').hide();
+          upFunc(e);
+          return true;
+      }
 
       var x = evt.pageX-$(context).offset().left;
       var y = evt.pageY-$(context).offset().top;
@@ -1568,7 +1576,7 @@
 
     function updateToolBox () {
       var theTool, maxt=0, tool={};
-      $('[data-hl]').each( function(){ var t= this.dataset.tool; tool[t] = tool[t]?tool[t]+1:1; } );
+      $('[data-hl]').each( function(){ var t= $(this).data('tool'); tool[t] = tool[t]?tool[t]+1:1; } );
       for(var i in tool){
         if(tool[i]>maxt){
           maxt = tool[i];

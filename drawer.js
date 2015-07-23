@@ -77,7 +77,6 @@ var DrawView  = (function () {
 
     reset: function () {
 
-      console.log(this.pageView.viewport);
       var scale = this.pageView.viewport.scale;
       var rotation = this.pageView.viewport.rotation;
       var div = this.div;
@@ -165,7 +164,7 @@ document.addEventListener('pagerendered', function (e) {
   var bw = box[2];
   var bh = box[3];
 
-    $('svg.canvas rect').each(function(i,v){
+    $('svg.canvas .shape').each(function(i,v){
     	var trans = getTranslateXY(v);
     	var oldRotation = getRotation(v);
     	var newRotate = ( oldRotation + (rotClock?90:-90) + 3600 ) % 360;
@@ -178,10 +177,34 @@ document.addEventListener('pagerendered', function (e) {
     	}
 
     	$(v).attr('transform', 'rotate('+newRotate+') translate('+(trans[0])+','+(trans[1])+')');
+    	updateBBox(v);
+
     });
 
 
 });
+
+function updateBBox(v){
+  var box = $(v).closest('svg.canvas').attr('viewBox').split(/\s+/g).map(function(v){return parseInt(v)});
+  var bw = box[2];
+  var bh = box[3];
+
+	var bbox = $(v).data('bbox');
+
+	var trans = getTranslateXY(v);
+	var rotate = getRotation(v);
+
+	var v1 = new Victor.fromArray(bbox[0]).subtract(new Victor( 0, bw) ); //.add(new Victor(trans[0], trans[1]) );
+	var v2 = new Victor.fromArray(bbox[1]).subtract(new Victor( 0, bw) ); //.add(new Victor(trans[0], trans[1]) );
+
+	var newV1 = v1.rotateDeg(rotate);
+	var newV2 = v2.rotateDeg(rotate);
+
+	// $(v).closest('svg.canvas').append( makeShape("circle", { cx:newV1.x, cy:newV1.y, r:5, fill:"rgba(255,0,255,1)" }) );
+	// $(v).closest('svg.canvas').append( makeShape("circle", { cx:newV2.x, cy:newV2.y, r:5, fill:"rgba(255,0,255,1)" }) );
+
+	$(v).data('bbox', JSON.stringify( [[newV1.x, newV1.y], [newV2.x, newV2.y]] ) );
+}
 
 function getRotation (obj) {
 	if(!obj) return [0,0];
@@ -196,7 +219,12 @@ function getRotation (obj) {
 }
 
 function getRotateTranslate (obj, x,y) {
-	var rotate = getRotation(obj);
+	var rotate;
+	if(obj)
+		rotate = getRotation(obj);
+	else
+		rotate = curRotation;
+
 	if(rotate == 0) {
 		return [x,y];
 	}
@@ -611,6 +639,7 @@ var svgns = "http://www.w3.org/2000/svg";
        dragging = true;
       $('[data-hl]').each(function  (i,v) {
         $(v).attr('data-oldTrans', getTranslateXY(v).join(',') );
+        $(v).attr('data-old_bbox', $(v).attr('data-bbox') );
       });
     }
 
@@ -900,6 +929,13 @@ var svgns = "http://www.w3.org/2000/svg";
 
               setTranslateXY(v, tx, ty);
 
+              var oldBbox = $(v).data('old_bbox') ;
+              oldBbox[0][0] += dx;
+              oldBbox[1][0] += dx;
+              oldBbox[0][1] += dy;
+              oldBbox[1][1] += dy;
+              $(v).data('bbox', JSON.stringify( oldBbox ) );
+
             });
 
           }
@@ -1076,6 +1112,7 @@ var svgns = "http://www.w3.org/2000/svg";
     		dragging=false;
 
         $(targetEl).attr('data-oldtrans', JSON.stringify( getTranslateXY(targetEl) ) );
+        $(targetEl).attr('data-old_bbox', $(targetEl).attr('data-bbox') );
 
         if(isHandler){
 
@@ -1316,8 +1353,9 @@ var svgns = "http://www.w3.org/2000/svg";
     function createRect (startPoint, endPoint, path, options) {
 
       if(!options) options = ToolSet['rect'];
-
+      var isCreate = false;
       if(!path){
+      	isCreate = true;
         path = makeShape("rect", { "class":'shape rect', fill:"rgba(255,255,255,0.001)" });
         curShapeID = +new Date+Math.random();
         curContext.querySelector('svg.canvas').appendChild( path );
@@ -1339,14 +1377,15 @@ var svgns = "http://www.w3.org/2000/svg";
         path.setAttribute(i, attr[i]);
       }
 
-      path.setAttribute("data-bbox", JSON.stringify( [startPoint,endPoint] ) );
+      if(isCreate) path.setAttribute("data-bbox", JSON.stringify( [startPoint,endPoint] ) );
       path.setAttribute("data-tool", 'rect' );
       path.setAttribute("data-startpoint", JSON.stringify( startPoint ) );
       path.setAttribute("data-endpoint", JSON.stringify( endPoint ) );
       path.setAttribute("data-options", JSON.stringify( options ) );
 
-      addSelectionList(path);
 
+      addSelectionList(path);
+    
     }
 
 
@@ -1713,6 +1752,7 @@ var svgns = "http://www.w3.org/2000/svg";
       if( $(el).data('hl') )return;
       $(el).data('hl', 1);
       $(el).attr('data-oldTrans', getTranslateXY(el).join(',') );
+      $(el).attr('data-old_bbox', $(el).attr('data-bbox') );
       if(isNew) $(el).get(0).setAttribute('newHL', 1);
       //$(el).appendTo( $(el).parent() );
       updateToolBox();
@@ -1953,8 +1993,8 @@ var rectsIntersect2 = function (testPoints, bbox, trans) {
 
   var startPoint = bbox[0];
   var endPoint = bbox[1];
-  r2.x = Math.min(startPoint[0], endPoint[0]) + trans[0];
-  r2.y = Math.min(startPoint[1], endPoint[1]) + trans[1];
+  r2.x = Math.min(startPoint[0], endPoint[0]); // + trans[0];
+  r2.y = Math.min(startPoint[1], endPoint[1]); // + trans[1];
   r2.width = Math.abs( startPoint[0] - endPoint[0] );
   r2.height = Math.abs( startPoint[1] - endPoint[1] );
 

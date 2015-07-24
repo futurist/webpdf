@@ -160,8 +160,11 @@ document.addEventListener('pagerendered', function (e) {
   	$('svg.canvas').attr('viewBox', '0 0 '+H+' '+W);
   }
 
+
+
   $('[data-hl]').attr('data-hl',null);
-  var oldShapes = $('svg.canvas .shape').toArray();
+
+  var oldShapes = $('svg.canvas .shape, .textCon .textWrap').toArray();
   var oldShapeIDs = oldShapes.map( function(v){ return $(v).data('id'); } );
   oldShapes.forEach(function(v){
   	rotateShape(v, rotClock? 90:-90 );
@@ -170,6 +173,18 @@ document.addEventListener('pagerendered', function (e) {
   oldShapeIDs.forEach(function  (v) {
     $('[data-id="'+ v +'"]').remove();
   });
+
+  //text tranlation with rotation
+  var box = $('svg.canvas').attr('viewBox').split(/\s+/g).map(function(v){return parseInt(v)});
+  var bw = box[2];
+  var bh = box[3];
+
+  $('.textCon .textWrap').toArray().forEach(function  (v) {
+  	console.log(v);
+      //$(v).find('pre, .bbox').css('transform', 'rotate('+curRotation+'deg) ');
+  });
+
+
   $('[data-hl]').attr('data-hl',null);
 
   return;
@@ -199,9 +214,9 @@ document.addEventListener('pagerendered', function (e) {
 });
 
 
-function rotatePoint(p, rotate, svg){
+function rotatePoint(p, rotate){
 
-  var box = $(svg).attr('viewBox').split(/\s+/g).map(function(v){return parseInt(v)});
+  var box = $('svg.canvas').attr('viewBox').split(/\s+/g).map(function(v){return parseInt(v)});
   var bw = box[2];
   var bh = box[3];
 
@@ -212,14 +227,14 @@ function rotatePoint(p, rotate, svg){
 
 function rotateShape(v, rotate){
 
-
-  var svg = $(v).closest('svg.canvas');
+  $('circle').remove();
 
 	var tool = $(v).data('tool');
   var path = $(v).data('path');
 
-	var startpoint = $(v).data('startpoint');
-	var endpoint = $(v).data('endpoint');
+	var bbox = $(v).data('bbox');
+	var startpoint =tool=='text'?bbox[0] : $(v).data('startpoint');
+	var endpoint =tool=='text'?bbox[1] : $(v).data('endpoint');
 	var options = $(v).data('options');
 
 	var trans = getTranslateXY(v);
@@ -227,12 +242,16 @@ function rotateShape(v, rotate){
 	if(startpoint){
     startpoint[0] += trans[0];
   	startpoint[1] += trans[1];
-    startpoint = rotatePoint(startpoint, rotate, svg);
+    startpoint = rotatePoint(startpoint, rotate);
+    console.log('start:', startpoint);
+$(v).closest('.page').find('svg.canvas').append( makeShape("circle", { cx:startpoint[0], cy:startpoint[1], r:5, fill:"rgba(255,0,255,1)" }) );
   }
   if(endpoint){
   	endpoint[0] += trans[0];
   	endpoint[1] += trans[1];
-    endpoint = rotatePoint(endpoint, rotate, svg);
+    endpoint = rotatePoint(endpoint, rotate);
+    console.log('end:', endpoint);
+$(v).closest('.page').find('svg.canvas').append( makeShape("circle", { cx:endpoint[0], cy:endpoint[1], r:5, fill:"rgba(255,0,255,1)" }) );
   }
 
 
@@ -253,10 +272,15 @@ function rotateShape(v, rotate){
 
     var newPath = [];
     path.forEach(function  (pt) {
-      newPath.push( rotatePoint(pt, rotate, svg) );
+      newPath.push( rotatePoint(pt, rotate) );
     });
 
     createPath(newPath, null, options);
+  }
+
+  if(tool == 'text'){
+  	var oldText = $(v).find('pre').html();
+  	createText(startpoint, endpoint, null, options, oldText);
   }
 
 }
@@ -1556,6 +1580,9 @@ var svgns = "http://www.w3.org/2000/svg";
       }
 
       $text.html( val );
+      $($text).get(0).style.removeProperty('width');
+      $($text).get(0).style.removeProperty('height');
+
       $('.editing').show();
 
       var offset = $('.textarea').offset();
@@ -1569,6 +1596,7 @@ var svgns = "http://www.w3.org/2000/svg";
       if(!trans) trans = [0,0];
       // offset.left += trans[0];
       // offset.top += trans[1];
+
 
       $('.editing').css( {width:offset.width, height:offset.height} );
       $('.editing').find('.bbox').css( {width:offset.width, height:offset.height} );
@@ -1623,12 +1651,12 @@ var svgns = "http://www.w3.org/2000/svg";
        .html( $(targetEl)
         .find('.text').html() )
        .focus();
-
+      rotateTextELement($('.textarea'), offset.width, offset.height);
     }
 
 
 
-    function createText (startPoint, endPoint, path, options) {
+    function createText (startPoint, endPoint, path, options, initText) {
 
       if(!options) options = ToolSet['text'];
       var isCeate = !path;
@@ -1646,15 +1674,22 @@ var svgns = "http://www.w3.org/2000/svg";
       var y = Math.min(startPoint[1], endPoint[1]);
       var w = Math.abs( startPoint[0] - endPoint[0] );
       var h = Math.abs( startPoint[1] - endPoint[1] );
-
+      console.log(x,y,w,h);
 
       var text = $(path).find('.text');
 
       text.css({  "color":options.stroke, "font-family": options['font-family'], "font-size": options['stroke-width'] });
 
+      if( initText ){
+          text.html( initText ).css({"width":w, "height":h});
+      }
+
       if(!isCeate){
         h = text.prop('scrollHeight');
         w = text.prop('scrollWidth');
+        if(curRotation==90||curRotation==270){
+        	var t=w; w=h;h=t;
+        }
       }
 
       path.css({"left":x, "top":y, "width":w, "height":h});
@@ -1675,11 +1710,15 @@ var svgns = "http://www.w3.org/2000/svg";
         path.attr("data-options", JSON.stringify( options ) );
 
       if(isCeate){
-        text.html( "" );
-        textEditMode(path);
+        if(!initText) textEditMode(path);
       } else {
 
       }
+
+      if(isCeate){
+        //rotateTextELement(text, w, h);
+	}
+
 
       /*  // dblclick to trigger
       path.on('dblclick', function () {
@@ -1689,8 +1728,24 @@ var svgns = "http://www.w3.org/2000/svg";
       });
       */
 
-      addSelectionList(path);
+      if(!initText) addSelectionList(path);
 
+    }
+
+    function rotateTextELement(text, w, h){
+    	text.css({'transform-origin': '0% 0%'});
+    	if(curRotation==0){
+    	  text.css({"width":w, "height":h, 'transform':'rotate(0deg) translate(0px,0px)'});
+    	}
+    	if(curRotation==90){
+    	  text.css({"width":h, "height":w, 'transform':'rotate(90deg) translate(0px,-'+ w +'px)'});
+    	}
+    	if(curRotation==180){
+    	  text.css({"width":w, "height":h, 'transform':'rotate(180deg) translate(-'+w+'px,-'+ h +'px)'});
+    	}
+    	if(curRotation==270){
+    	  text.css({"width":h, "height":w, 'transform':'rotate(270deg) translate(-'+h+'px,0px)'});
+    	}
     }
 
     function createCircle (startPoint, endPoint, path, options) {

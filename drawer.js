@@ -138,11 +138,21 @@ document.addEventListener('pagerendered', function (e) {
   var viewBox = pageView.viewport.viewBox;
   var W = viewBox[2];
   var H = viewBox[3];
-  $('.textCon').css({'transform': 'scale('+curScale+')' }).show();
   //$('svg.canvas *').css({'transform-origin':'0% 0%', 'transform': 'rotate('+curRotation+'deg)' }).show();
+
+
+  //text tranlation with rotation
+
+  if(curRotation == 0)
+  	$('.textCon').show().css({'transform': 'scale('+curScale+')' });
+  if(curRotation == 90)
+  	$('.textCon').show().css({'transform': 'scale('+curScale+') rotate(90deg) translate(0,-'+ H +'px)' });
 
   //change direction
   if(curRotation == oldRotation) return;
+
+
+  //svg translation with rotation
 
   var rotClock =  (curRotation==0&&oldRotation==270) ? true :  ( (curRotation==270&&oldRotation==0) ? false :  (curRotation - oldRotation > 0) );
 
@@ -160,11 +170,14 @@ document.addEventListener('pagerendered', function (e) {
   	$('svg.canvas').attr('viewBox', '0 0 '+H+' '+W);
   }
 
+  var box = $('svg.canvas').attr('viewBox').split(/\s+/g).map(function(v){return parseInt(v)});
+  var bw = box[2];
+  var bh = box[3];
 
 
   $('[data-hl]').attr('data-hl',null);
 
-  var oldShapes = $('svg.canvas .shape, .textCon .textWrap').toArray();
+  var oldShapes = $('svg.canvas .shape').toArray();
   var oldShapeIDs = oldShapes.map( function(v){ return $(v).data('id'); } );
   oldShapes.forEach(function(v){
   	rotateShape(v, rotClock? 90:-90 );
@@ -174,13 +187,8 @@ document.addEventListener('pagerendered', function (e) {
     $('[data-id="'+ v +'"]').remove();
   });
 
-  //text tranlation with rotation
-  var box = $('svg.canvas').attr('viewBox').split(/\s+/g).map(function(v){return parseInt(v)});
-  var bw = box[2];
-  var bh = box[3];
 
   $('.textCon .textWrap').toArray().forEach(function  (v) {
-  	console.log(v);
       //$(v).find('pre, .bbox').css('transform', 'rotate('+curRotation+'deg) ');
   });
 
@@ -278,10 +286,6 @@ $(v).closest('.page').find('svg.canvas').append( makeShape("circle", { cx:endpoi
     createPath(newPath, null, options);
   }
 
-  if(tool == 'text'){
-  	var oldText = $(v).find('pre').html();
-  	createText(startpoint, endpoint, null, options, oldText);
-  }
 
 }
 
@@ -1651,7 +1655,6 @@ var svgns = "http://www.w3.org/2000/svg";
        .html( $(targetEl)
         .find('.text').html() )
        .focus();
-      rotateTextELement($('.textarea'), offset.width, offset.height);
     }
 
 
@@ -1687,9 +1690,7 @@ var svgns = "http://www.w3.org/2000/svg";
       if(!isCeate){
         h = text.prop('scrollHeight');
         w = text.prop('scrollWidth');
-        if(curRotation==90||curRotation==270){
-        	var t=w; w=h;h=t;
-        }
+
       }
 
       path.css({"left":x, "top":y, "width":w, "height":h});

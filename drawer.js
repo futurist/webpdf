@@ -51,8 +51,8 @@ var DrawView  = (function () {
 
     $drawCon.append(div);
 
+    window.viewBox = pageView.viewport.viewBox;
 
-    var viewBox = pageView.viewport.viewBox;
 
     var $drawerLayer = $(this.div);
 
@@ -135,7 +135,7 @@ document.addEventListener('pagerendered', function (e) {
   var oldRotation = window.curRotation||0;
   window.curScale = pageView.viewport.scale;
   window.curRotation = pageView.viewport.rotation;
-  var viewBox = pageView.viewport.viewBox;
+  window.viewBox = pageView.viewport.viewBox;
   var W = viewBox[2];
   var H = viewBox[3];
   //$('svg.canvas *').css({'transform-origin':'0% 0%', 'transform': 'rotate('+curRotation+'deg)' }).show();
@@ -143,45 +143,55 @@ document.addEventListener('pagerendered', function (e) {
 
   //text tranlation with rotation
 
-  if(curRotation == 0)
-  	$('.textCon').show().css({'transform': 'scale('+curScale+')' });
-  if(curRotation == 90)
-  	$('.textCon').show().css({'transform': 'scale('+curScale+') rotate(90deg) translate(0,-'+ H +'px)' });
+  if(curRotation == 0){
+    $('.textCon').show().css({'transform': 'scale('+curScale+')' });
+  }
+  if(curRotation == 90){
+    $('.textCon').show().css({'transform': 'scale('+curScale+') rotate(90deg) translate(0,-'+ H +'px)' });
+  }
+  if(curRotation == 180){
+    $('.textCon').show().css({'transform': 'scale('+curScale+') rotate(180deg) translate(-'+ W +'px,-'+ H +'px)' });
+  }
+  if(curRotation == 270){
+    $('.textCon').show().css({'transform': 'scale('+curScale+') rotate(270deg) translate(-'+ W +'px,-'+ 0 +'px)' });
+  }
 
   //change direction
   if(curRotation == oldRotation) return;
-
 
   //svg translation with rotation
 
   var rotClock =  (curRotation==0&&oldRotation==270) ? true :  ( (curRotation==270&&oldRotation==0) ? false :  (curRotation - oldRotation > 0) );
 
   if(curRotation == 0) {
-  	$('svg.canvas').attr('viewBox', '0 0 '+W+' '+H);
+    $('svg.canvas').attr('viewBox', '0 0 '+W+' '+H);
   }
   if(curRotation == 90){
     $('svg.canvas').attr('viewBox', '0 0 '+H+' '+W);
     //$('svg.canvas rect').attr('transform', 'matrix(0,1,1,0,0,0)');
   }
   if(curRotation == 180){
-  	$('svg.canvas').attr('viewBox', '0 0 '+W+' '+H);
+    $('svg.canvas').attr('viewBox', '0 0 '+W+' '+H);
   }
   if(curRotation == 270){
-  	$('svg.canvas').attr('viewBox', '0 0 '+H+' '+W);
+    $('svg.canvas').attr('viewBox', '0 0 '+H+' '+W);
   }
 
   var box = $('svg.canvas').attr('viewBox').split(/\s+/g).map(function(v){return parseInt(v)});
   var bw = box[2];
   var bh = box[3];
 
+  var p = $('.svgCon').parent();
+  $('.svgCon').width( p.width() );
+  $('.svgCon').height( p.height() );
 
   $('[data-hl]').attr('data-hl',null);
 
   var oldShapes = $('svg.canvas .shape').toArray();
   var oldShapeIDs = oldShapes.map( function(v){ return $(v).data('id'); } );
   oldShapes.forEach(function(v){
-  	rotateShape(v, rotClock? 90:-90 );
-	});
+    rotateShape(v, rotClock? 90:-90 );
+  });
 
   oldShapeIDs.forEach(function  (v) {
     $('[data-id="'+ v +'"]').remove();
@@ -202,31 +212,39 @@ document.addEventListener('pagerendered', function (e) {
   var bh = box[3];
 
     $('svg.canvas .shape').each(function(i,v){
-    	var trans = getTranslateXY(v);
-    	var oldRotation = getRotation(v);
-    	var newRotate = ( oldRotation + (rotClock?90:-90) + 3600 ) % 360;
+      var trans = getTranslateXY(v);
+      var oldRotation = getRotation(v);
+      var newRotate = ( oldRotation + (rotClock?90:-90) + 3600 ) % 360;
 
-    	switch(newRotate) {
-    		case 0: rotClock ? trans[0]+=bw : trans[1]+= bh; break;
-    		case 90: rotClock ? trans[1]+=-bw : trans[0]+= bh; break;
-    		case 180: rotClock ? trans[0]+=-bw : trans[1]+= -bh; break;
-    		case 270: rotClock ? trans[1]+=bw : trans[0]+= -bh; break;
-    	}
+      switch(newRotate) {
+        case 0: rotClock ? trans[0]+=bw : trans[1]+= bh; break;
+        case 90: rotClock ? trans[1]+=-bw : trans[0]+= bh; break;
+        case 180: rotClock ? trans[0]+=-bw : trans[1]+= -bh; break;
+        case 270: rotClock ? trans[1]+=bw : trans[0]+= -bh; break;
+      }
 
-    	$(v).attr('transform', 'rotate('+newRotate+') translate('+(trans[0])+','+(trans[1])+')');
-    	updateBBox(v);
+      $(v).attr('transform', 'rotate('+newRotate+') translate('+(trans[0])+','+(trans[1])+')');
+      updateBBox(v);
 
     });
 
 
 });
 
+function getViewPortWH () {
+  var box = $('svg.canvas').attr('viewBox').split(/\s+/g).map(function(v){return parseInt(v)});
+  var bw = box[2];
+  var bh = box[3];
+  return {bw:bw, bh:bh};
+}
 
 function rotatePoint(p, rotate){
 
   var box = $('svg.canvas').attr('viewBox').split(/\s+/g).map(function(v){return parseInt(v)});
   var bw = box[2];
   var bh = box[3];
+
+  if(!rotate) rotate = curRotation;
 
   var v1 = new Victor.fromArray(p).subtract( rotate>0 ? new Victor( 0, bw) : new Victor( bh, 0) ); //.add(new Victor(trans[0], trans[1]) );
   var newV1 = v1.rotateDeg(rotate);
@@ -237,35 +255,31 @@ function rotateShape(v, rotate){
 
   $('circle').remove();
 
-	var tool = $(v).data('tool');
+  var tool = $(v).data('tool');
   var path = $(v).data('path');
 
-	var bbox = $(v).data('bbox');
-	var startpoint =tool=='text'?bbox[0] : $(v).data('startpoint');
-	var endpoint =tool=='text'?bbox[1] : $(v).data('endpoint');
-	var options = $(v).data('options');
+  var bbox = $(v).data('bbox');
+  var startpoint =tool=='text'?bbox[0] : $(v).data('startpoint');
+  var endpoint =tool=='text'?bbox[1] : $(v).data('endpoint');
+  var options = $(v).data('options');
 
-	var trans = getTranslateXY(v);
+  var trans = getTranslateXY(v);
 
-	if(startpoint){
+  if(startpoint){
     startpoint[0] += trans[0];
-  	startpoint[1] += trans[1];
+    startpoint[1] += trans[1];
     startpoint = rotatePoint(startpoint, rotate);
-    console.log('start:', startpoint);
-$(v).closest('.page').find('svg.canvas').append( makeShape("circle", { cx:startpoint[0], cy:startpoint[1], r:5, fill:"rgba(255,0,255,1)" }) );
   }
   if(endpoint){
-  	endpoint[0] += trans[0];
-  	endpoint[1] += trans[1];
+    endpoint[0] += trans[0];
+    endpoint[1] += trans[1];
     endpoint = rotatePoint(endpoint, rotate);
-    console.log('end:', endpoint);
-$(v).closest('.page').find('svg.canvas').append( makeShape("circle", { cx:endpoint[0], cy:endpoint[1], r:5, fill:"rgba(255,0,255,1)" }) );
   }
 
 
 
-	// $(v).closest('svg.canvas').append( makeShape("circle", { cx:newV1.x, cy:newV1.y, r:5, fill:"rgba(255,0,255,1)" }) );
-	// $(v).closest('svg.canvas').append( makeShape("circle", { cx:newV2.x, cy:newV2.y, r:5, fill:"rgba(255,0,255,1)" }) );
+  // $(v).closest('svg.canvas').append( makeShape("circle", { cx:newV1.x, cy:newV1.y, r:5, fill:"rgba(255,0,255,1)" }) );
+  // $(v).closest('svg.canvas').append( makeShape("circle", { cx:newV2.x, cy:newV2.y, r:5, fill:"rgba(255,0,255,1)" }) );
 
   if(tool == 'rect'){
     createRect(startpoint, endpoint, null, options);
@@ -297,58 +311,58 @@ function updateBBox(v){
   var bw = box[2];
   var bh = box[3];
 
-	var bbox = $(v).data('bbox');
+  var bbox = $(v).data('bbox');
 
-	var trans = getTranslateXY(v);
-	var rotate = getRotation(v);
+  var trans = getTranslateXY(v);
+  var rotate = getRotation(v);
 
-	var v1 = new Victor.fromArray(bbox[0]).subtract(new Victor( 0, bw) ); //.add(new Victor(trans[0], trans[1]) );
-	var v2 = new Victor.fromArray(bbox[1]).subtract(new Victor( 0, bw) ); //.add(new Victor(trans[0], trans[1]) );
+  var v1 = new Victor.fromArray(bbox[0]).subtract(new Victor( 0, bw) ); //.add(new Victor(trans[0], trans[1]) );
+  var v2 = new Victor.fromArray(bbox[1]).subtract(new Victor( 0, bw) ); //.add(new Victor(trans[0], trans[1]) );
 
-	var newV1 = v1.rotateDeg(rotate);
-	var newV2 = v2.rotateDeg(rotate);
+  var newV1 = v1.rotateDeg(rotate);
+  var newV2 = v2.rotateDeg(rotate);
 
-	// $(v).closest('svg.canvas').append( makeShape("circle", { cx:newV1.x, cy:newV1.y, r:5, fill:"rgba(255,0,255,1)" }) );
-	// $(v).closest('svg.canvas').append( makeShape("circle", { cx:newV2.x, cy:newV2.y, r:5, fill:"rgba(255,0,255,1)" }) );
+  // $(v).closest('svg.canvas').append( makeShape("circle", { cx:newV1.x, cy:newV1.y, r:5, fill:"rgba(255,0,255,1)" }) );
+  // $(v).closest('svg.canvas').append( makeShape("circle", { cx:newV2.x, cy:newV2.y, r:5, fill:"rgba(255,0,255,1)" }) );
 
-	$(v).data('bbox', JSON.stringify( [[newV1.x, newV1.y], [newV2.x, newV2.y]] ) );
+  $(v).data('bbox', JSON.stringify( [[newV1.x, newV1.y], [newV2.x, newV2.y]] ) );
 }
 
 
 
 
 function getRotation (obj) {
-	if(!obj) return [0,0];
+  if(!obj) return [0,0];
    if(obj.size) obj=obj.get(0);
     var style = obj.style;
     var transform = style.transform || style.webkitTransform || style.mozTransform;
     var transformAttr =obj.getAttribute('transform');
     transform = (!transformAttr) ? transform :  transformAttr;
     if(!transform ) return 0;
-	var zT = transform.match(/rotate\(\s*([0-9.-]+)\s*\)/);
+  var zT = transform.match(/rotate\(\s*([0-9.-]+)\s*\)/);
     return zT ? parseInt(zT[1]) : 0;
 }
 
 function getRotateTranslate (obj, x,y) {
-	var rotate;
-	if(obj)
-		rotate = getRotation(obj);
-	else
-		rotate = curRotation;
+  var rotate;
+  if(obj)
+    rotate = getRotation(obj);
+  else
+    rotate = curRotation;
 
-	if(rotate == 0) {
-		return [x,y];
-	}
-	if(rotate == 90){
-		return [y,-x];
-	}
-	if(rotate == 180){
-		return [-x,-y];
-	}
-	if(rotate == 270){
-		return [-y,x];
-	}
-	return [x,y];
+  if(rotate == 0) {
+    return [x,y];
+  }
+  if(rotate == 90){
+    return [y,-x];
+  }
+  if(rotate == 180){
+    return [-x,-y];
+  }
+  if(rotate == 270){
+    return [-y,x];
+  }
+  return [x,y];
 }
 
 document.addEventListener('textlayerrendered', function (e) {
@@ -755,24 +769,31 @@ var svgns = "http://www.w3.org/2000/svg";
 
 
     function downFunc (e) {
-   	  var evt = /touch/.test(e.type) ? e.touches[0] : e;
+      var evt = /touch/.test(e.type) ? e.touches[0] : e;
       var canvas = $(evt.target).closest('.drawerLayer')
       if(!canvas.size()) {
         curContext = null;
         return;
       }
+
+      var isShape = $(evt.target).hasClass('shape');
+      var isText = $(evt.target).closest('.textWrap').size()>0;
+
       var x = evt.pageX-$(canvas).offset().left;
       var y = evt.pageY-$(canvas).offset().top;
 
-      x/=curScale;
-      y/=curScale;
+      if(isText){
+        var conPos = getOffsetXY(evt.pageX, evt.pageY, $('.textCon', canvas).get(0) , $(canvas).get(0).clientWidth/curScale, $(canvas).get(0).clientHeight/curScale );
+        x=conPos.x;
+        y=conPos.y;
+      } else {
+        x/=curScale;
+        y/=curScale;        
+      }
 
       downX = x;
       downY = y;
       clearTimeout(downTimer);
-
-      var isShape = $(evt.target).hasClass('shape');
-      var isText = $(evt.target).closest('.textWrap').size()>0;
 
       var targetEl = isText? $(evt.target).closest('.textWrap') : evt.target;
 
@@ -794,9 +815,14 @@ var svgns = "http://www.w3.org/2000/svg";
 
 
       if(isHandler){
+
         $('.handler').addClass('dragHandler');
-        $('.textarea').data('offset', JSON.stringify( $('.textarea').position() ) );
-        $('.handler').data('offset', JSON.stringify( $('.handler').position() ) );
+        var oldsize = {width: parseInt( $('.textarea').css('width') ),  height: parseInt( $('.textarea').css('height') ) };
+        $('.textarea').data('oldsize', JSON.stringify( oldsize ) );
+
+        var oldpos = {left: parseInt($('.handler').css('left') ),  top: parseInt( $('.handler').css('top') ) };
+        $('.handler').data( 'oldpos', JSON.stringify( oldpos ) );
+
         dragging = true;
         return;
       }
@@ -841,14 +867,14 @@ var svgns = "http://www.w3.org/2000/svg";
       prevEl = targetEl;
       prevTime = e.timeStamp;
 
-   	  // long click to trigger dragging mode && selecting mode
+      // long click to trigger dragging mode && selecting mode
       if(!selecting && !dragging && !drawing )
-   	  downTimer = window.setTimeout(function() {
+      downTimer = window.setTimeout(function() {
         //we are longclick on shape
         if( isShape || isText ){
 
-     	  	addSelectionList( targetEl );
-     	  	beginDrag();
+          addSelectionList( targetEl );
+          beginDrag();
 
         }else{
           //we are longclick on SVG, selection mode
@@ -857,22 +883,22 @@ var svgns = "http://www.w3.org/2000/svg";
             $('svg.canvas',context).addClass('selectState');
           },300);
         }
-   	  }, 0);
+      }, 0);
 
-   	  if( $(targetEl).data('hl') ){
+      if( $(targetEl).data('hl') ){
 
-   	  	beginDrag();
+        beginDrag();
 
-   	  } else {
+      } else {
 
-   	  	dragging = false;
+        dragging = false;
 
         if(!e.shiftKey)
-   	  	$('[data-hl]').each(function(i,v){
+        $('[data-hl]').each(function(i,v){
           $(v).data('hl',null);
-   	  	});
+        });
 
-   	  }
+      }
 
     }
 
@@ -890,8 +916,25 @@ var svgns = "http://www.w3.org/2000/svg";
       var x = evt.pageX-$(curContext).offset().left;
       var y = evt.pageY-$(curContext).offset().top;
 
+
       var canvas = $(evt.target).closest('.drawerLayer');
       var context = $(canvas).closest('.drawerLayer').get(0);
+
+      var isShape = $(evt.target).hasClass('shape');
+      var isText = $(evt.target).closest('.textWrap').size()>0;
+
+      var targetEl = isText? $(evt.target).closest('.textWrap') : evt.target;
+
+
+      if(isText){
+        var conPos = getOffsetXY(evt.pageX, evt.pageY, $('.textCon', canvas).get(0) , $(canvas).get(0).clientWidth/curScale, $(canvas).get(0).clientHeight/curScale );
+        x=conPos.x;
+        y=conPos.y;
+      } else {
+        x/=curScale;
+        y/=curScale;        
+      }
+
 
       function checkMoveOut(){
         if( !curContext || ( $(context).size() && context!=curContext )
@@ -909,18 +952,10 @@ var svgns = "http://www.w3.org/2000/svg";
 
       if( checkMoveOut() ) return;
 
-      var isShape = $(evt.target).hasClass('shape');
-      var isText = $(evt.target).closest('.textWrap').size()>0;
 
-      var targetEl = isText? $(evt.target).closest('.textWrap') : evt.target;
-
-      x/=curScale;
-      y/=curScale;
 
       var dx = x-downX;
       var dy = y-downY;
-
-
 
       //FIX for iPad which cannot select TextElement
       var el =getElementsFromPoint( [[x,y],[x,y]] );
@@ -936,30 +971,22 @@ var svgns = "http://www.w3.org/2000/svg";
 
       var isHandler = $(evt.target).hasClass('handler');
 
+
       if( $('.dragHandler').size() && dist && buttonDown) {
         $('.handler').addClass('dragHandler');
 
+        var rotXY = getRotateTranslate(null,dx,dy);
+        dx = rotXY[0];
+        dy = rotXY[1];
 
+        var w = $('.textarea').width();
+        var h = $('.textarea').height();
 
-        var dataoffset = $('.handler').data('offset') ;
-
-        dataoffset.left/=curScale;
-        dataoffset.top/=curScale;
-
-        dataoffset.left += dx;
-        dataoffset.top += dy;
-
-        dataoffset2 = $('.textarea').data('offset') ;
-
-        dataoffset2.left/=curScale;
-        dataoffset2.top/=curScale;
-
-        var w = dataoffset.left - dataoffset2.left;
-        var h = dataoffset.top - dataoffset2.top;
-
-        if(w>10 && h>10){
-          $('.textarea').css({ width:w, height:h });
-          $('.handler').css({left:dataoffset.left, top: dataoffset.top});
+        if( w>10 && h>10) {
+          var oldsize = $('.textarea').data('oldsize');
+          $('.textarea').css({ width:oldsize.width+dx, height:oldsize.height+dy });
+          var oldpos = $('.handler').data('oldpos');
+          $('.handler').css({left: oldpos.left+dx , top:  oldpos.top+dy });
           dragging = true;
         }else{
           if(w<10) w=11;
@@ -1025,13 +1052,15 @@ var svgns = "http://www.w3.org/2000/svg";
 
 
           } else {
-  	      	$('[data-hl]').each(function  (i,v) {
+            $('[data-hl]').each(function  (i,v) {
               var oldTrans = $(v).attr('data-oldTrans');
               oldTrans= !oldTrans?[0,0]:oldTrans.split(',');
 
-		      var rotXY = getRotateTranslate(v,dx,dy);
-		      dx = rotXY[0];
-		      dy = rotXY[1];
+              if( $(v).hasClass('textWrap') ) {
+                  var rotXY = getRotateTranslate(null,dx,dy);
+                  dx = rotXY[0];
+                  dy = rotXY[1];
+              }
 
               var tx = dx+ ~~oldTrans[0];
               var ty = dy+ ~~oldTrans[1];
@@ -1047,20 +1076,20 @@ var svgns = "http://www.w3.org/2000/svg";
 
         if(curTool=='curve'){
 
-  	      if( !drawing && dist >DRAW_TOLERANCE ){
-  	    	  drawing = true;
-  		      rPath=[];
-  	      }
+          if( !drawing && dist >DRAW_TOLERANCE ){
+            drawing = true;
+            rPath=[];
+          }
 
-  	      if(!drawing)return;
+          if(!drawing)return;
 
-  	      var L = rPath.length;
+          var L = rPath.length;
 
-  	      if(L && calcDist(rPath[L-1], [x, y])<DOT_DISTANCE )return;
+          if(L && calcDist(rPath[L-1], [x, y])<DOT_DISTANCE )return;
           var el = makeShape("circle", { class:"hint", cx:x, cy:y, r:3, fill:"red" });
-  	      curContext.querySelector('svg.canvas').appendChild( el );
+          curContext.querySelector('svg.canvas').appendChild( el );
 
-  	      rPath.push( [x, y] );
+          rPath.push( [x, y] );
 
         }
 
@@ -1125,8 +1154,8 @@ var svgns = "http://www.w3.org/2000/svg";
 
       if(!curContext) return;
 
-    	//init
-    	var evt = /touch/.test(e.type) ? e.changedTouches[0] : e;
+      //init
+      var evt = /touch/.test(e.type) ? e.changedTouches[0] : e;
 
       var isShape = $(evt.target).hasClass('shape');
       var isText = $(evt.target).closest('.textWrap').size()>0;
@@ -1137,8 +1166,16 @@ var svgns = "http://www.w3.org/2000/svg";
 
       var x = evt.pageX-$(curContext).offset().left;
       var y = evt.pageY-$(curContext).offset().top;
-      x/=curScale;
-      y/=curScale;
+
+      if(isText){
+        var conPos = getOffsetXY(evt.pageX, evt.pageY, $('.textCon', curContext).get(0) , curContext.clientWidth/curScale, curContext.clientHeight/curScale );
+        x=conPos.x;
+        y=conPos.y;
+      } else {
+        x/=curScale;
+        y/=curScale;        
+      }
+      
 
       var dx = x-downX;
       var dy = y-downY;
@@ -1161,25 +1198,18 @@ var svgns = "http://www.w3.org/2000/svg";
 
       if(isHandler){
 
-        var dataoffset = $('.handler').data('offset') ;
-
-        dataoffset.left += dx;
-        dataoffset.top += dy;
-        $('.handler').data('offset', JSON.stringify( dataoffset ) );
-
-        dataoffset2 = $('.textarea').data('offset') ;
-
-        dataoffset2.width = dataoffset.left - dataoffset2.left;
-        dataoffset2.height = dataoffset.top - dataoffset2.top;
-        $('.textarea').data('offset', JSON.stringify( dataoffset2 ) );
-
+        var w = $('.textarea').width();
+        var h = $('.textarea').height();
 
         var bbox = $('.editing').data('bbox') ;
-        bbox[1][0] = bbox[0][0]+ dataoffset2.width;
-        bbox[1][1] = bbox[0][1]+ dataoffset2.height;
+        bbox[1][0] = bbox[0][0]+ w;
+        bbox[1][1] = bbox[0][1]+ h;
         $('.editing').data('bbox', JSON.stringify(bbox) ) ;
 
+
         $(evt.target).removeClass('dragHandler');
+        $('.textarea').focus();
+
         return;
       }
 
@@ -1204,15 +1234,15 @@ var svgns = "http://www.w3.org/2000/svg";
         return;
       }
 
-    	// just click, no motion
-    	if( e.shiftKey && !dragging && !drawing && $('[data-hl]').length==0 ) {
-    		if( $(evt.target).hasClass('shape') ) addSelectionList(evt.target);
-    		return;
-    	}
+      // just click, no motion
+      if( e.shiftKey && !dragging && !drawing && $('[data-hl]').length==0 ) {
+        if( $(evt.target).hasClass('shape') ) addSelectionList(evt.target);
+        return;
+      }
 
 
-    	if(dragging){
-    		dragging=false;
+      if(dragging){
+        dragging=false;
 
         $(targetEl).attr('data-oldtrans', JSON.stringify( getTranslateXY(targetEl) ) );
 
@@ -1222,7 +1252,7 @@ var svgns = "http://www.w3.org/2000/svg";
 
         if(dist) svgHistory.update();
         return;
-    	}
+      }
 
 
 
@@ -1250,10 +1280,10 @@ var svgns = "http://www.w3.org/2000/svg";
       **/
 
 
-	    if(drawing){
+      if(drawing){
 
-	    	// yes motion, drawing path
-	      drawing = false;
+        // yes motion, drawing path
+        drawing = false;
 
 
         if(curTool=='curve'){
@@ -1658,7 +1688,6 @@ var svgns = "http://www.w3.org/2000/svg";
     }
 
 
-
     function createText (startPoint, endPoint, path, options, initText) {
 
       if(!options) options = ToolSet['text'];
@@ -1677,7 +1706,7 @@ var svgns = "http://www.w3.org/2000/svg";
       var y = Math.min(startPoint[1], endPoint[1]);
       var w = Math.abs( startPoint[0] - endPoint[0] );
       var h = Math.abs( startPoint[1] - endPoint[1] );
-      console.log(x,y,w,h);
+
 
       var text = $(path).find('.text');
 
@@ -1718,7 +1747,7 @@ var svgns = "http://www.w3.org/2000/svg";
 
       if(isCeate){
         //rotateTextELement(text, w, h);
-	}
+  }
 
 
       /*  // dblclick to trigger
@@ -1734,19 +1763,19 @@ var svgns = "http://www.w3.org/2000/svg";
     }
 
     function rotateTextELement(text, w, h){
-    	text.css({'transform-origin': '0% 0%'});
-    	if(curRotation==0){
-    	  text.css({"width":w, "height":h, 'transform':'rotate(0deg) translate(0px,0px)'});
-    	}
-    	if(curRotation==90){
-    	  text.css({"width":h, "height":w, 'transform':'rotate(90deg) translate(0px,-'+ w +'px)'});
-    	}
-    	if(curRotation==180){
-    	  text.css({"width":w, "height":h, 'transform':'rotate(180deg) translate(-'+w+'px,-'+ h +'px)'});
-    	}
-    	if(curRotation==270){
-    	  text.css({"width":h, "height":w, 'transform':'rotate(270deg) translate(-'+h+'px,0px)'});
-    	}
+      text.css({'transform-origin': '0% 0%'});
+      if(curRotation==0){
+        text.css({"width":w, "height":h, 'transform':'rotate(0deg) translate(0px,0px)'});
+      }
+      if(curRotation==90){
+        text.css({"width":h, "height":w, 'transform':'rotate(90deg) translate(0px,-'+ w +'px)'});
+      }
+      if(curRotation==180){
+        text.css({"width":w, "height":h, 'transform':'rotate(180deg) translate(-'+w+'px,-'+ h +'px)'});
+      }
+      if(curRotation==270){
+        text.css({"width":h, "height":w, 'transform':'rotate(270deg) translate(-'+h+'px,0px)'});
+      }
     }
 
     function createCircle (startPoint, endPoint, path, options) {
@@ -1918,11 +1947,11 @@ var svgns = "http://www.w3.org/2000/svg";
         var transformAttr =obj.getAttribute('transform');
         transform = (!transformAttr) ? transform :  transformAttr;
         if(!transform ) return [0,0];
-		var zT = transform.match(/translate\(\s*([0-9.-]+[\w%]*)\s*,\s*([0-9.-]+[\w%]*)\s*\)/);
+    var zT = transform.match(/translate\(\s*([0-9.-]+[\w%]*)\s*,\s*([0-9.-]+[\w%]*)\s*\)/);
         return zT ? [ parseInt(zT[1]), parseInt(zT[2]) ] : [0,0];
     }
     function setTranslateXY(obj, x, y){
-    	 if(!obj) return [0,0];
+       if(!obj) return [0,0];
        if(obj.size) obj=obj.get(0);
         var style = obj.style;
         var transform = style.transform || style.webkitTransform || style.mozTransform;
@@ -1931,11 +1960,11 @@ var svgns = "http://www.w3.org/2000/svg";
         if(!transform ) transform="translate(0,0)";
         var re = /translate\(\s*([0-9.-]+[\w%]*)\s*,\s*([0-9.-]+[\w%]*)\s*\)/ig;
        if($(obj).closest('svg').size() ) {
-	        var newTransform = transform.replace(re, 'translate('+x + ','+ y + ')'  );
-       		$(obj).attr('transform', newTransform  );
+          var newTransform = transform.replace(re, 'translate('+x + ','+ y + ')'  );
+          $(obj).attr('transform', newTransform  );
        }else{
-	        var newTransform = transform.replace(re, 'translate('+x+'px,'+y +'px)');
-       		$(obj).css('transform', newTransform  );
+          var newTransform = transform.replace(re, 'translate('+x+'px,'+y +'px)');
+          $(obj).css('transform', newTransform  );
        }
     }
     function calcInterpo (rPath, tension) {
@@ -2247,3 +2276,72 @@ function ApplyLineBreaks(strTextAreaId) {
     oTextarea.value = strNewValue;
     oTextarea.setAttribute("wrap", "");
 }
+
+
+
+function getOffsetXY(pageX, pageY, element,width, height) {
+  if(!element) return;
+  var oldWidth = $(element).width();
+  var oldHeight = $(element).height();
+  $(element).width(width);
+  $(element).height(height);
+  function coords(element) {
+    var div = document.createElement('div'),
+        e = [], i;
+    div.style.display = 'none';
+    element.appendChild(div);
+    for (i = 0; i < 4; i++) {
+      div.style.cssText = 'display:block;width:0;height:0;position:absolute;left:' + (i % 3 ? 100 : 0) + '%;top:' + (i < 2 ? 0 : 100) + '%;';
+      e[i] = div.getBoundingClientRect();
+    }
+    element.removeChild(div);
+    return e;
+  }
+  var e = coords(element), a, d, c;
+  a = [
+    [e[3].top - e[0].top, e[0].top - e[1].top],
+    [e[0].left - e[3].left, e[1].left - e[0].left]
+  ];
+  d = (a[0][0] * a[1][1] - a[0][1] * a[1][0]);
+  c = [pageX - window.pageXOffset - e[0].left, 
+       pageY - window.pageYOffset - e[0].top];
+  //c = [pageX, pageY];
+
+  $(element).width(oldWidth);
+  $(element).height(oldHeight);
+
+  return {
+    x: (c[0] * a[0][0] + c[1] * a[1][0])/d*width,
+    y: (c[0] * a[0][1] + c[1] * a[1][1])/d*height
+  };
+}
+
+function GetZoomFactor () {
+    var factor = 1;
+    if (document.body.getBoundingClientRect) {
+            // rect is only in physical pixel size in IE before version 8 
+        var rect = document.body.getBoundingClientRect ();
+        var physicalW = rect.right - rect.left;
+        var logicalW = document.body.offsetWidth;
+
+            // the zoom level is always an integer percent value
+        factor = Math.round ((physicalW / logicalW) * 100) / 100;
+    }
+    return factor;
+}
+
+function GetScrollPositions () {
+    if ('pageXOffset' in window) {  // all browsers, except IE before version 9
+        var scrollLeft =  window.pageXOffset;
+        var scrollTop = window.pageYOffset;
+    }
+    else {      // Internet Explorer before version 9
+        var zoomFactor = GetZoomFactor ();
+        var scrollLeft = Math.round (document.documentElement.scrollLeft / zoomFactor);
+        var scrollTop = Math.round (document.documentElement.scrollTop / zoomFactor);
+    }
+    return [scrollLeft, scrollTop];
+}
+
+
+

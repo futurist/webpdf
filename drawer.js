@@ -185,6 +185,11 @@ document.addEventListener('pagerendered', function (e) {
   $('.svgCon').width( p.width() );
   $('.svgCon').height( p.height() );
 
+
+  /*****
+  * For SVG Shape, we redraw all the shape according to the rotation.
+  * For text, we rotate all the shape.
+  */
   $('[data-hl]').attr('data-hl',null);
 
   var oldShapes = $('svg.canvas .shape').toArray();
@@ -195,11 +200,6 @@ document.addEventListener('pagerendered', function (e) {
 
   oldShapeIDs.forEach(function  (v) {
     $('[data-id="'+ v +'"]').remove();
-  });
-
-
-  $('.textCon .textWrap').toArray().forEach(function  (v) {
-      //$(v).find('pre, .bbox').css('transform', 'rotate('+curRotation+'deg) ');
   });
 
 
@@ -250,6 +250,30 @@ function rotatePoint(p, rotate){
   var newV1 = v1.rotateDeg(rotate);
   return newV1.toArray();
 }
+
+function rotateTextPoint(p, rotate){
+
+  var box = $('svg.canvas').attr('viewBox').split(/\s+/g).map(function(v){return parseInt(v)});
+  var bw = box[2];
+  var bh = box[3];
+
+  if(!rotate) rotate = curRotation;
+  if(rotate==0){
+    return [p[0], p[1]];
+  }
+  if(rotate==90){
+    return [ p[1], bw - p[0] ];
+  }
+  if(rotate==180){
+    return [ bw-p[0], bh - p[1] ];
+  }
+  if(rotate==270){
+    return [ bh-p[1], p[0] ];
+  }
+
+}
+
+
 
 function rotateShape(v, rotate){
 
@@ -782,8 +806,9 @@ var svgns = "http://www.w3.org/2000/svg";
       var x = evt.pageX-$(canvas).offset().left;
       var y = evt.pageY-$(canvas).offset().top;
 
-      if(isText){
-        var conPos = getOffsetXY(evt.pageX, evt.pageY, $('.textCon', canvas).get(0) , $(canvas).get(0).clientWidth/curScale, $(canvas).get(0).clientHeight/curScale );
+      if(0&&isText){
+        var viewBW = getViewPortWH();
+        var conPos = getOffsetXY(evt.pageX, evt.pageY, $('.textCon', canvas).get(0) , viewBW.bw, viewBW.bh );
         x=conPos.x;
         y=conPos.y;
       } else {
@@ -926,8 +951,9 @@ var svgns = "http://www.w3.org/2000/svg";
       var targetEl = isText? $(evt.target).closest('.textWrap') : evt.target;
 
 
-      if(isText){
-        var conPos = getOffsetXY(evt.pageX, evt.pageY, $('.textCon', canvas).get(0) , $(canvas).get(0).clientWidth/curScale, $(canvas).get(0).clientHeight/curScale );
+      if( 0&& isText && !dragging){
+        var viewBW = getViewPortWH();
+        var conPos = getOffsetXY(evt.pageX, evt.pageY, $('.textCon', canvas).get(0) , viewBW.bw, viewBW.bh );
         x=conPos.x;
         y=conPos.y;
       } else {
@@ -1167,8 +1193,9 @@ var svgns = "http://www.w3.org/2000/svg";
       var x = evt.pageX-$(curContext).offset().left;
       var y = evt.pageY-$(curContext).offset().top;
 
-      if(isText){
-        var conPos = getOffsetXY(evt.pageX, evt.pageY, $('.textCon', curContext).get(0) , curContext.clientWidth/curScale, curContext.clientHeight/curScale );
+      if(0&&isText && !dragging){
+        var viewBW = getViewPortWH();
+        var conPos = getOffsetXY(evt.pageX, evt.pageY, $('.textCon', curContext).get(0) , viewBW.bw, viewBW.bh );
         x=conPos.x;
         y=conPos.y;
       } else {
@@ -1693,6 +1720,10 @@ var svgns = "http://www.w3.org/2000/svg";
       if(!options) options = ToolSet['text'];
       var isCeate = !path;
 
+      if(isCeate){
+        startPoint = rotateTextPoint( startPoint, curRotation );
+        endPoint = rotateTextPoint( endPoint, curRotation );
+      }
 
       if(!path){
         path = $('<div class="textWrap"><pre class="text textholder"></pre></div>');

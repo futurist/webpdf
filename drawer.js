@@ -158,7 +158,7 @@ document.addEventListener('pagerendered', function (e) {
   if(curRotation==90)  var cc = {clientX: offset.left+offset.width, clientY: $(pageView.drawerLayer).offset().top};
   var el =  $('.svgCon', pageView.drawerLayer).get(0) ;
   //var aa= getOffset(cc , $('.svgCon', pageView.drawerLayer).get(0) );
-  var aa = getOffsetXY( cc.clientX, cc.clientY, el );
+  var aa = getOffsetXY( cc.clientX, cc.clientY, el, W,H );
   var offx = aa.x*W*curScale;
   var offy = aa.y*H*curScale;
   offx /= curScale;

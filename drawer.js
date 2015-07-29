@@ -648,8 +648,11 @@ var svgns = "http://www.w3.org/2000/svg";
       $('#drawTool .subtool_'+tool).show();
 
       var shapeA = [];
-      if( $('[data-hl]').size() ){
-        shapeA = $('[data-hl]').toArray();
+      if( $('[data-hl], .editing').size() ){
+        shapeA = $('[data-hl], .editing').toArray();
+        shapeA = shapeA.filter(function onlyUnique(value, index, self) {
+		    return self.indexOf(value) === index;
+		});
       }else {
 
         /*
@@ -657,7 +660,8 @@ var svgns = "http://www.w3.org/2000/svg";
         */
         //shapeA = $('[data-id="'+ curShapeID +'"]').toArray();
       }
-        getOptions(ToolSet[tool], options );
+
+       getOptions(ToolSet[tool], options );
 
 
       var isDirty = false;
@@ -713,6 +717,13 @@ var svgns = "http://www.w3.org/2000/svg";
 
         if( start && end )
         if(vTool=='text' ){
+
+        	console.log(newOptions);
+        	if( $('.textarea').size() ){
+        		$('.textarea, .editing').css({  "color":newOptions.stroke, "font-family": newOptions['font-family'], "font-size": newOptions['stroke-width'] });
+        		$('.editing').data('options', JSON.stringify( newOptions) );
+        		return;
+        	}
 
           var startPoint = (start);
           var endPoint = (end);
@@ -1684,6 +1695,8 @@ var svgns = "http://www.w3.org/2000/svg";
       bbox[1][1] = bbox[0][1]+ offset.height;
       $('.editing').data('bbox', JSON.stringify(bbox) ) ;
 
+      var options = $('.editing').data('options');
+      $('.editing pre').css({  "color":options.stroke, "font-family": options['font-family'], "font-size": options['stroke-width'] });
 
       try{
          $('.textarea').remove();
@@ -1735,6 +1748,7 @@ var svgns = "http://www.w3.org/2000/svg";
 
       if(!options) options = ToolSet['text'];
       var isCeate = !path;
+
 
       if(isCeate){
         startPoint = rotateTextPoint( startPoint, curRotation );

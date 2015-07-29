@@ -138,8 +138,39 @@ document.addEventListener('pagerendered', function (e) {
   window.viewBox = pageView.viewport.viewBox;
   var W = viewBox[2];
   var H = viewBox[3];
-  //$('svg.canvas *').css({'transform-origin':'0% 0%', 'transform': 'rotate('+curRotation+'deg)' }).show();
 
+  $('.textCon, .svgCon', pageView.drawerLayer).css({ 'transform-origin':'0% 0%', 'transform': 'scale('+curScale+') rotate('+curRotation+'deg) translate(0px,0px)' }).show();
+
+  var offset = $(pageView.drawerLayer).offset();
+  var compStyle =window.getComputedStyle( $(pageView.drawerLayer).get(0) );
+  var borderL = parseInt(compStyle['border-left-width'], 10);
+  var borderR = parseInt(compStyle['border-right-width'], 10);
+  var borderT = parseInt(compStyle['border-top-width'], 10);
+  var borderB = parseInt(compStyle['border-bottom-width'], 10);
+  offset.left += borderL;
+  offset.top += borderT;
+  offset.width -= borderL+borderR;
+  offset.height -= borderT+borderB;
+
+  console.log(offset);
+
+  if(curRotation==0)  var cc = {clientX: $(pageView.drawerLayer).offset().left, clientY: $(pageView.drawerLayer).offset().top};
+  if(curRotation==90)  var cc = {clientX: offset.left+offset.width, clientY: $(pageView.drawerLayer).offset().top};
+  var el =  $('.svgCon', pageView.drawerLayer).get(0) ;
+  //var aa= getOffset(cc , $('.svgCon', pageView.drawerLayer).get(0) );
+  var aa = getOffsetXY( cc.clientX, cc.clientY, el );
+  var offx = aa.x*W*curScale;
+  var offy = aa.y*H*curScale;
+  offx /= curScale;
+  offy /= curScale;
+  console.log(W, H, cc, aa, offx, offy, $('.textCon', pageView.drawerLayer).get(0).style.cssText )
+  var t1 = $('.textCon', pageView.drawerLayer).get(0).style.cssText;  
+  var t2 = $('.svgCon', pageView.drawerLayer).get(0).style.cssText;  
+
+  $('.textCon', pageView.drawerLayer).get(0).style.cssText = t1.replace(/translate\(0px\s*,\s*0px\)/, 'translate('+offx+'px,'+offy+'px)' );
+  $('.svgCon', pageView.drawerLayer).get(0).style.cssText = t2.replace(/translate\(0px\s*,\s*0px\)/, 'translate('+offx+'px,'+offy+'px)' );
+
+  return;
 
   //text tranlation with rotation
 
@@ -800,6 +831,7 @@ var svgns = "http://www.w3.org/2000/svg";
         return;
       }
 
+      console.log(canvas, getOffsetXY(evt.pageX, evt.pageY, canvas.get(0)) );
       var isShape = $(evt.target).hasClass('shape');
       var isText = $(evt.target).closest('.textWrap').size()>0;
 
@@ -813,7 +845,7 @@ var svgns = "http://www.w3.org/2000/svg";
         y=conPos.y;
       } else {
         x/=curScale;
-        y/=curScale;        
+        y/=curScale;
       }
 
       downX = x;
@@ -958,7 +990,7 @@ var svgns = "http://www.w3.org/2000/svg";
         y=conPos.y;
       } else {
         x/=curScale;
-        y/=curScale;        
+        y/=curScale;
       }
 
 
@@ -1200,9 +1232,9 @@ var svgns = "http://www.w3.org/2000/svg";
         y=conPos.y;
       } else {
         x/=curScale;
-        y/=curScale;        
+        y/=curScale;
       }
-      
+
 
       var dx = x-downX;
       var dy = y-downY;
@@ -2312,10 +2344,10 @@ function ApplyLineBreaks(strTextAreaId) {
 
 function getOffsetXY(pageX, pageY, element,width, height) {
   if(!element) return;
-  var oldWidth = $(element).width();
-  var oldHeight = $(element).height();
-  $(element).width(width);
-  $(element).height(height);
+  var oldWidth = $(element).get(0).style.width;
+  var oldHeight = $(element).get(0).style.height;
+  if(width) $(element).width(width);
+  if(height) $(element).height(height);
   function coords(element) {
     var div = document.createElement('div'),
         e = [], i;
@@ -2334,23 +2366,93 @@ function getOffsetXY(pageX, pageY, element,width, height) {
     [e[0].left - e[3].left, e[1].left - e[0].left]
   ];
   d = (a[0][0] * a[1][1] - a[0][1] * a[1][0]);
-  c = [pageX - window.pageXOffset - e[0].left, 
+  c = [pageX - window.pageXOffset - e[0].left,
        pageY - window.pageYOffset - e[0].top];
   //c = [pageX, pageY];
 
-  $(element).width(oldWidth);
-  $(element).height(oldHeight);
+  $(element).get(0).style.width = oldWidth;
+  $(element).get(0).style.height = oldHeight;
 
   return {
-    x: (c[0] * a[0][0] + c[1] * a[1][0])/d*width,
-    y: (c[0] * a[0][1] + c[1] * a[1][1])/d*height
+    x: (c[0] * a[0][0] + c[1] * a[1][0])/d,
+    y: (c[0] * a[0][1] + c[1] * a[1][1])/d
   };
+}
+
+
+function getOffset(event,elt){
+    var iterations=0;
+    //if we have webkit, then use webkitConvertPointFromPageToNode instead
+    if(window.webkitConvertPointFromPageToNode){
+        var webkitPoint=webkitConvertPointFromPageToNode(elt,new WebKitPoint(event.clientX,event.clientY));
+        //if it is off-element, return null
+        if(webkitPoint.x<0||webkitPoint.y<0)
+            return null;
+        return {
+            x: webkitPoint.x,
+            y: webkitPoint.y,
+            time: new Date().getTime()-st
+        }
+    }
+    //make full-size element on top of specified element
+    var cover=document.createElement('div');
+    //add styling
+    cover.style.cssText='height:100%;width:100%;opacity:0;position:absolute;z-index:5000;';
+    //and add it to the document
+    elt.appendChild(cover);
+    //make sure the event is in the element given
+    if(document.elementFromPoint(event.clientX,event.clientY)!==cover){
+        //remove the cover
+        cover.parentNode.removeChild(cover);
+        //we've got nothing to show, so return null
+        return null;
+    }
+    //array of all places for rects
+    var rectPlaces=['topleft','topcenter','topright','centerleft','centercenter','centerright','bottomleft','bottomcenter','bottomright'];
+    //function that adds 9 rects to element
+    function addChildren(elt){
+        iterations++;
+        //loop through all places for rects
+        rectPlaces.forEach(function(curRect){
+            //create the element for this rect
+            var curElt=document.createElement('div');
+            //add class and id
+            curElt.setAttribute('class','offsetrect');
+            curElt.setAttribute('id',curRect+'offset');
+            //add it to element
+            elt.appendChild(curElt);
+        });
+        //get the element form point and its styling
+        var eltFromPoint=document.elementFromPoint(event.clientX,event.clientY);
+        var eltFromPointStyle=getComputedStyle(eltFromPoint);
+        //Either return the element smaller than 1 pixel that the event was in, or recurse until we do find it, and return the result of the recursement
+        return Math.max(parseFloat(eltFromPointStyle.getPropertyValue('height')),parseFloat(eltFromPointStyle.getPropertyValue('width')))<=1?eltFromPoint:addChildren(eltFromPoint);
+    }
+    //this is the innermost element
+    var correctElt=addChildren(cover);
+    //find the element's top and left value by going through all of its parents and adding up the values, as top and left are relative to the parent but we want relative to teh wall
+    for(var curElt=correctElt,correctTop=0,correctLeft=0;curElt!==cover;curElt=curElt.parentNode){
+        //get the style for the current element
+        var curEltStyle=getComputedStyle(curElt);
+        //add the top and left for the current element to the total
+        correctTop+=parseFloat(curEltStyle.getPropertyValue('top'));
+        correctLeft+=parseFloat(curEltStyle.getPropertyValue('left'));
+    }
+    //remove all of the elements used for testing
+    cover.parentNode.removeChild(cover);
+    //the returned object
+    var returnObj={
+        x: correctLeft,
+        y: correctTop,
+        iterations: iterations
+    }
+    return returnObj;
 }
 
 function GetZoomFactor () {
     var factor = 1;
     if (document.body.getBoundingClientRect) {
-            // rect is only in physical pixel size in IE before version 8 
+            // rect is only in physical pixel size in IE before version 8
         var rect = document.body.getBoundingClientRect ();
         var physicalW = rect.right - rect.left;
         var logicalW = document.body.offsetWidth;

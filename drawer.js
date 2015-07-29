@@ -139,38 +139,7 @@ document.addEventListener('pagerendered', function (e) {
   var W = viewBox[2];
   var H = viewBox[3];
 
-  $('.textCon, .svgCon', pageView.drawerLayer).css({ 'transform-origin':'0% 0%', 'transform': 'scale('+curScale+') rotate('+curRotation+'deg) translate(0px,0px)' }).show();
 
-  var offset = $(pageView.drawerLayer).offset();
-  var compStyle =window.getComputedStyle( $(pageView.drawerLayer).get(0) );
-  var borderL = parseInt(compStyle['border-left-width'], 10);
-  var borderR = parseInt(compStyle['border-right-width'], 10);
-  var borderT = parseInt(compStyle['border-top-width'], 10);
-  var borderB = parseInt(compStyle['border-bottom-width'], 10);
-  offset.left += borderL;
-  offset.top += borderT;
-  offset.width -= borderL+borderR;
-  offset.height -= borderT+borderB;
-
-  console.log(offset);
-
-  if(curRotation==0)  var cc = {clientX: $(pageView.drawerLayer).offset().left, clientY: $(pageView.drawerLayer).offset().top};
-  if(curRotation==90)  var cc = {clientX: offset.left+offset.width, clientY: $(pageView.drawerLayer).offset().top};
-  var el =  $('.svgCon', pageView.drawerLayer).get(0) ;
-  //var aa= getOffset(cc , $('.svgCon', pageView.drawerLayer).get(0) );
-  var aa = getOffsetXY( cc.clientX, cc.clientY, el );
-  var offx = aa.x*W*curScale;
-  var offy = aa.y*H*curScale;
-  offx /= curScale;
-  offy /= curScale;
-  console.log(W, H, cc, aa, offx, offy, $('.textCon', pageView.drawerLayer).get(0).style.cssText )
-  var t1 = $('.textCon', pageView.drawerLayer).get(0).style.cssText;  
-  var t2 = $('.svgCon', pageView.drawerLayer).get(0).style.cssText;  
-
-  $('.textCon', pageView.drawerLayer).get(0).style.cssText = t1.replace(/translate\(0px\s*,\s*0px\)/, 'translate('+offx+'px,'+offy+'px)' );
-  $('.svgCon', pageView.drawerLayer).get(0).style.cssText = t2.replace(/translate\(0px\s*,\s*0px\)/, 'translate('+offx+'px,'+offy+'px)' );
-
-  return;
 
   //text tranlation with rotation
 
@@ -261,6 +230,21 @@ document.addEventListener('pagerendered', function (e) {
 
 
 });
+
+function getClientOffset(el){
+	var offset = $(el).offset();
+	var compStyle =window.getComputedStyle( $(el).get(0) );
+	var borderL = parseInt(compStyle['border-left-width'], 10);
+	var borderR = parseInt(compStyle['border-right-width'], 10);
+	var borderT = parseInt(compStyle['border-top-width'], 10);
+	var borderB = parseInt(compStyle['border-bottom-width'], 10);
+	offset.left += borderL;
+	offset.top += borderT;
+	offset.width -= borderL+borderR;
+	offset.height -= borderT+borderB;
+	return offset;
+}
+
 
 function getViewPortWH () {
   var box = $('svg.canvas').attr('viewBox').split(/\s+/g).map(function(v){return parseInt(v)});
@@ -835,8 +819,8 @@ var svgns = "http://www.w3.org/2000/svg";
       var isShape = $(evt.target).hasClass('shape');
       var isText = $(evt.target).closest('.textWrap').size()>0;
 
-      var x = evt.pageX-$(canvas).offset().left;
-      var y = evt.pageY-$(canvas).offset().top;
+      var x = evt.pageX- getClientOffset($(canvas)).left;
+      var y = evt.pageY-getClientOffset($(canvas)).top;
 
       if(0&&isText){
         var viewBW = getViewPortWH();
@@ -970,8 +954,8 @@ var svgns = "http://www.w3.org/2000/svg";
 
       if(!curContext) return;
 
-      var x = evt.pageX-$(curContext).offset().left;
-      var y = evt.pageY-$(curContext).offset().top;
+      var x = evt.pageX-getClientOffset($(curContext)).left;
+      var y = evt.pageY-getClientOffset($(curContext)).top;
 
 
       var canvas = $(evt.target).closest('.drawerLayer');
@@ -1222,8 +1206,8 @@ var svgns = "http://www.w3.org/2000/svg";
 
       var canvas = $(curContext).find('svg.canvas');
 
-      var x = evt.pageX-$(curContext).offset().left;
-      var y = evt.pageY-$(curContext).offset().top;
+      var x = evt.pageX-getClientOffset($(curContext)).left;
+      var y = evt.pageY-getClientOffset($(curContext)).top;
 
       if(0&&isText && !dragging){
         var viewBW = getViewPortWH();

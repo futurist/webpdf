@@ -446,7 +446,7 @@ See https://github.com/adobe-type-tools/cmap-resources
   margin: 1px auto -8px auto;
   position: relative;
   overflow: hidden;
-  border: 9px solid rgba(255,0,0,0.5);
+  /*border: 9px solid rgba(255,0,0,0.5);*/
 }
 
 
@@ -482,30 +482,12 @@ See https://github.com/adobe-type-tools/cmap-resources
     pointer-events: visible;
   }
   .drawerLayer [data-hl]{
-    stroke-dasharray: 20,15;
+    stroke-dasharray: 5,5;
+    fill: rgba(255,255,0,0.5);
     cursor: -webkit-grabbing;
   }
   .drawerLayer .selectState, .selectState [data-hl]{
       cursor: crosshair!important;
-  }
-  #drawTool{
-    position: fixed;
-    z-index: 100;
-    bottom: 10px;
-    left: 0px;
-    height: 30px;
-    width: 100%;
-    overflow: visible;
-  }
-  #drawTool .subtool{
-    position: absolute;
-    bottom: 50px;
-    left: 0;
-    height: 30px;
-  }
-  #drawTool button{
-    height:44px;
-    width:88px;
   }
   .drawerLayer .textCon{
     position: absolute;
@@ -552,7 +534,7 @@ See https://github.com/adobe-type-tools/cmap-resources
   .drawerLayer .bbox{
     position: absolute;
     z-index: 9999999;
-    background-color: rgba(255,0,0,0);
+    background-color: rgba(0,0,255,0);
   }
   .drawerLayer [data-hl] .bbox{
     background-color: rgba(255,255,0,0.5);
@@ -561,13 +543,13 @@ See https://github.com/adobe-type-tools/cmap-resources
     position: absolute;
     width: 44px;
     height: 44px;
-    background: red;
+    background: rgba(0,0,255,0.5);
     z-index: 999999999;
   }
   .drawerLayer .textarea{
     position: absolute;
     z-index: 999999999;
-    background: rgba(255,0,0,0.5);
+    background: rgba(0,0,255,0.2);
     -webkit-appearance:none;
     -webkit-border-radius:0px;
     -webkit-border-fit:border !important;
@@ -579,6 +561,97 @@ See https://github.com/adobe-type-tools/cmap-resources
     margin: 0;
     padding: 0;
   }
+
+  .colorCon{
+      position: fixed;
+      width: 300px;
+      display: none;
+      border: 1px solid #aaa;
+      background: #eee;
+      bottom: 90px;
+      right: 20px;
+      min-height: 50px;
+      z-index: 999999999;
+  }
+
+  .colorCon a{
+    float:left;
+    width: 50px;
+    height: 40px;
+    background: #f00;
+    margin: 5px 5px;
+  }
+
+
+.noselect {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    -khtml-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+}
+
+
+  #drawTool2{
+    position: fixed;
+    z-index: 100;
+    bottom: 10px;
+    left: 0px;
+    height: 30px;
+    width: 100%;
+    overflow: visible;
+  }
+  #drawTool2 .subtool{
+    position: fixed;
+    bottom: 50px;
+    left: 0;
+    height: 30px;
+  }
+
+  .botmenu{
+    position: fixed;
+    bottom: 0;
+    left:0;
+      width: 100%;
+    height: 44px;
+    border-top:1px solid #bfbfbf;
+    font:18px/1 "黑体";
+    background: #fff;
+    z-index: 999999999999;
+  }
+
+  .botmenu>div{
+    display: table;
+    table-layout:fixed;
+    height: 100%;
+    width: 100%;
+  }
+  .botmenu a{
+    cursor: pointer;
+    
+    display: table-cell;
+    vertical-align: middle;
+    text-align: center;
+    width: 25%;
+    height: 100%;
+    border-right:1px solid #bfbfbf;
+  }
+  .botmenu a:link, .botmenu a:visited{
+    color: #353535;
+    text-decoration: none;
+  }
+  .subtool {
+    position: relative;
+    bottom: 89px;
+    background: #fff;
+    border-top: 1px solid #bfbfbf;
+  }
+
+  .plusSign{
+      font-size: 40px;
+  }
+
 
 </style>
 
@@ -627,59 +700,86 @@ See https://github.com/adobe-type-tools/cmap-resources
 }
 </style>
 
-<div id="drawTool">
+
+
+
+<div id="mainMenu" class="botmenu noselect">
+
+  <div class="maintool">
+    <a class="button" onclick="backCabinet()">文件柜</a>
+    <a class="button" onclick="setStatus('remark')">标注</a>
+    <a class="button plusSign" onclick="PDFViewerApplication.zoomOut()">-</a>
+    <a class="button plusSign" onclick="PDFViewerApplication.zoomIn()">+</a>
+    <a class="button" onclick="setStatus('share')">分享</a>
+    <a class="button" onclick="setStatus('print')">打印</a>
+
+  </div>
+
+</div>
+
+
+
+<div id="drawTool" class="botmenu noselect">
+
 
 <div class="maintool">
-  <button class="btnCurve" data-onclick="setTool('curve')">绘制</button>
-  <button class="btnLine" data-onclick="setTool('line')">直线</button>
-  <button class="btnRect" data-onclick="setTool('rect')">矩形</button>
-  <button class="btnCircle" data-onclick="setTool('circle')">圆形</button>
-  <button class="btnText" data-onclick="setTool('text')">文字</button>
-  <button class="btnRedo" data-onclick="OPHistory.redo()">Redo</button>
-  <button class="btnUndo" data-onclick="OPHistory.undo()">Undo</button>
-  <button class="btnDel" data-onclick="deleteEl()">删除</button>
+  <a class="button btnCurve" data-onclick="saveCanvas()">保存</a>
+  <a class="button btnCurve" data-onclick="setTool('curve')">绘制</a>
+  <a class="button btnLine" data-onclick="setTool('line')">直线</a>
+  <a class="button btnRect" data-onclick="setTool('rect')">矩形</a>
+  <a class="button btnCircle" data-onclick="setTool('circle')">圆形</a>
+  <a class="button btnText" data-onclick="setTool('text')">文字</a>
+  <a class="button btnText" data-onclick="switchOption('operation')">操作</a>
+
+</div>
+
+<div class="subtool subtool_operation">
+  <a class="button btnRedo" data-onclick="OPHistory.redo()">Redo</a>
+  <a class="button btnUndo" data-onclick="OPHistory.undo()">Undo</a>
+  <a class="button btnDel" data-onclick="deleteEl()">删除</a>
 </div>
 
 <div class="subtool subtool_curve">
-  <button class="btnArrow1" data-onclick='setTool("curve", { "toggle":{"arrow": 1} } )'>前箭头</button>
-  <button class="btnArrow2" data-onclick='setTool("curve", { "toggle":{"arrow": 2} } )'>后箭头</button>
-  <button class="btnAutoClose1" data-onclick='setTool("curve", {"toggle": {"autoClose":1} } )'>直线封闭</button>
-  <button class="btnAutoClose2" data-onclick='setTool("curve", {"toggle": {"autoClose":2} } )'>曲线封闭</button>
-  <button class="btnStrokeWidth2" data-onclick='setTool("curve", {"stroke-width": "-"} )'>小</button>
-  <button class="btnStrokeWidth6" data-onclick='setTool("curve", {"stroke-width": "+"} )'>大</button>
-  <button class="btnStroke" data-onclick='setTool("curve", {"stroke": "#f0f"} )'>颜色</button>
+  <a class="button btnArrow1" data-onclick='setTool("curve", { "toggle":{"arrow": 1} } )'>前箭头</a>
+  <a class="button btnArrow2" data-onclick='setTool("curve", { "toggle":{"arrow": 2} } )'>后箭头</a>
+  <a class="button btnAutoClose1" data-onclick='setTool("curve", {"toggle": {"autoClose":1} } )'>直线封闭</a>
+  <a class="button btnAutoClose2" data-onclick='setTool("curve", {"toggle": {"autoClose":2} } )'>曲线封闭</a>
+  <a class="button btnStrokeWidth2" data-onclick='setTool("curve", {"stroke-width": "-"} )'>小</a>
+  <a class="button btnStrokeWidth6" data-onclick='setTool("curve", {"stroke-width": "+"} )'>大</a>
+  <a class="button btnStroke" data-onclick='chooseColor()'>颜色</a>
 </div>
 
 <div class="subtool subtool_line">
-  <button class="btnArrow1" data-onclick='setTool("line", {"toggle": {"arrow":1} })'>前箭头</button>
-  <button class="btnArrow2" data-onclick='setTool("line", {"toggle": {"arrow":2} })'>后箭头</button>
-  <button class="btnArrow2" data-onclick='setTool("line", {"toggle": {"highLight":1}, "stroke":"#f0f"})'>荧光笔</button>
-  <button class="btnStrokeWidth2" data-onclick='setTool("line", {"stroke-width": "-"})'>小</button>
-  <button class="btnStrokeWidth6" data-onclick='setTool("line", {"stroke-width": "+"})'>大</button>
-  <button class="btnStroke" data-onclick='setTool("line", {"stroke": "#f0f"})'>颜色</button>
+  <a class="button btnArrow1" data-onclick='setTool("line", {"toggle": {"arrow":1} })'>前箭头</a>
+  <a class="button btnArrow2" data-onclick='setTool("line", {"toggle": {"arrow":2} })'>后箭头</a>
+  <a class="button btnArrow2" data-onclick='setTool("line", {"toggle": {"highLight":1}, "stroke":"#f0f"})'>荧光笔</a>
+  <a class="button btnStrokeWidth2" data-onclick='setTool("line", {"stroke-width": "-"})'>小</a>
+  <a class="button btnStrokeWidth6" data-onclick='setTool("line", {"stroke-width": "+"})'>大</a>
+  <a class="button btnStroke" data-onclick='chooseColor()'>颜色</a>
 </div>
 
 <div class="subtool subtool_rect">
-  <button class="btnStrokeWidth2" data-onclick='setTool("rect", {"stroke-width": "-"})'>小</button>
-  <button class="btnStrokeWidth6" data-onclick='setTool("rect", {"stroke-width": "+"})'>大</button>
-  <button class="btnStroke" data-onclick='setTool("rect", {"stroke": "#f0f"})'>颜色</button>
+  <a class="button btnStrokeWidth2" data-onclick='setTool("rect", {"stroke-width": "-"})'>小</a>
+  <a class="button btnStrokeWidth6" data-onclick='setTool("rect", {"stroke-width": "+"})'>大</a>
+  <a class="button btnStroke" data-onclick='chooseColor()'>颜色</a>
 </div>
 
 <div class="subtool subtool_circle">
-  <button class="btnStrokeWidth2" data-onclick='setTool("circle", {"stroke-width": "-"})'>小</button>
-  <button class="btnStrokeWidth6" data-onclick='setTool("circle", {"stroke-width": "+"})'>大</button>
-  <button class="btnStroke" data-onclick='setTool("circle", {"stroke": "#f0f"})'>颜色</button>
+  <a class="button btnStrokeWidth2" data-onclick='setTool("circle", {"stroke-width": "-"})'>小</a>
+  <a class="button btnStrokeWidth6" data-onclick='setTool("circle", {"stroke-width": "+"})'>大</a>
+  <a class="button btnStroke" data-onclick='chooseColor()'>颜色</a>
 </div>
 
 <div class="subtool subtool_text">
-  <button class="btnStrokeWidth2" data-onclick='setTool("text", {"stroke-width": "-"})'>小</button>
-  <button class="btnStrokeWidth6" data-onclick='setTool("text", {"stroke-width": "+"})'>大</button>
-  <button class="btnStroke" data-onclick='setTool("text", {"stroke": "#f0f"})'>颜色</button>
+  <a class="button btnStrokeWidth2" data-onclick='setTool("text", {"stroke-width": "-"})'>小</a>
+  <a class="button btnStrokeWidth6" data-onclick='setTool("text", {"stroke-width": "+"})'>大</a>
+  <a class="button btnStroke" data-onclick='chooseColor()'>颜色</a>
 </div>
 
 </div>
 
-
+<div class="colorCon">
+</div>
 
 
   </body>

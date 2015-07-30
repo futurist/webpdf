@@ -56,7 +56,7 @@ var DrawView  = (function () {
 
     var $drawerLayer = $(this.div);
 
-    var str = '<div class="svgCon" style="padding-top:0px;"> <svg viewBox="0 0 {{width}} {{height}}" preserveAspectRatio="xMidYMid meet" class="canvas" xmlns="http://www.w3.org/2000/svg" version="1.1"> <defs> <marker id="triangle" preserveAspectRatio="xMinYMin meet"viewBox="0 0 100 100" refX="50" refY="50"markerUnits="userSpaceOnUse"stroke="#f00"fill="#f00"stroke-linecap="round"stroke-width="10"stroke-linejoin="bevel"markerWidth="40" markerHeight="30"orient="auto"> <path d="M 0 0 L 100 50 L 0 100 L 30 50 z" /> </marker> </defs> <rect class="selrect" style="display:none; stroke:#999; stroke-width:1; stroke-dasharray:10,5; fill:none;" /> </svg> </div> <div class="textCon" class="canvas"> </div>';
+    var str = '<div class="svgCon" style="padding-top:0px;"> <svg viewBox="0 0 {{width}} {{height}}" preserveAspectRatio="xMidYMid meet" class="canvas" xmlns="http://www.w3.org/2000/svg" version="1.1"> <defs> <marker id="triangle" preserveAspectRatio="xMinYMin meet" viewBox="0 0 100 100" refX="50" refY="50" markerUnits="userSpaceOnUse" stroke="#f00" fill="#f00" stroke-linecap="round" stroke-width="10" stroke-linejoin="bevel" markerWidth="40" markerHeight="30" orient="auto"> <path d="M 0 0 L 100 50 L 0 100 L 30 50 z" /> </marker> </defs> <rect class="selrect" style="display:none; stroke:#999; stroke-width:1; stroke-dasharray:10,5; fill:none;" /> </svg> </div> <div class="textCon" class="canvas"> </div>';
     str = str.replace('{{width}}', viewBox[2]).replace('{{height}}', viewBox[3]);
 
     $drawerLayer.empty().append(str).data('page-number', this.id);
@@ -143,18 +143,27 @@ document.addEventListener('pagerendered', function (e) {
 
   //text tranlation with rotation
 
+  var transformProp = isAndroid ? '-webkit-transform' : 'transform';
+
   if(curRotation == 0){
-    $('.textCon').show().css({'transform': 'scale('+curScale+')' });
+    $('.textCon').show().css({'-webkit-transform': 'scale('+curScale+')' });
   }
   if(curRotation == 90){
-    $('.textCon').show().css({'transform': 'scale('+curScale+') rotate(90deg) translate(0,-'+ H +'px)' });
+    $('.textCon').show().css({'-webkit-transform': 'scale('+curScale+') rotate(90deg) translate(0,-'+ H +'px)' });
   }
   if(curRotation == 180){
-    $('.textCon').show().css({'transform': 'scale('+curScale+') rotate(180deg) translate(-'+ W +'px,-'+ H +'px)' });
+    $('.textCon').show().css({'-webkit-transform': 'scale('+curScale+') rotate(180deg) translate(-'+ W +'px,-'+ H +'px)' });
   }
   if(curRotation == 270){
-    $('.textCon').show().css({'transform': 'scale('+curScale+') rotate(270deg) translate(-'+ W +'px,-'+ 0 +'px)' });
+    $('.textCon').show().css({'-webkit-transform': 'scale('+curScale+') rotate(270deg) translate(-'+ W +'px,-'+ 0 +'px)' });
   }
+
+
+
+  var p = getRealOffset( $('.svgCon').parent() );
+  $('.svgCon').width( p.width );
+  $('.svgCon').height( p.height );
+
 
   //change direction
   if(curRotation == oldRotation) return;
@@ -180,10 +189,6 @@ document.addEventListener('pagerendered', function (e) {
   var box = $('svg.canvas').attr('viewBox').split(/\s+/g).map(function(v){return parseInt(v)});
   var bw = box[2];
   var bh = box[3];
-
-  var p = $('.svgCon').parent();
-  $('.svgCon').width( p.width() );
-  $('.svgCon').height( p.height() );
 
 
   /*****
@@ -231,7 +236,7 @@ document.addEventListener('pagerendered', function (e) {
 
 });
 
-function getClientOffset(el){
+function getRealOffset(el){
 	var offset = $(el).offset();
 	var compStyle =window.getComputedStyle( $(el).get(0) );
 	var borderL = parseInt(compStyle['border-left-width'], 10);
@@ -460,6 +465,10 @@ $(window).on(
   }
 );
 
+var isAndroid = /(android)/i.test(navigator.userAgent);
+var isWeiXin = navigator.userAgent.match(/MicroMessenger\/([\d.]+)/i);
+var isiOS = /iPhone/i.test(navigator.platform) || /iPod/i.test(navigator.platform) || /iPad/i.test(navigator.userAgent);  
+var isMobile = isAndroid||isWeiXin||isiOS;
 
 // init function
 function init (context) {
@@ -484,7 +493,7 @@ $(function  () {
 
   startWindowEvent();
 
-  $('button').on(downE, function  (e) {
+  $('.button').on(downE, function  (e) {
     e.stopPropagation();
     var evt = /touch/.test(e.type) ? e.touches[0] : e;
     eval( $(evt.target).data('onclick') );
@@ -638,6 +647,11 @@ var svgns = "http://www.w3.org/2000/svg";
 
 
 
+    function switchOption (tool, options) {
+    	$('#drawTool .subtool').hide();
+      	$('#drawTool .subtool_'+tool).show();
+    }
+
     function setTool (tool, options) {
 
       if(!options) options={};
@@ -718,9 +732,8 @@ var svgns = "http://www.w3.org/2000/svg";
         if( start && end )
         if(vTool=='text' ){
 
-        	console.log(newOptions);
         	if( $('.textarea').size() ){
-        		$('.textarea, .editing').css({  "color":newOptions.stroke, "font-family": newOptions['font-family'], "font-size": newOptions['stroke-width'] });
+        		$('.textarea, .editing').css({  "font-family": newOptions['font-family'], "font-size": newOptions['stroke-width'] });
         		$('.editing').data('options', JSON.stringify( newOptions) );
         		return;
         	}
@@ -826,12 +839,12 @@ var svgns = "http://www.w3.org/2000/svg";
         return;
       }
 
-      console.log(canvas, getOffsetXY(evt.pageX, evt.pageY, canvas.get(0)) );
+      //console.log(canvas, getOffsetXY(evt.pageX, evt.pageY, canvas.get(0)) );
       var isShape = $(evt.target).hasClass('shape');
       var isText = $(evt.target).closest('.textWrap').size()>0;
 
-      var x = evt.pageX- getClientOffset($(canvas)).left;
-      var y = evt.pageY-getClientOffset($(canvas)).top;
+      var x = evt.pageX- getRealOffset($(canvas)).left;
+      var y = evt.pageY-getRealOffset($(canvas)).top;
 
       if(0&&isText){
         var viewBW = getViewPortWH();
@@ -963,10 +976,11 @@ var svgns = "http://www.w3.org/2000/svg";
 
       //if( ! $(evt.target).closest('.canvas').size() ) return;
 
-      if(!curContext) return;
-
-      var x = evt.pageX-getClientOffset($(curContext)).left;
-      var y = evt.pageY-getClientOffset($(curContext)).top;
+      if(!curContext) {
+      	return;
+      }
+      var x = evt.pageX-getRealOffset($(curContext)).left;
+      var y = evt.pageY-getRealOffset($(curContext)).top;
 
 
       var canvas = $(evt.target).closest('.drawerLayer');
@@ -1003,7 +1017,9 @@ var svgns = "http://www.w3.org/2000/svg";
         return false;
       }
 
-      if( checkMoveOut() ) return;
+      if( checkMoveOut() ){
+      	return;
+      } 
 
 
 
@@ -1118,7 +1134,6 @@ var svgns = "http://www.w3.org/2000/svg";
               var tx = dx+ ~~oldTrans[0];
               var ty = dy+ ~~oldTrans[1];
 
-
               setTranslateXY(v, tx, ty);
 
             });
@@ -1150,12 +1165,14 @@ var svgns = "http://www.w3.org/2000/svg";
 
           if( !drawing && dist >DRAW_TOLERANCE ){
             drawing = true;
-            createLine([downX, downY], [x,y]);
+            if(!isAndroid) createLine([downX, downY], [x,y]);
           }
           if(!drawing)return;
 
-          var line = curContext.querySelector('[data-id="'+ curShapeID +'"]');
-          createLine([downX, downY], [x,y], line);
+          if(!isAndroid){
+	          var line = curContext.querySelector('[data-id="'+ curShapeID +'"]');
+	          createLine([downX, downY], [x,y], line);
+          }
 
 
         }
@@ -1164,12 +1181,14 @@ var svgns = "http://www.w3.org/2000/svg";
 
           if( !drawing && dist >DRAW_TOLERANCE ){
             drawing = true;
-            createRect([downX, downY], [x,y]);
+            if(!isAndroid) createRect([downX, downY], [x,y]);
           }
           if(!drawing)return;
 
-          var rect = curContext.querySelector('[data-id="'+ curShapeID +'"]');
-          createRect([downX, downY], [x,y], rect);
+          if(!isAndroid){
+	          var rect = curContext.querySelector('[data-id="'+ curShapeID +'"]');
+	          createRect([downX, downY], [x,y], rect);
+	      }
 
 
         }
@@ -1178,12 +1197,14 @@ var svgns = "http://www.w3.org/2000/svg";
 
           if( !drawing && dist >DRAW_TOLERANCE ){
             drawing = true;
-            createCircle([downX, downY], [x,y]);
+            if(!isAndroid) createCircle([downX, downY], [x,y]);
           }
           if(!drawing)return;
 
-          var circle = curContext.querySelector('[data-id="'+ curShapeID +'"]');
-          createCircle([downX, downY], [x,y], circle);
+          if(!isAndroid){
+	          var circle = curContext.querySelector('[data-id="'+ curShapeID +'"]');
+	          createCircle([downX, downY], [x,y], circle);
+	      }
 
         }
 
@@ -1217,8 +1238,8 @@ var svgns = "http://www.w3.org/2000/svg";
 
       var canvas = $(curContext).find('svg.canvas');
 
-      var x = evt.pageX-getClientOffset($(curContext)).left;
-      var y = evt.pageY-getClientOffset($(curContext)).top;
+      var x = evt.pageX-getRealOffset($(curContext)).left;
+      var y = evt.pageY-getRealOffset($(curContext)).top;
 
       if(0&&isText && !dragging){
         var viewBW = getViewPortWH();
@@ -1233,10 +1254,12 @@ var svgns = "http://www.w3.org/2000/svg";
 
       var dx = x-downX;
       var dy = y-downY;
+      var prevX = downX;
+      var prevY = downY;
 
       var dist = downX&&downY && calcDist([downX, downY], [x,y]) || 0;
-      downX=downY=null;
 
+      downX=downY=null;
       clearTimeout(downTimer);
 
       var context = curContext;
@@ -1248,6 +1271,7 @@ var svgns = "http://www.w3.org/2000/svg";
         targetEl = el.pop();
         isText = $(targetEl).closest('.textWrap').size()>0;
       }
+
       var isHandler = $(evt.target).hasClass('handler');
 
       if(isHandler){
@@ -1341,8 +1365,6 @@ var svgns = "http://www.w3.org/2000/svg";
 
 
         if(curTool=='curve'){
-
-
           createPath(rPath);
 
           document.querySelectorAll('circle.hint').forEach(function  (v) {
@@ -1350,7 +1372,21 @@ var svgns = "http://www.w3.org/2000/svg";
           });
 
          svgHistory.update();
+        }
 
+
+        if(isAndroid && curTool=='line') {
+          var line = curContext.querySelector('[data-id="'+ curShapeID +'"]');
+          createLine([prevX, prevY], [x,y]);
+        }
+
+        if(isAndroid && curTool=='rect') {
+          var rect = curContext.querySelector('[data-id="'+ curShapeID +'"]');
+          createRect([prevX, prevY], [x,y]);
+        }
+        if(isAndroid && curTool=='circle') {
+          var circle = curContext.querySelector('[data-id="'+ curShapeID +'"]');
+          createCircle([prevX, prevY], [x,y]);
         }
 
         if(curTool=='text'){
@@ -1367,6 +1403,8 @@ var svgns = "http://www.w3.org/2000/svg";
 
 
       }
+
+      
 
     }
 
@@ -1516,7 +1554,8 @@ var svgns = "http://www.w3.org/2000/svg";
       var swidth = options['stroke-width']||2;
       var highlight = options.highLight;
 
-      var attr = {"d":d, "stroke-linecap":"round", "stroke-linejoin":"miter", "stroke-miterlimit":"4", stroke:options['stroke']||'#f00', "stroke-width": highlight ? swidth*4 : swidth , "opacity": highlight?0.5:1 }
+      //"stroke-linecap":"round", "stroke-linejoin":"miter", "stroke-miterlimit":"4",
+      var attr = {"d":d,  stroke:options['stroke']||'#f00', "stroke-width": highlight ? swidth*4 : swidth , "opacity": highlight?0.5:1 }
 
       for(var i in attr){
         path.setAttribute(i, attr[i]);
@@ -1724,6 +1763,7 @@ var svgns = "http://www.w3.org/2000/svg";
       $(targetEl).addClass('editing').hide();
       var box = $(targetEl).data('bbox');
       var offset = pointsToRect(box[0], box[1], getTranslateXY(targetEl) );
+      offset.width += 30;
      $(curContext).find('.textCon').append('<textarea class="text textarea" wrap="hard"></textarea>');
      $(curContext).find('.textCon').append('<div class="handler"></div>');
 
@@ -1783,7 +1823,7 @@ var svgns = "http://www.w3.org/2000/svg";
 
       }
 
-      path.css({"left":x, "top":y, "width":w, "height":h});
+      path.css({"left":x, "top":y, "width":w, "height":h, transform:'translate(0,0)'});
 
       if(isCeate){
         var $bbox = $('<div class="bbox"></div>');
@@ -2024,8 +2064,13 @@ var svgns = "http://www.w3.org/2000/svg";
           var newTransform = transform.replace(re, 'translate('+x + ','+ y + ')'  );
           $(obj).attr('transform', newTransform  );
        }else{
-          var newTransform = transform.replace(re, 'translate('+x+'px,'+y +'px)');
-          $(obj).css('transform', newTransform  );
+          var newTransform = transform.replace(re, 'translate('+parseInt(x)+'px,'+ parseInt(y) +'px)');
+          if(isAndroid){
+	          var oldCSS = $(obj).get(0).style.cssText + '-webkit-transform:none;';
+	          $(obj).get(0).style.cssText = oldCSS.replace( /-webkit-transform:[^;]*;|transform:[^;]*;/ig, '-webkit-transform:'+newTransform+';' );
+	      } else {
+	          $(obj).css('transform', newTransform  );
+	      }
        }
     }
     function calcInterpo (rPath, tension) {
@@ -2472,6 +2517,65 @@ function GetScrollPositions () {
         var scrollTop = Math.round (document.documentElement.scrollTop / zoomFactor);
     }
     return [scrollLeft, scrollTop];
+}
+
+function makeColorPicker () {
+
+	var letters = '0369CF'.split('');
+    var colorA = [];
+    for (var i = 0; i < 6; i++ )
+    for (var j = 0; j < 6; j++ )
+    for (var k = 0; k < 6; k++ ) {
+    	var std = Math.abs(j-i) + Math.abs(k-i) + Math.abs(j-k);
+    	var color = '#'+ letters[i]+letters[i]+letters[j]+letters[j]+letters[k]+letters[k];
+    	color = 'rgb('+parseInt('0x'+letters[i]+letters[i],16)+','+parseInt('0x'+letters[j]+letters[j],16)+','+parseInt('0x'+letters[k]+letters[k],16)+')';
+        if(std>8) colorA.push( color );
+    }
+    var W = $(window).width();
+    //W = ~~(W / 60)*60;
+    $('.colorCon').empty().width(300);
+    for(i=0; i<colorA.length; i++){
+		var box = $('<a href="#"></a>');
+		box.css({ 'background-color': colorA[i] });
+		box.data('color',  colorA[i] );
+		$('.colorCon').append(box);
+		box.on('click', function  (e) {
+			setTool(curTool, {"stroke": $(this).data('color') } );
+			$('.colorCon').hide();
+			e.preventDefault();
+		});
+	}
+}
+
+$(function  () {
+	makeColorPicker();
+})
+
+function chooseColor () {
+	$('.colorCon').show();
+}
+
+
+function saveCanvas () {
+  var offset = getRealOffset( $('#pageContainer1') );
+  $('.drawViewer').css({ height:0 });
+	$('[data-hl]').attr('data-hl',null);
+	$('#drawTool').hide();
+	$('#mainMenu').show();
+}
+
+
+function setStatus (stat) {
+	switch (stat){
+		case 'remark':
+			$('#drawTool').show();
+			$('#mainMenu').hide();
+			break;
+	}
+}
+
+function backCabinet () {
+	
 }
 
 

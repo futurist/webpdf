@@ -446,7 +446,7 @@ See https://github.com/adobe-type-tools/cmap-resources
   margin: 1px auto -8px auto;
   position: relative;
   overflow: hidden;
-  /*border: 9px solid rgba(255,0,0,0.5);*/
+  border: 9px solid rgba(0,0,0,0.01);
 }
 
 
@@ -467,7 +467,7 @@ See https://github.com/adobe-type-tools/cmap-resources
     -webkit-touch-callout: none;
   }
 
-  .drawerLayer .unselectable {
+  .page .unselectable {
     -webkit-touch-callout: none;
     -webkit-user-select: none;
     -khtml-user-select: none;
@@ -475,40 +475,43 @@ See https://github.com/adobe-type-tools/cmap-resources
     -ms-user-select: none;
       user-select: none;
   }
-  .drawerLayer .selrect{
+  .page .selrect{
     pointer-events: none;
   }
-  .drawerLayer svg path{
+  .page svg path{
     pointer-events: visible;
   }
-  .drawerLayer [data-hl]{
+  .page [data-hl]{
     stroke-dasharray: 5,5;
     fill: rgba(255,255,0,0.5);
     cursor: -webkit-grabbing;
   }
-  .drawerLayer .selectState, .selectState [data-hl]{
+  .page .selectState, .selectState [data-hl]{
       cursor: crosshair!important;
   }
-  .drawerLayer .textCon{
+  .page .textCon{
     position: absolute;
     overflow: visible;
     z-index: 99999;
+    top: 0;
+    left: 0;
     transform-origin: left top;
     transform:translate3d(0,0,0);
   }
-  .drawerLayer .textCon .text{
+  .page .textCon .text{
     position: absolute;
   }
 
-  .drawerLayer .canvasCon, .svgCon{
+  .page .canvasCon, .svgCon{
     position: absolute;
     z-index: 10;
     top:0;
     left: 0;
     bottom: 0;
     right: 0;
+    z-index: 99999;
   }
-  .drawerLayer svg.canvas{
+  .page svg.canvas{
     position: absolute;
     z-index: 15;
     top:0;
@@ -517,11 +520,11 @@ See https://github.com/adobe-type-tools/cmap-resources
     height: 100%;
   }
 
-  .drawerLayer .textWrap{
+  .page .textWrap{
     position: absolute;
     z-index: 99999;
   }
-  .drawerLayer .textWrap pre{
+  .page .textWrap pre{
     white-space: pre-wrap; /* css-3 */
     white-space: -moz-pre-wrap; /* Mozilla, since 1999 */
     white-space: -pre-wrap; /* Opera 4-6 */
@@ -531,22 +534,22 @@ See https://github.com/adobe-type-tools/cmap-resources
     padding-left:3px;
     display: inline-block;
   }
-  .drawerLayer .bbox{
+  .page .bbox{
     position: absolute;
     z-index: 9999999;
     background-color: rgba(0,0,255,0);
   }
-  .drawerLayer [data-hl] .bbox{
+  .page [data-hl] .bbox{
     background-color: rgba(255,255,0,0.5);
   }
-  .drawerLayer .handler{
+  .page .handler{
     position: absolute;
     width: 44px;
     height: 44px;
     background: rgba(0,0,255,0.5);
     z-index: 999999999;
   }
-  .drawerLayer .textarea{
+  .page .textarea{
     position: absolute;
     z-index: 999999999;
     background: rgba(0,0,255,0.2);
@@ -629,7 +632,7 @@ See https://github.com/adobe-type-tools/cmap-resources
   }
   .botmenu a{
     cursor: pointer;
-    
+
     display: table-cell;
     vertical-align: middle;
     text-align: center;
@@ -651,6 +654,11 @@ See https://github.com/adobe-type-tools/cmap-resources
   .plusSign{
       font-size: 40px;
   }
+
+  .textLayer{
+    z-index: 99999999;
+  }
+
 
 
 </style>
@@ -707,11 +715,11 @@ See https://github.com/adobe-type-tools/cmap-resources
 
   <div class="maintool">
     <a class="button" onclick="backCabinet()">文件柜</a>
-    <a class="button" onclick="setStatus('remark')">标注</a>
+    <a class="button" onclick="setStage('remark')">标注</a>
     <a class="button plusSign" onclick="PDFViewerApplication.zoomOut()">-</a>
     <a class="button plusSign" onclick="PDFViewerApplication.zoomIn()">+</a>
-    <a class="button" onclick="setStatus('share')">分享</a>
-    <a class="button" onclick="setStatus('print')">打印</a>
+    <a class="button" onclick="setStage('share')">分享</a>
+    <a class="button" onclick="setStage('print')">打印</a>
 
   </div>
 
@@ -723,7 +731,7 @@ See https://github.com/adobe-type-tools/cmap-resources
 
 
 <div class="maintool">
-  <a class="button btnCurve" data-onclick="saveCanvas()">保存</a>
+  <a class="button btnCurve" data-onclick="saveCanvas(); setStage('viewer')">保存</a>
   <a class="button btnCurve" data-onclick="setTool('curve')">绘制</a>
   <a class="button btnLine" data-onclick="setTool('line')">直线</a>
   <a class="button btnRect" data-onclick="setTool('rect')">矩形</a>

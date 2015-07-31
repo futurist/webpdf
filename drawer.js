@@ -66,6 +66,8 @@ var DrawView  = (function () {
 
     init( $drawerLayer );
 
+    restoreCanvas();
+
   }
 
   DrawView.prototype = {
@@ -412,11 +414,11 @@ function getRotateTranslate (obj, x,y) {
 document.addEventListener('textlayerrendered', function (e) {
   var pageIndex = e.detail.pageNumber - 1;
   var pageView = PDFViewerApplication.pdfViewer.getPageView(pageIndex);
-
+  if(curStage == 'remark')  $('.textLayer').hide();
 }, true);
 
 
-
+window.curStage = 'remark';
 window.pdfViewer = null;
 
 var PageObj = (function(){
@@ -467,7 +469,7 @@ $(window).on(
 
 var isAndroid = /(android)/i.test(navigator.userAgent);
 var isWeiXin = navigator.userAgent.match(/MicroMessenger\/([\d.]+)/i);
-var isiOS = /iPhone/i.test(navigator.platform) || /iPod/i.test(navigator.platform) || /iPad/i.test(navigator.userAgent);  
+var isiOS = /iPhone/i.test(navigator.platform) || /iPod/i.test(navigator.platform) || /iPad/i.test(navigator.userAgent);
 var isMobile = isAndroid||isWeiXin||isiOS;
 
 // init function
@@ -481,7 +483,7 @@ function init (context) {
   $('svg.canvas', context).data('id', NewID() );
   $('.svgCon', context).data('id', NewID() );
   $('.textCon', context).data('id', NewID() );
-
+  $('.textLayer').hide();
 
   svgHistory.update('init');
 
@@ -1019,7 +1021,7 @@ var svgns = "http://www.w3.org/2000/svg";
 
       if( checkMoveOut() ){
       	return;
-      } 
+      }
 
 
 
@@ -1404,7 +1406,7 @@ var svgns = "http://www.w3.org/2000/svg";
 
       }
 
-      
+
 
     }
 
@@ -1542,6 +1544,13 @@ var svgns = "http://www.w3.org/2000/svg";
     function createLine (startPoint, endPoint, path, options) {
 
       if(!options) options = ToolSet['line'];
+
+      var a= Victor.fromArray(startPoint);
+      var b= Victor.fromArray(endPoint);
+      var c = b.clone().subtract(a);
+      var snapAngle = Math.round(c.angleDeg()/15)*15 /180 * Math.PI;
+      //console.log( c.angleDeg(), c.length() *Math.cos( c.angle()-snapAngle ) );
+      endPoint = [ startPoint[0]+ c.length() *Math.cos( snapAngle ), startPoint[1]+ c.length() *Math.sin( snapAngle ) ];
 
       if(!path){
         path = makeShape("path", { "class":'shape line', fill:"rgba(255,255,255,0.001)" });
@@ -2044,7 +2053,7 @@ var svgns = "http://www.w3.org/2000/svg";
         if(!obj) return [0,0];
        if(obj.size) obj=obj.get(0);
         var style = obj.style;
-        var transform = style.transform || style.webkitTransform || style.mozTransform;
+        var transform = style.webkitTransform || style.transform || style.mozTransform;
         var transformAttr =obj.getAttribute('transform');
         transform = (!transformAttr) ? transform :  transformAttr;
         if(!transform ) return [0,0];
@@ -2055,7 +2064,7 @@ var svgns = "http://www.w3.org/2000/svg";
        if(!obj) return [0,0];
        if(obj.size) obj=obj.get(0);
         var style = obj.style;
-        var transform = style.transform || style.webkitTransform || style.mozTransform;
+        var transform = style.webkitTransform  || style.transform || style.mozTransform;
         var transformAttr =obj.getAttribute('transform');
         transform = (!transformAttr) ? transform :  transformAttr;
         if(!transform ) transform="translate(0,0)";
@@ -2065,6 +2074,8 @@ var svgns = "http://www.w3.org/2000/svg";
           $(obj).attr('transform', newTransform  );
        }else{
           var newTransform = transform.replace(re, 'translate('+parseInt(x)+'px,'+ parseInt(y) +'px)');
+          $(obj).css('-webkit-transform', newTransform  );
+	          return;
           if(isAndroid){
 	          var oldCSS = $(obj).get(0).style.cssText + '-webkit-transform:none;';
 	          $(obj).get(0).style.cssText = oldCSS.replace( /-webkit-transform:[^;]*;|transform:[^;]*;/ig, '-webkit-transform:'+newTransform+';' );
@@ -2549,6 +2560,7 @@ function makeColorPicker () {
 
 $(function  () {
 	makeColorPicker();
+
 })
 
 function chooseColor () {
@@ -2556,26 +2568,84 @@ function chooseColor () {
 }
 
 
-function saveCanvas () {
-  var offset = getRealOffset( $('#pageContainer1') );
-  $('.drawViewer').css({ height:0 });
-	$('[data-hl]').attr('data-hl',null);
-	$('#drawTool').hide();
-	$('#mainMenu').show();
+
+var host = "http://1111hui.com:3000";
+var savedCanvasData = [];
+
+function restoreCanvas () {
+
+	$('#drawViewer .page').each(function(){
+		var page = $(this).data('page-number');
+		if(savedCanvasData[page-1]) $(this).html( savedCanvasData[page-1] );
+	});
+
 }
 
+function saveCanvas () {
 
-function setStatus (stat) {
+
+	$('[data-hl]').attr('data-hl',null);
+
+	var saveObj = $('#drawViewer .page').toArray().map(function(v){
+		return $(v).html()
+	});
+
+	setTimeout(function(){
+		$.post( host + '/saveCanvas', { data: JSON.stringify(saveObj) } );
+	},0);
+
+  var svgCon = $('.svgCon').toArray();
+  svgCon.forEach(function(v,i){
+  	var page = $(v).parent().data('page-number');
+  	$(v).insertAfter('#pageContainer'+page+' .canvasWrapper');
+  });
+
+  var textCon = $('.textCon').toArray();
+  textCon.forEach(function(v,i){
+  	var page = $(v).parent().data('page-number');
+  	$(v).insertAfter('#pageContainer'+page+' .canvasWrapper');
+  });
+
+	$('#drawViewer').hide();
+	$('#drawTool').hide();
+	$('#mainMenu').show();
+	$('.textLayer').show();
+}
+
+function editCanvas () {
+	  var svgCon = $('.svgCon').toArray();
+	  svgCon.forEach(function(v,i){
+	  	var page = $(v).parent().data('page-number');
+	  	$(v).appendTo('#drawerLayer'+page+'');
+	  });
+
+	  var textCon = $('.textCon').toArray();
+	  textCon.forEach(function(v,i){
+	  	var page = $(v).parent().data('page-number');
+	  	$(v).appendTo('#drawerLayer'+page+'');
+	  });
+
+		$('#drawViewer').show();
+		$('#drawTool').show();
+		$('#mainMenu').hide();
+		$('.textLayer').hide();
+
+}
+
+function setStage (stat) {
 	switch (stat){
 		case 'remark':
-			$('#drawTool').show();
-			$('#mainMenu').hide();
+			editCanvas();
+			break;
+		case 'viewer':
+
 			break;
 	}
+	curStage = stat;
 }
 
 function backCabinet () {
-	
+
 }
 
 

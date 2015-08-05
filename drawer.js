@@ -132,6 +132,8 @@ window.addEventListener('scalechange', function scalechange(evt) {
 });
 
 document.addEventListener('pagerendered', function (e) {
+
+
   var pageIndex = e.detail.pageNumber - 1;
   var pageView = PDFViewerApplication.pdfViewer.getPageView(pageIndex);
   var oldRotation = window.curRotation||0;
@@ -141,7 +143,7 @@ document.addEventListener('pagerendered', function (e) {
   var W = viewBox[2];
   var H = viewBox[3];
 
-
+  copyDrawerLayerData(pageIndex);
 
   //text tranlation with rotation
 
@@ -414,7 +416,7 @@ function getRotateTranslate (obj, x,y) {
 document.addEventListener('textlayerrendered', function (e) {
   var pageIndex = e.detail.pageNumber - 1;
   var pageView = PDFViewerApplication.pdfViewer.getPageView(pageIndex);
-  if(curStage == 'remark')  $('.textLayer').hide();
+  if(window.curStage == 'remark')  $('.textLayer').hide();
 }, true);
 
 
@@ -459,11 +461,8 @@ var PageObj = (function(){
 })();
 
 
-
-$(window).on(
-  'touchmove',
-   function(e) {
-    e.preventDefault();
+ $(window).on('touchmove', function(e) {
+    if(window.curStage=='remark') e.preventDefault();
   }
 );
 
@@ -488,21 +487,6 @@ function init (context) {
   svgHistory.update('init');
 
 }
-//init();
-$(function  () {
-
-  setTool('curve');
-
-  startWindowEvent();
-
-  $('.button').on(downE, function  (e) {
-    e.stopPropagation();
-    var evt = /touch/.test(e.type) ? e.touches[0] : e;
-    eval( $(evt.target).data('onclick') );
-  } );
-
-
-});
 
 
 
@@ -544,7 +528,7 @@ var svgns = "http://www.w3.org/2000/svg";
       curve:{
         "stroke-width": 2,
         "stroke":"#f00",
-        "autoClose":0,
+        "autoClose":2,
         "arrow":0,
       },
       line:{
@@ -656,9 +640,12 @@ var svgns = "http://www.w3.org/2000/svg";
 
     function setTool (tool, options) {
 
-      if(!options) options={};
-
+      if(!options && curTool!=tool){
+        $('[data-hl]').attr('data-hl', null);
+      }
       curTool = tool;
+
+      if(!options) options={};
 
       $('#drawTool .subtool').hide();
       $('#drawTool .subtool_'+tool).show();
@@ -805,10 +792,12 @@ var svgns = "http://www.w3.org/2000/svg";
       }
     }
     var debugID=0;
-    function debug (str) {
-      if(!str) str="";
-      str+="";
-      $('#debug').html( ++debugID +" "+ str.replace(/</g, '&lt;').replace(/>/g, '&gt;') );
+    function debug () {
+      var str="";
+      for(var i=0; i<arguments.length; i++){
+        str+=arguments[i] + ' ';
+      }
+      $('#debug').show().html( ++debugID +" "+ str.replace(/</g, '&lt;').replace(/>/g, '&gt;') );
     }
 
     function getElementsFromPoint (rectPoint) {
@@ -1561,10 +1550,11 @@ var svgns = "http://www.w3.org/2000/svg";
       var d = 'M'+startPoint.join(',')+' '+endPoint.join(',');
 
       var swidth = options['stroke-width']||2;
-      var highlight = options.highLight;
+      var light = options.highLight;
 
       //"stroke-linecap":"round", "stroke-linejoin":"miter", "stroke-miterlimit":"4",
-      var attr = {"d":d,  stroke:options['stroke']||'#f00', "stroke-width": highlight ? swidth*4 : swidth , "opacity": highlight?0.5:1 }
+      var attr = {"d":d,  stroke:options['stroke']||'#f00', "stroke-width": light ? swidth*4 : swidth , "opacity": light?0.5:1 }
+      path.style['opacity'] = light?0.5:1;
 
       for(var i in attr){
         path.setAttribute(i, attr[i]);
@@ -2045,7 +2035,7 @@ var svgns = "http://www.w3.org/2000/svg";
           theTool = i;
         }
       }
-      setTool(theTool);
+      setTool(theTool, {});
     }
 
     function getTranslateXY(obj)
@@ -2558,10 +2548,6 @@ function makeColorPicker () {
 	}
 }
 
-$(function  () {
-	makeColorPicker();
-
-})
 
 function chooseColor () {
 	$('.colorCon').show();
@@ -2569,7 +2555,7 @@ function chooseColor () {
 
 
 
-var host = "http://1111hui.com:3000";
+var host = "http://1111hui.com:88";
 var savedCanvasData = [];
 
 function restoreCanvas () {
@@ -2578,6 +2564,23 @@ function restoreCanvas () {
 		var page = $(this).data('page-number');
 		if(savedCanvasData[page-1]) $(this).html( savedCanvasData[page-1] );
 	});
+
+}
+
+function copyDrawerLayerData(pageIndex){
+  var drawCon = $('#drawViewer');
+  if(pageIndex) drawCon = drawCon.find('.page').eq(pageIndex);
+  var svgCon = $('.svgCon', drawCon).toArray();
+  svgCon.forEach(function(v,i){
+    var page = $(v).parent().data('page-number');
+    $(v).clone().insertAfter('#pageContainer'+page+' .canvasWrapper');
+  });
+
+  var textCon = $('.textCon', drawCon).toArray();
+  textCon.forEach(function(v,i){
+    var page = $(v).parent().data('page-number');
+    $(v).clone().insertAfter('#pageContainer'+page+' .canvasWrapper');
+  });
 
 }
 
@@ -2594,36 +2597,26 @@ function saveCanvas () {
 		$.post( host + '/saveCanvas', { data: JSON.stringify(saveObj) } );
 	},0);
 
-  var svgCon = $('.svgCon').toArray();
-  svgCon.forEach(function(v,i){
-  	var page = $(v).parent().data('page-number');
-  	$(v).insertAfter('#pageContainer'+page+' .canvasWrapper');
-  });
+  copyDrawerLayerData();
 
-  var textCon = $('.textCon').toArray();
-  textCon.forEach(function(v,i){
-  	var page = $(v).parent().data('page-number');
-  	$(v).insertAfter('#pageContainer'+page+' .canvasWrapper');
-  });
+  setStage('viewer');
 
-	$('#drawViewer').hide();
-	$('#drawTool').hide();
-	$('#mainMenu').show();
-	$('.textLayer').show();
 }
 
-function editCanvas () {
-	  var svgCon = $('.svgCon').toArray();
-	  svgCon.forEach(function(v,i){
-	  	var page = $(v).parent().data('page-number');
-	  	$(v).appendTo('#drawerLayer'+page+'');
-	  });
+function showCanvas () {
 
-	  var textCon = $('.textCon').toArray();
-	  textCon.forEach(function(v,i){
-	  	var page = $(v).parent().data('page-number');
-	  	$(v).appendTo('#drawerLayer'+page+'');
-	  });
+    setTool('curve');
+
+    startWindowEvent();
+
+    $('.button').off().on(downE, function  (e) {
+      e.stopPropagation();
+      var evt = /touch/.test(e.type) ? e.touches[0] : e;
+      eval( $(evt.target).data('onclick') );
+    } );
+
+
+	  $('.svgCon, .textCon', $('#viewer')).remove();
 
 		$('#drawViewer').show();
 		$('#drawTool').show();
@@ -2633,20 +2626,62 @@ function editCanvas () {
 }
 
 function setStage (stat) {
+
 	switch (stat){
 		case 'remark':
-			editCanvas();
+			showCanvas();
 			break;
 		case 'viewer':
-
+      $('#drawViewer').hide();
+      $('#drawTool').hide();
+      $('#mainMenu').show();
+      $('.textLayer').show();
 			break;
 	}
-	curStage = stat;
+
+  if(stat!='remark'){
+      endWindowEvent();
+  }
+	window.curStage = stat;
 }
 
 function backCabinet () {
 
 }
 
+
+
+$(function  () {
+  makeColorPicker();
+  setStage('viewer');
+
+  var startDist = 0;
+  var touchEvent = new $.TouchEvent({
+      targetSelector: '#viewer',
+      startCallback: function(e){
+        var _this = this;
+        startDist = 0;
+        setTimeout(function(){
+          if(_this.touches>1) startDist = _this.moveDist;
+          else startDist = 0;
+        }, 50);
+      },
+      endCallback: function(e){
+        var _this = this;
+        var changeDist = 0;
+        if(startDist && _this.touches && _this.changedTouches ){
+          changeDist = (  _this.moveDist - startDist );
+          var scale= 1 + changeDist/ $(window).width();
+          window.curScale = PDFViewerApplication.pdfViewer.currentScale;
+          //debug(window.curScale, scale)
+          if(changeDist && scale) PDFViewerApplication.setScale( window.curScale*scale , false);
+        }
+
+      },
+      moveCallback: function(e){
+        var _this = this;
+      }
+    });
+});
 
 

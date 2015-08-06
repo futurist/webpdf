@@ -63,6 +63,7 @@ var DrawView  = (function () {
 
     pageView.drawerLayer = $drawerLayer.get(0);
     window.pdfViewer = PDFViewerApplication.pdfViewer;
+    window.curFile = PDFViewerApplication.url;
 
     init( $drawerLayer );
 
@@ -148,19 +149,21 @@ document.addEventListener('pagerendered', function (e) {
   //text tranlation with rotation
 
   var transformProp = isAndroid ? '-webkit-transform' : 'transform';
+  $('.textCon').show().css({'-webkit-transform': 'scale('+curScale+')' });
+  window.curRotation = 0;
 
-  if(curRotation == 0){
-    $('.textCon').show().css({'-webkit-transform': 'scale('+curScale+')' });
-  }
-  if(curRotation == 90){
-    $('.textCon').show().css({'-webkit-transform': 'scale('+curScale+') rotate(90deg) translate(0,-'+ H +'px)' });
-  }
-  if(curRotation == 180){
-    $('.textCon').show().css({'-webkit-transform': 'scale('+curScale+') rotate(180deg) translate(-'+ W +'px,-'+ H +'px)' });
-  }
-  if(curRotation == 270){
-    $('.textCon').show().css({'-webkit-transform': 'scale('+curScale+') rotate(270deg) translate(-'+ W +'px,-'+ 0 +'px)' });
-  }
+  // if(curRotation == 0){
+  //   $('.textCon').show().css({'-webkit-transform': 'scale('+curScale+')' });
+  // }
+  // if(curRotation == 90){
+  //   $('.textCon').show().css({'-webkit-transform': 'scale('+curScale+') rotate(90deg) translate(0,-'+ H +'px)' });
+  // }
+  // if(curRotation == 180){
+  //   $('.textCon').show().css({'-webkit-transform': 'scale('+curScale+') rotate(180deg) translate(-'+ W +'px,-'+ H +'px)' });
+  // }
+  // if(curRotation == 270){
+  //   $('.textCon').show().css({'-webkit-transform': 'scale('+curScale+') rotate(270deg) translate(-'+ W +'px,-'+ 0 +'px)' });
+  // }
 
 
 
@@ -461,7 +464,7 @@ var PageObj = (function(){
 })();
 
 
- $(window).on('touchmove', function(e) {
+$(document).add($(window)).on('touchmove', function(e) {
     if(window.curStage=='remark') e.preventDefault();
   }
 );
@@ -633,9 +636,41 @@ var svgns = "http://www.w3.org/2000/svg";
 
 
 
-    function switchOption (tool, options) {
-    	$('#drawTool .subtool').hide();
-      	$('#drawTool .subtool_'+tool).show();
+    function switchOption (con, tool, options) {
+    	$(con+' .subtool').hide();
+      $(con+' .subtool_'+tool).show().addClass('active');
+    }
+
+    function rotatePDF(dir){
+
+
+      $.post(host+'/rotateFile', {url: window.curFile, dir:dir}, function(data){
+        data = JSON.parse(data);
+        var oldUrl = window.location.href.split('/')
+        oldUrl.pop();
+        oldUrl.push(data.key);
+        var newUrl = oldUrl.join('/');
+        console.log(newUrl);
+        window.location = newUrl;
+      } );
+
+      return;
+
+      $.ajax({
+            type : "get",
+            async: false,
+            url : host+'/rotateFile?url='+ window.curFile + '&dir='+dir, 
+            dataType : "jsonp",
+            jsonp: "callback",//传递给请求处理程序或页面的，用以获得jsonp回调函数名的参数名(默认为:callback)
+            success : function(json){
+                alert(json);
+            },
+            error:function(){
+                alert('fail');
+            }
+        });
+
+
     }
 
     function setTool (tool, options) {
@@ -823,6 +858,7 @@ var svgns = "http://www.w3.org/2000/svg";
 
 
     function downFunc (e) {
+      setTimeout(function(){ $('.colorCon').hide(); }, 200);
       var evt = /touch/.test(e.type) ? e.touches[0] : e;
       var canvas = $(evt.target).closest('.drawerLayer')
       if(!canvas.size()) {
@@ -1750,6 +1786,7 @@ var svgns = "http://www.w3.org/2000/svg";
           setTimeout(function(){ svgHistory.update(); }, 100);
         }
       } else {
+        //$text.html( val.replace(/\n/g, '') );
         setTimeout(function(){ svgHistory.update(); }, 100);
       }
     }
@@ -2563,8 +2600,11 @@ function restoreCanvas () {
 	$('#drawViewer .page').each(function(){
 		var page = $(this).data('page-number');
 		if(savedCanvasData[page-1]) $(this).html( savedCanvasData[page-1] );
+    else{
+      $(this).find('.textWrap, .shape').remove();
+    }
 	});
-
+  copyDrawerLayerData();
 }
 
 function copyDrawerLayerData(pageIndex){
@@ -2592,6 +2632,7 @@ function saveCanvas () {
 	var saveObj = $('#drawViewer .page').toArray().map(function(v){
 		return $(v).html()
 	});
+  savedCanvasData = saveObj;
 
 	setTimeout(function(){
 		$.post( host + '/saveCanvas', { data: JSON.stringify(saveObj) } );
@@ -2599,22 +2640,13 @@ function saveCanvas () {
 
   copyDrawerLayerData();
 
-  setStage('viewer');
-
 }
 
 function showCanvas () {
 
     setTool('curve');
-
+    $('.btnCurve').addClass('active');
     startWindowEvent();
-
-    $('.button').off().on(downE, function  (e) {
-      e.stopPropagation();
-      var evt = /touch/.test(e.type) ? e.touches[0] : e;
-      eval( $(evt.target).data('onclick') );
-    } );
-
 
 	  $('.svgCon, .textCon', $('#viewer')).remove();
 
@@ -2626,7 +2658,8 @@ function showCanvas () {
 }
 
 function setStage (stat) {
-
+  $('.active').removeClass('active');
+  $('.subtool').hide();
 	switch (stat){
 		case 'remark':
 			showCanvas();
@@ -2646,7 +2679,10 @@ function setStage (stat) {
 }
 
 function backCabinet () {
-
+  var filename = curFile.split('/').pop();
+  if(filename.match(/\.pdf$/)){
+    window.location = "http://1111hui.com/pdf/client/tree.html?path="+filename;
+  }
 }
 
 
@@ -2654,6 +2690,16 @@ function backCabinet () {
 $(function  () {
   makeColorPicker();
   setStage('viewer');
+
+  $('.button').off().on(downE, function  (e) {
+    e.stopPropagation();
+    $(this).parent().children().removeClass('active');
+    $(this).addClass('active');
+    var evt = /touch/.test(e.type) ? e.touches[0] : e;
+    eval( $(evt.target).data('onclick') );
+    if( !$(this).hasClass('btnColorCon') ) setTimeout(function(){ $('.colorCon').hide(); }, 200);
+
+  } );
 
   var startDist = 0;
   var touchEvent = new $.TouchEvent({

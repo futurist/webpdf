@@ -52,10 +52,27 @@ function initSignPad(){
         if (signPAD.isEmpty()) {
             alert("请签名后再保存.");
         } else {
-            var data = window.signHisID? { signID:signID, hisID: window.signHisID} : {data: signPAD.toDataURL(), width:signCanvas.width, height:signCanvas.height, signID:signID};
-            $.post( 'http://1111hui.com:88/saveSign', data , function(data){
-                console.log(data);
-            });
+
+        var img = new Image();
+        img.onload = function(){
+            var canvas = document.createElement("canvas");
+              canvas.height = img.width;
+              canvas.width = img.height;
+              var ctx = canvas.getContext("2d");
+              ctx.rotate(90 * Math.PI / 180);
+              ctx.translate(0, -canvas.width);
+              //..check orientation data, this code assumes the case where its oriented 90 degrees off
+              ctx.drawImage(img, 0, 0);
+              var signData = canvas.toDataURL("image/png");
+              
+                var data = window.signHisID? { signID:signID, hisID: window.signHisID} : {data: signData, width:canvas.width, height:canvas.height, signID:signID};
+                $.post( 'http://1111hui.com:88/saveSign', data , function(data){
+                    console.log(data);
+                });
+
+          }
+          img.src=signPAD.toDataURL();
+            
         }
     });
 

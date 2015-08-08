@@ -503,7 +503,25 @@ See https://github.com/adobe-type-tools/cmap-resources
     position: absolute;
   }
 
-  .page .canvasCon, .svgCon{
+  .page .signImg{
+    position: absolute;
+    border:0;
+    outline: 0;
+  }
+
+  .page .signImg .img{
+    width:100%;
+    height: auto;
+  }
+  .page .signImg .img00{
+    background-repeat: no-repeat;
+    background-size: contain;    
+    content: '';
+    -webkit-transform-origin: left top;
+    -webkit-transform: rotate(90deg) translate(0%,-100%);
+  }
+
+  .page .canvasCon, .svgCon, .signCon{
     position: absolute;
     z-index: 10;
     top:0;

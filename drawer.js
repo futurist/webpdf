@@ -149,6 +149,8 @@ document.addEventListener('pagerendered', function (e) {
 
   copyDrawerLayerData(pageIndex);
 
+  restoreSignature(pageIndex);
+
   //text tranlation with rotation
 
   var transformProp = isAndroid ? '-webkit-transform' : 'transform';
@@ -2601,15 +2603,43 @@ var savedSignData = [];
 
 function restoreCanvas () {
 
-	$('#drawViewer .page').each(function(){
-		var page = $(this).data('page-number');
-		if(savedCanvasData[page-1]) $(this).html( savedCanvasData[page-1] );
+  $('#drawViewer .page').each(function(){
+    var page = $(this).data('page-number');
+    if(savedCanvasData[page-1]) $(this).html( savedCanvasData[page-1] );
     else{
       $(this).find('.textWrap, .shape').remove();
     }
-	});
+  });
   copyDrawerLayerData();
 }
+
+function getSignData (page) {
+  var data = savedSignData.filter(function  (v,i) {
+    return v.page==page;
+  });
+  return data ? data[0] : null;
+}
+
+function restoreSignature (pageIndex) {
+
+  savedSignData.forEach(function  (v,i) {
+    var page = pageIndex+1;
+    if(v.page!=page) return true;
+    //var img = $('<div class="signImg"><div class="img"></div></div>');
+    var img = $('<div class="signImg"><img class="img"></div></div>');
+    img.appendTo( $('#viewer .page').eq(v.page-1) );
+    img.css({left:v.pos.left+'px', top:v.pos.top+'px', width:v.pos.width+'px', height:v.pos.height+'px' });
+    img.find('.img').attr({ 'src': v.sign.signData });
+
+    // var r = v.sign.width/v.sign.height;
+    // var h = v.pos.width;
+    // var w = h*r;
+    // //img.find('.img').css({'background-image': 'url('+v.sign.signData+')',  width:w+'px', height: h+'px' });
+
+  });
+}
+
+
 
 function copyDrawerLayerData(pageIndex){
   var drawCon = $('#drawViewer');

@@ -52,12 +52,14 @@ var DrawView  = (function () {
     $drawCon.append(div);
 
     window.viewBox = pageView.viewport.viewBox;
-
+    var R = pageView.viewport.rotation;
+    var W = R%180? viewBox[3] : viewBox[2];
+    var H = R%180? viewBox[2] : viewBox[3];
 
     var $drawerLayer = $(this.div);
 
     var str = '<div class="svgCon" style="padding-top:0px;"> <svg viewBox="0 0 {{width}} {{height}}" preserveAspectRatio="xMidYMid meet" class="canvas" xmlns="http://www.w3.org/2000/svg" version="1.1"> <defs> <marker id="triangle" preserveAspectRatio="xMinYMin meet" viewBox="0 0 100 100" refX="50" refY="50" markerUnits="userSpaceOnUse" stroke="#f00" fill="#f00" stroke-linecap="round" stroke-width="10" stroke-linejoin="bevel" markerWidth="40" markerHeight="30" orient="auto"> <path d="M 0 0 L 100 50 L 0 100 L 30 50 z" /> </marker> </defs> <rect class="selrect" style="display:none; stroke:#999; stroke-width:1; stroke-dasharray:10,5; fill:none;" /> </svg> </div> <div class="textCon" class="canvas"> </div>';
-    str = str.replace('{{width}}', viewBox[2]).replace('{{height}}', viewBox[3]);
+    str = str.replace('{{width}}', W).replace('{{height}}', H);
 
     $drawerLayer.empty().append(str).data('page-number', this.id);
 
@@ -141,8 +143,9 @@ document.addEventListener('pagerendered', function (e) {
   window.curScale = pageView.viewport.scale;
   window.curRotation = pageView.viewport.rotation;
   window.viewBox = pageView.viewport.viewBox;
-  var W = viewBox[2];
-  var H = viewBox[3];
+  var R = pageView.viewport.rotation;
+  var W = R%180? viewBox[3] : viewBox[2];
+  var H = R%180? viewBox[2] : viewBox[3];
 
   copyDrawerLayerData(pageIndex);
 
@@ -659,7 +662,7 @@ var svgns = "http://www.w3.org/2000/svg";
       $.ajax({
             type : "get",
             async: false,
-            url : host+'/rotateFile?url='+ window.curFile + '&dir='+dir, 
+            url : host+'/rotateFile?url='+ window.curFile + '&dir='+dir,
             dataType : "jsonp",
             jsonp: "callback",//传递给请求处理程序或页面的，用以获得jsonp回调函数名的参数名(默认为:callback)
             success : function(json){
@@ -2311,10 +2314,10 @@ var rectsIntersect2 = function (testPoints, bbox, trans) {
     (r2.y + r2.height) > r1.y;
 };
 var rectsIntersect = function (r1, r2) {
-  return r2.x < (r1.x + r1.width) &&
-    (r2.x + r2.width) > r1.x &&
-    r2.y < (r1.y + r1.height) &&
-    (r2.y + r2.height) > r1.y;
+  return r2.left < (r1.left + r1.width) &&
+    (r2.left + r2.width) > r1.left &&
+    r2.top < (r1.top + r1.height) &&
+    (r2.top + r2.height) > r1.top;
 };
 
 
@@ -2594,6 +2597,7 @@ function chooseColor () {
 
 var host = "http://1111hui.com:88";
 var savedCanvasData = [];
+var savedSignData = [];
 
 function restoreCanvas () {
 
@@ -2635,7 +2639,7 @@ function saveCanvas () {
   savedCanvasData = saveObj;
 
 	setTimeout(function(){
-		$.post( host + '/saveCanvas', { data: JSON.stringify(saveObj) } );
+		$.post( host + '/saveCanvas', { file:curFile, shareID:shareID, data: JSON.stringify(saveObj) } );
 	},0);
 
   copyDrawerLayerData();
@@ -2657,18 +2661,128 @@ function showCanvas () {
 
 }
 
+
+
+
+var optionsDrag = {
+  limit: function (x,y,x0,y0) {
+  	return {x:x, y:y};
+  },
+  setCursor: 'move',
+  setPosition:false,
+  useGPU:true,
+  calcXY: function(me){
+    return {
+      left: parseInt( getComputedStyle(me.element).left ),
+      top: parseInt( getComputedStyle(me.element).top )
+    }
+  },
+  onDrag: function (element, x, y, e) {
+    $(element).css('left', x);
+    $(element).css('top', y);
+    $('.signPadHandler').css('left', x+$(element).width());
+    $('.signPadHandler').css('top', y+$(element).height());
+  }
+};
+
+var optionsResize = {
+  limit: function (x,y,x0,y0) {
+  	var offset = getRealOffset($('.signPad') );
+  	if(offset.width<118) return {x:offset.left+offset.width, y:offset.top+offset.height }
+  	else return {x:x, y:y};
+  },
+  setCursor: 'move',
+  setPosition:false,
+  useGPU:true,
+  calcXY: function(me){
+    return {
+      left: parseInt( getComputedStyle(me.element).left ),
+      top: parseInt( getComputedStyle(me.element).top )
+    }
+  },
+  onDragEnd: function(element, x, y, e) {
+  	var offset = getRealOffset($('.signPad') );
+  	if(offset.width<118) {
+  		$('.signPad').width(118);
+  		$('.signPad').height(118*3/4);
+  		$(element).css('left', offset.left+118);
+	    $(element).css('top', offset.top+118*3/4 );
+  	}
+  },
+  onDrag: function (element, x, y, e) {
+  	var offset = getRealOffset($('.signPad') );
+  	var top = offset.top;
+  	var left = offset.left;
+  	var W = x- left;
+  	var H = W*3/4;
+    $(element).css('left', x);
+    $(element).css('top', top +H );
+    $('.signPad').css('width',  W );
+    $('.signPad').css('height', H );
+  }
+};
+
+
+function beginSign(){
+	var padOffset = getRealOffset($('.signPad'));
+	var el = $('#viewer .page').filter(function(){
+		var offset = getRealOffset($(this));
+		return rectsIntersect(offset, padOffset);
+	});
+	if(el.length>1){
+		alert("签名位置不可跨越两页，请调整一下");
+		return;
+	}
+	var offset = getRealOffset($(el[0]));
+	var pos = {left: padOffset.left - offset.left, top: padOffset.top - offset.top, width: padOffset.width, height: padOffset.height };
+	if(pos.left<0 || pos.top<0
+		|| padOffset.width+padOffset.left> offset.left+offset.width
+		|| padOffset.height+padOffset.top>offset.top+offset.height ){
+		if( !confirm("签名框有部分超出页面，可能会导致签名无法全部显示"))
+		return;
+	}
+	var page = $(el[0]).data('page-number');
+
+	var curPage = PDFViewerApplication.pdfViewer.currentPageNumber;
+	var offset = getRealOffset( $('.page').eq(curPage-1) );
+
+	var scaleValue = PDFViewerApplication.pdfViewer.currentScaleValue;
+	if(!isNaN(scaleValue)) scaleValue*=100;
+
+	var hashleft = -offset.left/window.curScale;
+	var hashtop = viewBox[3] + offset.top/window.curScale - 30;
+
+	var urlhash = '#page='+page+'&zoom='+ scaleValue +','+ ~~hashleft+','+ ~~hashtop;
+	var data = { signPerson:'yangjiming', shareID:window.shareID, file:window.curFile, page:page,  pos: pos, urlhash: urlhash, isMobile:isMobile };
+	$.post(host+'/beginSign', {data: data} , function(data){
+		console.log(data);
+	});
+}
+
 function setStage (stat) {
   $('.active').removeClass('active');
   $('.subtool').hide();
+  $('.signPad, .signPadHandler').hide();
+  HandTool.handTool.deactivate();
 	switch (stat){
 		case 'remark':
 			showCanvas();
 			break;
 		case 'viewer':
-      $('#drawViewer').hide();
-      $('#drawTool').hide();
-      $('#mainMenu').show();
-      $('.textLayer').show();
+		      $('#drawViewer').hide();
+		      $('#drawTool').hide();
+		      $('#mainMenu').show();
+		      $('.textLayer').show();
+			break;
+		case 'sign':
+			var w = 200;
+			var h= w*3/4;
+			$('.signPad').show().css({width:w, height:h, left:$(window).width()/2-w/2, top:$(window).height()/2-h/2 });
+			var offset = getRealOffset($('.signPad') );
+			$('.signPadHandler').show().css({left: offset.left+offset.width, top: offset.top+offset.height });
+			HandTool.handTool.activate();
+			new Draggable( $('.signPad').get(0) , optionsDrag);
+			new Draggable( $('.signPadHandler').get(0) , optionsResize);
 			break;
 	}
 
@@ -2681,7 +2795,8 @@ function setStage (stat) {
 function backCabinet () {
   var filename = curFile.split('/').pop();
   if(filename.match(/\.pdf$/)){
-    window.location = "http://1111hui.com/pdf/client/tree.html?path="+filename;
+    var shareStr = shareID? '&shareID='+ shareID : '';
+    window.location = "http://1111hui.com/pdf/client/tree.html?path="+filename +shareStr;
   }
 }
 
@@ -2728,6 +2843,30 @@ $(function  () {
         var _this = this;
       }
     });
+
+  var urlObj = searchToObject(window.location.search);
+  window.curFile = urlObj.file;
+  window.shareID = urlObj.shareID;
+  window.isSign = urlObj.isSign;
+  if(!window.isSign) $('.btnSign').hide();
+
+  $.post( host + '/getCanvas', { file:curFile, shareID:shareID }, function(data){
+    if(data) savedCanvasData = JSON.parse( data );
+  } );
+
+  $.post( host + '/getSavedSign', { file:curFile, shareID:shareID }, function(data){
+    if(data && data.map) savedSignData = data;
+  } );
+
+
 });
 
+
+function searchToObject(search) {
+  return search.substring(1).split("&").reduce(function(result, value) {
+    var parts = value.split('=');
+    if (parts[0]) result[decodeURIComponent(parts[0])] = decodeURIComponent(parts[1]);
+    return result;
+  }, {})
+}
 

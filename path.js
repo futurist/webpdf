@@ -17,6 +17,33 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  SOFTWARE. */
 
+ 
+function eve(el, type){
+    el= ('jquery' in el)? el.get(0) : el ;  //(typeof el['jquery']!='undefined')
+    if(typeof type=='undefined') type='click';
+    var click = document.createEvent("MouseEvents");
+    click.initMouseEvent(type, true, true, window,
+                         0, 0, 0, 0, 0, false, false, false, false, 0, null);
+    button = el;
+    button.dispatchEvent(click);
+    button.focus();
+}
+
+
+function $$(sel){ return document.querySelector(sel); }
+
+function wait(condition, passfunc, failfunc){
+    var _inter = setInterval(function(){
+        if( eval(condition) ){
+            clearInterval(_inter);
+            passfunc.call();
+        }else{
+            if(failfunc) failfunc.call();
+        }
+    },300);
+}
+
+
 var OPHistory = new function() {
 
 	var _doChain = [];

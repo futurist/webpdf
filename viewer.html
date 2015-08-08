@@ -49,6 +49,7 @@ See https://github.com/adobe-type-tools/cmap-resources
     <script src="zepto.js"></script>
     <script src="path.js"></script>
     <script src="drawer.js"></script>
+<script type="text/javascript" src="draggable.js"></script>
 
   </head>
 
@@ -667,9 +668,39 @@ See https://github.com/adobe-type-tools/cmap-resources
   .textLayer{
     z-index: 99999999;
   }
-
-
-
+  .signPad{
+    position: fixed;
+    z-index: 99999999;
+    width: 480px;
+    height: 320px;
+    top: 0;
+    left:0;
+  }
+  .signPadCanvas{
+    position: absolute;
+    top:0;
+    left:0;
+    width: 100%;
+    height: 100%;    
+    background: rgba(255,0,0,0.5);    
+  }
+  .signPadInfo{
+    position: absolute;
+    top:0;
+    left:0;
+    width: 100%;
+    height: 100%;
+    z-index: 999;
+  }
+  .signPadHandler{
+    position: absolute;
+    top:0;
+    left:0;
+    width: 44px;
+    height: 44px;
+    background: rgba(255,0,0,0.5);
+    z-index: 99999999999;
+  }
 </style>
 
 <style type="text/css">
@@ -725,6 +756,7 @@ See https://github.com/adobe-type-tools/cmap-resources
   <div class="maintool">
     <a href="javascript:;" class="button" data-onclick="backCabinet()">文件柜</a>
     <a href="javascript:;" class="button" data-onclick="setStage('remark')">标注</a>
+    <a href="javascript:;" class="button btnSign" data-onclick="setStage('sign')">签署</a>
     <a href="javascript:;" class="button plusSign" data-onclick="PDFViewerApplication.zoomOut()">-</a>
     <a href="javascript:;" class="button plusSign" data-onclick="PDFViewerApplication.zoomIn()">+</a>
     <a href="javascript:;" class="button" data-onclick="switchOption('#mainMenu', 'rotate')">旋转</a>
@@ -760,8 +792,8 @@ See https://github.com/adobe-type-tools/cmap-resources
   <a href="javascript:;" class="button" data-onclick="if(confirm('确认不保存退出吗？')){restoreCanvas();setStage('viewer');}">取消</a>
   <a href="javascript:;" class="button btnRedo" data-onclick="OPHistory.redo()">重做</a>
   <a href="javascript:;" class="button btnUndo" data-onclick="OPHistory.undo()">还原</a>
-  <a href="javascript:;" class="button btnDel" data-onclick="deleteEl()">删除</a>
   <a href="javascript:;" class="button" data-onclick="saveCanvas(); setStage('viewer')">保存</a>
+  <a href="javascript:;" class="button btnDel" data-onclick="deleteEl()">删除</a>
 </div>
 
 <div class="subtool subtool_curve">
@@ -805,6 +837,17 @@ See https://github.com/adobe-type-tools/cmap-resources
 
 <div class="colorCon">
 </div>
+
+<div class="signPad">
+  <div class="signPadCanvas"></div>
+  <div class="signPadInfo">
+    <div>移动此框到需要签名的位置，然后按确定。</div>
+    <a href="javascript:;" class="button signBtnOK" data-onclick="beginSign()">确定</a>
+    <a href="javascript:;" class="button signBtnCancel" data-onclick="setStage('viewer')">取消</a>
+  </div>
+</div>
+<div class="signPadHandler"></div>
+
 
 <div id="debug" style="display:none; position:absolute; z-index:99999999; top:0; left:0;"></div>
 

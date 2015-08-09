@@ -22,7 +22,7 @@ body {
   border-radius: 4px;
 }
 
-.m-signature-pad:before, .m-signature-pad:after {
+.m-signature-pad1:before, .m-signature-pad1:after {
 	position: absolute;
   z-index: -1;
   content: "";
@@ -94,7 +94,7 @@ body {
 
 .m-signature-pad--footer
   .button.clear {
-    left: 80px;
+    left: 60px;
   }
 .m-signature-pad--footer
   .button.cancel {
@@ -108,7 +108,7 @@ body {
 
 .m-signature-pad--footer
   .button.history {
-    right: 80px;
+    right: 60px;
   }
 
 .hisBack{
@@ -141,8 +141,8 @@ body {
     bottom: 0;
     width: auto;
     height: auto;
-    min-width: 250px;
-    min-height: 140px;
+/*    min-width: 250px;
+    min-height: 140px;*/
     margin: 5%;
   }
 }
@@ -153,7 +153,7 @@ body {
   }
 }
 
-@media screen and (max-height: 320px) {
+@media screen and (max-height: 32px) {
   .m-signature-pad--body {
     left: 0;
     right: 0;

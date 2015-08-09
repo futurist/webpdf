@@ -2708,9 +2708,9 @@ var optionsResize = {
   	var offset = getRealOffset($('.signPad') );
   	if(offset.width<118) {
   		$('.signPad').width(118);
-  		$('.signPad').height(118*2/5);
+  		$('.signPad').height(118*456/984);
   		$(element).css('left', offset.left+118);
-	    $(element).css('top', offset.top+118*2/5 );
+	    $(element).css('top', offset.top+118*456/984 );
   	}
   },
   onDrag: function (element, x, y, e) {
@@ -2719,7 +2719,7 @@ var optionsResize = {
   	var top = offset.top;
   	var left = offset.left;
   	var W = x- left;
-  	var H = W*2/5;
+  	var H = W*456/984;
     $(element).css('left', x);
     $(element).css('top', top +H );
     $('.signPad').css('width',  W );
@@ -2750,7 +2750,7 @@ function restoreSignature (pageIndex) {
     var img = $('<div class="signImg"><img class="img"></div></div>');
     img.appendTo( $('#viewer .page').eq(v.page-1) );
     img.css({left:v.pos.left*scale+'px', top:v.pos.top*scale+'px', width:v.pos.width*scale+'px', height:v.pos.height*scale+'px' });
-    img.find('.img').attr({ 'src': v.sign.signData });
+    if(v.sign) img.find('.img').attr({ 'src': v.sign.signData });
     img.data('id', v._id);
     img.click(function(){
       if( window.isSigned ) return;
@@ -2787,7 +2787,7 @@ function finishSign(){
 
 function showSign(){
   var w = 200;
-  var h= w*2/5;
+  var h= w*456/984;
   $('.signPad').show().css({width:w, height:h, left:$(window).width()/2-w/2, top:$(window).height()/2-h/2 });
   var offset = getRealOffset($('.signPad') );
   $('.signPadHandler').show().css({left: offset.left+offset.width, top: offset.top+offset.height });

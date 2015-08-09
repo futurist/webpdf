@@ -507,15 +507,22 @@ See https://github.com/adobe-type-tools/cmap-resources
     position: absolute;
     border:0;
     outline: 0;
+    z-index: 999999999;
   }
 
   .page .signImg .img{
+    position: absolute;
+    bottom: 0;
     width:100%;
     height: auto;
   }
+  .page .signImg.active .img{
+    border:1px solid red;
+  }
+
   .page .signImg .img00{
     background-repeat: no-repeat;
-    background-size: contain;    
+    background-size: contain;
     content: '';
     -webkit-transform-origin: left top;
     -webkit-transform: rotate(90deg) translate(0%,-100%);
@@ -687,6 +694,7 @@ See https://github.com/adobe-type-tools/cmap-resources
     z-index: 99999999;
   }
   .signPad{
+    display: none;
     position: fixed;
     z-index: 99999999;
     width: 480px;
@@ -696,11 +704,19 @@ See https://github.com/adobe-type-tools/cmap-resources
   }
   .signPadCanvas{
     position: absolute;
+    display: table;
     top:0;
     left:0;
     width: 100%;
-    height: 100%;    
-    background: rgba(255,0,0,0.5);    
+    height: 100%;
+    background: rgba(255,0,0,0.5);
+  }
+  .signPadCanvas span{
+      display: table-cell;
+    vertical-align: bottom;
+    font:18px/1 Arial;
+    text-align: center;
+    padding-bottom: 10px;
   }
   .signPadInfo{
     position: absolute;
@@ -709,6 +725,7 @@ See https://github.com/adobe-type-tools/cmap-resources
     width: 100%;
     height: 100%;
     z-index: 999;
+    border-bottom: 3px solid black;
   }
   .signPadHandler{
     position: absolute;
@@ -718,6 +735,10 @@ See https://github.com/adobe-type-tools/cmap-resources
     height: 44px;
     background: rgba(255,0,0,0.5);
     z-index: 99999999999;
+  }
+
+  .button.btnSign{
+    display: none;
   }
 </style>
 
@@ -768,13 +789,23 @@ See https://github.com/adobe-type-tools/cmap-resources
 
 
 
+<div id="signMenu" class="botmenu noselect">
+
+  <div class="maintool">
+    <a href="javascript:;" class="button" data-onclick="setStage('viewer')">返回主菜单</a>
+    <a href="javascript:;" class="button" data-onclick="deleteSign()">删除签名</a>
+    <a href="javascript:;" class="button btnSign" data-onclick="finishSign()">完成签名</a>
+  </div>
+
+</div>
+
 
 <div id="mainMenu" class="botmenu noselect">
 
   <div class="maintool">
     <a href="javascript:;" class="button" data-onclick="backCabinet()">文件柜</a>
     <a href="javascript:;" class="button" data-onclick="setStage('remark')">标注</a>
-    <a href="javascript:;" class="button btnSign" data-onclick="setStage('sign')">签署</a>
+    <a href="javascript:;" class="button btnSign" data-onclick="showSign()">签署</a>
     <a href="javascript:;" class="button plusSign" data-onclick="PDFViewerApplication.zoomOut()">-</a>
     <a href="javascript:;" class="button plusSign" data-onclick="PDFViewerApplication.zoomIn()">+</a>
     <a href="javascript:;" class="button" data-onclick="switchOption('#mainMenu', 'rotate')">旋转</a>
@@ -857,9 +888,9 @@ See https://github.com/adobe-type-tools/cmap-resources
 </div>
 
 <div class="signPad">
-  <div class="signPadCanvas"></div>
+  <div class="signPadCanvas"><span>签名处</span></div>
   <div class="signPadInfo">
-    <div>移动此框到需要签名的位置，然后按确定。</div>
+    <div>移动＜签名处＞字样到需要签名的位置，然后按确定。</div>
     <a href="javascript:;" class="button signBtnOK" data-onclick="beginSign()">确定</a>
     <a href="javascript:;" class="button signBtnCancel" data-onclick="setStage('viewer')">取消</a>
   </div>

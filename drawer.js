@@ -526,10 +526,10 @@ var svgns = "http://www.w3.org/2000/svg";
     var isTouch = ('ontouchstart' in window) || ('DocumentTouch' in window && document instanceof DocumentTouch);
 
     // touch event uniform to touchscreen & PC
-    var downE = isTouch? 'touchstart' :'mousedown';
-    var moveE = isTouch? 'touchmove' :'mousemove';
-    var upE = isTouch? 'touchend' :'mouseup';
-    var leaveE = isTouch? 'touchcancel' :'mouseleave';
+    var downE = isMobile? 'touchstart' :'mousedown';
+    var moveE = isMobile? 'touchmove' :'mousemove';
+    var upE = isMobile? 'touchend' :'mouseup';
+    var leaveE = isMobile? 'touchcancel' :'mouseleave';
 
     // the preset toolset
     var ToolSet = {
@@ -1004,7 +1004,7 @@ var svgns = "http://www.w3.org/2000/svg";
 
       var evt = /touch/.test(e.type) ? e.touches[0] : e;
 
-      var buttonDown = ( !isTouch? e.which>0 : e.touches.length>0 );
+      var buttonDown = ( !isMobile? e.which>0 : e.touches.length>0 );
 
       //if( ! $(evt.target).closest('.canvas').size() ) return;
 
@@ -2613,32 +2613,6 @@ function restoreCanvas () {
   copyDrawerLayerData();
 }
 
-function getSignData (page) {
-  var data = savedSignData.filter(function  (v,i) {
-    return v.page==page;
-  });
-  return data ? data[0] : null;
-}
-
-function restoreSignature (pageIndex) {
-
-  savedSignData.forEach(function  (v,i) {
-    var page = pageIndex+1;
-    if(v.page!=page) return true;
-    //var img = $('<div class="signImg"><div class="img"></div></div>');
-    var img = $('<div class="signImg"><img class="img"></div></div>');
-    img.appendTo( $('#viewer .page').eq(v.page-1) );
-    img.css({left:v.pos.left+'px', top:v.pos.top+'px', width:v.pos.width+'px', height:v.pos.height+'px' });
-    img.find('.img').attr({ 'src': v.sign.signData });
-
-    // var r = v.sign.width/v.sign.height;
-    // var h = v.pos.width;
-    // var w = h*r;
-    // //img.find('.img').css({'background-image': 'url('+v.sign.signData+')',  width:w+'px', height: h+'px' });
-
-  });
-}
-
 
 
 function copyDrawerLayerData(pageIndex){
@@ -2734,23 +2708,93 @@ var optionsResize = {
   	var offset = getRealOffset($('.signPad') );
   	if(offset.width<118) {
   		$('.signPad').width(118);
-  		$('.signPad').height(118*3/4);
+  		$('.signPad').height(118*2/5);
   		$(element).css('left', offset.left+118);
-	    $(element).css('top', offset.top+118*3/4 );
+	    $(element).css('top', offset.top+118*2/5 );
   	}
   },
   onDrag: function (element, x, y, e) {
   	var offset = getRealOffset($('.signPad') );
+    console.log(x,y);
   	var top = offset.top;
   	var left = offset.left;
   	var W = x- left;
-  	var H = W*3/4;
+  	var H = W*2/5;
     $(element).css('left', x);
     $(element).css('top', top +H );
     $('.signPad').css('width',  W );
     $('.signPad').css('height', H );
+    if(W<180){
+      $('.signPadInfo div').hide();
+    }else{
+      $('.signPadInfo div').show();
+    }
   }
 };
+
+
+function getSignData (page) {
+  var data = savedSignData.filter(function  (v,i) {
+    return v.page==page;
+  });
+  return data ? data[0] : null;
+}
+
+function restoreSignature (pageIndex) {
+
+  savedSignData.forEach(function  (v,i) {
+    var page = pageIndex+1;
+    if(v.page!=page) return true;
+    var scale = v.scale? window.curScale/v.scale : 1;
+    //var img = $('<div class="signImg"><div class="img"></div></div>');
+    var img = $('<div class="signImg"><img class="img"></div></div>');
+    img.appendTo( $('#viewer .page').eq(v.page-1) );
+    img.css({left:v.pos.left*scale+'px', top:v.pos.top*scale+'px', width:v.pos.width*scale+'px', height:v.pos.height*scale+'px' });
+    img.find('.img').attr({ 'src': v.sign.signData });
+    img.data('id', v._id);
+    img.click(function(){
+      if( window.isSigned ) return;
+      if($(this).hasClass('active')){
+        setStage('viewer');
+        $(this).removeClass('active');
+      }else{
+        setStage('sign');
+        $(this).addClass('active');
+      }
+
+    });
+    // var r = v.sign.width/v.sign.height;
+    // var h = v.pos.width;
+    // var w = h*r;
+    // //img.find('.img').css({'background-image': 'url('+v.sign.signData+')',  width:w+'px', height: h+'px' });
+
+  });
+}
+
+function deleteSign(){
+  var img = $('.signImg.active');
+  $.post(host+'/deleteSign', {id:img.data('id')} );
+  img.remove();
+  setStage('viewer');
+}
+
+function finishSign(){
+  $.post(host+'/finishSign', {shareID:window.shareID, person:rootPerson.userid } );
+  window.isSigned = true;
+  $('.btnSign').hide();
+  setStage('viewer');
+}
+
+function showSign(){
+  var w = 200;
+  var h= w*2/5;
+  $('.signPad').show().css({width:w, height:h, left:$(window).width()/2-w/2, top:$(window).height()/2-h/2 });
+  var offset = getRealOffset($('.signPad') );
+  $('.signPadHandler').show().css({left: offset.left+offset.width, top: offset.top+offset.height });
+  HandTool.handTool.activate();
+  new Draggable( $('.signPad').get(0) , optionsDrag);
+  new Draggable( $('.signPadHandler').get(0) , optionsResize);
+}
 
 
 function beginSign(){
@@ -2777,25 +2821,30 @@ function beginSign(){
 	var offset = getRealOffset( $('.page').eq(curPage-1) );
 
 	var scaleValue = PDFViewerApplication.pdfViewer.currentScaleValue;
-	if(!isNaN(scaleValue)) scaleValue*=100;
+	if(!isNaN(scaleValue)) scaleValue= Math.round(scaleValue*100);
 
 	var hashleft = -offset.left/window.curScale;
 	var hashtop = viewBox[3] + offset.top/window.curScale - 30;
 
-	var urlhash = '#page='+page+'&zoom='+ scaleValue +','+ ~~hashleft+','+ ~~hashtop;
-	var data = { signPerson:'yangjiming', shareID:window.shareID, file:window.curFile, page:page,  pos: pos, urlhash: urlhash, isMobile:isMobile };
+	var urlhash = 'page='+page+'&zoom='+ scaleValue +','+ ~~hashleft+','+ ~~hashtop;
+	var data = { signPerson:'yangjiming', shareID:window.shareID, file:window.curFile, page:page, scale:window.curScale, pos: pos, urlhash: urlhash, isMobile:isMobile };
 	$.post(host+'/beginSign', {data: data} , function(data){
-		console.log(data);
+		if(data){
+      window.location = 'http://1111hui.com/pdf/webpdf/signpad.html?signID='+data;
+    }
 	});
 }
 
 function setStage (stat) {
   $('.active').removeClass('active');
   $('.subtool').hide();
+  $('.botmenu').hide();
+  $('.signImg').show();
   $('.signPad, .signPadHandler').hide();
   HandTool.handTool.deactivate();
 	switch (stat){
 		case 'remark':
+      $('.signImg').hide();
 			showCanvas();
 			break;
 		case 'viewer':
@@ -2805,14 +2854,7 @@ function setStage (stat) {
 		      $('.textLayer').show();
 			break;
 		case 'sign':
-			var w = 200;
-			var h= w*3/4;
-			$('.signPad').show().css({width:w, height:h, left:$(window).width()/2-w/2, top:$(window).height()/2-h/2 });
-			var offset = getRealOffset($('.signPad') );
-			$('.signPadHandler').show().css({left: offset.left+offset.width, top: offset.top+offset.height });
-			HandTool.handTool.activate();
-			new Draggable( $('.signPad').get(0) , optionsDrag);
-			new Draggable( $('.signPadHandler').get(0) , optionsResize);
+      $('#signMenu').show();
 			break;
 	}
 
@@ -2836,7 +2878,7 @@ $(function  () {
   makeColorPicker();
   setStage('viewer');
 
-  $('.button').off().on(downE, function  (e) {
+  $('.button').on(downE, function  (e) {
     e.stopPropagation();
     $(this).parent().children().removeClass('active');
     $(this).addClass('active');
@@ -2878,6 +2920,9 @@ $(function  () {
   window.curFile = urlObj.file;
   window.shareID = urlObj.shareID;
   window.isSign = urlObj.isSign;
+  window.isSigned = false;
+  window.shareData = null;
+
   if(!window.isSign) $('.btnSign').hide();
 
   $.post( host + '/getCanvas', { file:curFile, shareID:shareID }, function(data){
@@ -2886,6 +2931,22 @@ $(function  () {
 
   $.post( host + '/getSavedSign', { file:curFile, shareID:shareID }, function(data){
     if(data && data.map) savedSignData = data;
+  } );
+
+
+  $.post( host + '/getShareData', { shareID:shareID }, function(data){
+    if(data)   window.shareData = data;
+    else return;
+
+    var t = data.toPerson.filter(function(v){
+      return v.userid = rootPerson.userid && v.isSigned
+    });
+    if(t.length){
+       window.isSigned = true;
+       alert('您已签署过此文档');
+    }else{
+      $('.btnSign').css({display: 'table-cell' });
+    }
   } );
 
 
@@ -2899,4 +2960,9 @@ function searchToObject(search) {
     return result;
   }, {})
 }
+
+
+var rootPerson = {userid: 'yangjiming', name:"杨吉明", depart:"行政" };
+
+
 

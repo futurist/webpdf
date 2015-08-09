@@ -53,26 +53,24 @@ function initSignPad(){
             alert("请签名后再保存.");
         } else {
 
-        var img = new Image();
-        img.onload = function(){
+
             var canvas = document.createElement("canvas");
-              canvas.height = img.width;
-              canvas.width = img.height;
+              canvas.height = signCanvas.width;
+              canvas.width = signCanvas.height;
               var ctx = canvas.getContext("2d");
               ctx.rotate(90 * Math.PI / 180);
               ctx.translate(0, -canvas.width);
               //..check orientation data, this code assumes the case where its oriented 90 degrees off
-              ctx.drawImage(img, 0, 0);
+              ctx.drawImage(signCanvas, 0, 0);
               var signData = canvas.toDataURL("image/png");
               
-                var data = window.signHisID? { signID:signID, hisID: window.signHisID} : {data: signData, width:canvas.width, height:canvas.height, signID:signID};
-                $.post( 'http://1111hui.com:88/saveSign', data , function(data){
-                    console.log(data);
-                });
-
-          }
-          img.src=signPAD.toDataURL();
-            
+            var data = window.signHisID? { signID:signID, hisID: window.signHisID} : {data: signData, width:canvas.width, height:canvas.height, signID:signID};
+            $.post( 'http://1111hui.com:88/saveSign', data , function(data){
+                if(data){
+                    alert('签名保存成功，已记录到历史签名以备下次使用，确定后返回文档');
+                    window.location = 'http://1111hui.com/pdf/webpdf/viewer.html?file='+data.file+'&isSign=1&shareID='+data.shareID+'#'+data.urlhash.replace('#','');
+                }
+            });            
         }
     });
 
@@ -88,7 +86,22 @@ function initSignPad(){
 
     $('.hisOK').click(function(){
         $('.hisBack').click();
-        signPAD.fromDataURL( $('img.active').attr('src') );
+
+        var img = $('img.active');
+        var W = eval(img.data('width'));
+        var H = eval(img.data('height'));
+        img.css('width', W);
+        img.css('height', H);
+
+        var canvas = document.createElement("canvas");
+        canvas.height = W;
+        canvas.width = H;
+        var ctx = canvas.getContext("2d");
+        ctx.rotate(-90 * Math.PI / 180);
+        ctx.translate(-W, 0);
+        ctx.drawImage(img.get(0), 0, 0);
+
+        signPAD.fromDataURL( canvas.toDataURL() );
         window.signHisID = $('img.active').data('hisID');
     });
 
@@ -98,33 +111,45 @@ function initSignPad(){
         $('.drawerMenu').hide();
         $('.historyMenu').show();
         $('.historyLayer').empty();
-        $.post( 'http://1111hui.com:88/getSignHistory', {signID:signID}, function(data){
-            if(data && data.forEach && data.length>0){
-                signPAD.clear();
-                data.forEach(function(v){
-                    var w = $(signCanvas).width();
-                    var h = $(signCanvas).height();
-                    if(v.width&&v.height){
-                        var r = w/v.width;
-                        h = r*v.height;
-                    }
-                    var img = $('<img class="thumb" src="'+ v.signData +'" width="'+w+'" height="'+h+'" />');
-                    $('.historyLayer').append(img);
-                    img.data('hisID', v._id);
-                    img.click(function(){
-                        $('.historyLayer img').removeClass('active');
-                        $(this).addClass('active');
-                    });
-                });
-            } else {
-                alert("还没有历史签名");
-                $('.hisBack').click();
-            }
-        });
+        if(window.historyData){
+            displayHistory(window.historyData);
+        } else {
+            $.post( 'http://1111hui.com:88/getSignHistory', {signID:signID}, function(data){
+                window.historyData = data;
+                displayHistory(data);
+            });
+        }
     });
 
 }
 
+window.historyData = null;
+
+function displayHistory (data) {
+    if(data && data.forEach && data.length>0){
+        signPAD.clear();
+        data.forEach(function(v){
+            var w = $(signCanvas).width();
+            var h = $(signCanvas).height();
+            if(v.width&&v.height){
+                var r = w/v.width;
+                h = r*v.height;
+            }
+            var img = $('<img class="thumb" src="'+ v.signData +'" width="'+w+'" height="'+h+'" />');
+            $('.historyLayer').append(img);
+            img.data('hisID', v._id);
+            img.data('width', v.width);
+            img.data('height', v.height);
+            img.click(function(){
+                $('.historyLayer img').removeClass('active');
+                $(this).addClass('active');
+            });
+        });
+    } else {
+        alert("还没有历史签名");
+        $('.hisBack').click();
+    }
+}
 
 $('.historyMenu').hide();
 $('.historyLayer').hide();

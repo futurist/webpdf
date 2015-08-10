@@ -2743,6 +2743,7 @@ function getSignData (page) {
 function restoreSignature (pageIndex) {
 
   savedSignData.forEach(function  (v,i) {
+    if(!v.sign) return true;
     var page = pageIndex+1;
     if(v.page!=page) return true;
     var scale = v.scale? window.curScale/v.scale : 1;
@@ -2750,7 +2751,7 @@ function restoreSignature (pageIndex) {
     var img = $('<div class="signImg"><img class="img"></div></div>');
     img.appendTo( $('#viewer .page').eq(v.page-1) );
     img.css({left:v.pos.left*scale+'px', top:v.pos.top*scale+'px', width:v.pos.width*scale+'px', height:v.pos.height*scale+'px' });
-    if(v.sign) img.find('.img').attr({ 'src': v.sign.signData });
+    img.find('.img').attr({ 'src': v.sign.signData });
     img.data('id', v._id);
     img.click(function(){
       if( window.isSigned ) return;
@@ -2763,6 +2764,15 @@ function restoreSignature (pageIndex) {
       }
 
     });
+
+    if(window.signID == v._id ){
+      img.click();
+      var off=img.offset();
+      var view = $('#viewerContainer');
+      view.scrollTop(off.top+view.scrollTop() -$(window).height()/2+off.height/2);
+      view.scrollLeft(off.left+view.scrollLeft() -$(window).width()/2+off.width/2);
+    }
+
     // var r = v.sign.width/v.sign.height;
     // var h = v.pos.width;
     // var w = h*r;
@@ -2779,7 +2789,9 @@ function deleteSign(){
 }
 
 function finishSign(){
-  $.post(host+'/finishSign', {shareID:window.shareID, person:rootPerson.userid } );
+  $.post(host+'/finishSign', {shareID:window.shareID, person:rootPerson.userid }, function(data){
+    if(data)alert(data);
+  } );
   window.isSigned = true;
   $('.btnSign').hide();
   setStage('viewer');
@@ -2827,10 +2839,12 @@ function beginSign(){
 	var hashtop = viewBox[3] + offset.top/window.curScale - 30;
 
 	var urlhash = 'page='+page+'&zoom='+ scaleValue +','+ ~~hashleft+','+ ~~hashtop;
+
 	var data = { signPerson:'yangjiming', shareID:window.shareID, file:window.curFile, page:page, scale:window.curScale, pos: pos, urlhash: urlhash, isMobile:isMobile };
 	$.post(host+'/beginSign', {data: data} , function(data){
 		if(data){
-      window.location = 'http://1111hui.com/pdf/webpdf/signpad.html?signID='+data;
+      var url = 'http://1111hui.com/pdf/webpdf/signpad.html?signID='+data+'&hash='+(+new Date());
+      window.location = url;
     }
 	});
 }
@@ -2920,6 +2934,7 @@ $(function  () {
   window.curFile = urlObj.file;
   window.shareID = urlObj.shareID;
   window.isSign = urlObj.isSign;
+  window.signID = urlObj.signID;
   window.isSigned = false;
   window.shareData = null;
 

@@ -17,8 +17,8 @@ function searchToObject(search) {
 
 window.scaleRatio = 456/984;
 window.historyData = null;
-var signID = searchToObject(window.location.search).signID;
-var hash = searchToObject(window.location.search).hash;
+var signID = searchToObject(window.location.hash).signID;
+var hash = searchToObject(window.location.hash).hash;
 
 // Adjust canvas coordinate space taking into account pixel ratio,
 // to make it look crisp on mobile devices.
@@ -76,7 +76,7 @@ function initSignPad(){
             $.post( 'http://1111hui.com:88/saveSign', data , function(data){
                 if(data){
                     alert( window.signHisID?'签名应用成功，确定后返回文档': '签名应用成功，并保存到历史签名。确定后返回文档');
-                    var url = 'http://1111hui.com/pdf/webpdf/viewer.html?file='+data.file+'&isSign=1&signID='+ signID +'&shareID='+data.shareID+'#'+data.urlhash.replace('#','');
+                    var url = 'http://1111hui.com/pdf/webpdf/viewer.html#file='+data.file+'&isSign=1&signID='+ signID +'&shareID='+data.shareID+'&pos='+data.urlhash.replace('#','');
                     window.location = url;
                 }
             });            

@@ -7001,7 +7001,7 @@ function webViewerLoad(evt) {
 }
 
 function webViewerInitialized() {
-  var queryString = document.location.search.substring(1);
+  var queryString = document.location.hash.substring(1);
   var params = parseQueryString(queryString);
   var file = 'file' in params ? params.file : DEFAULT_URL;
 

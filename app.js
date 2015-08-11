@@ -23,7 +23,8 @@ var express = require("express");
 var bodyParser = require("body-parser");
 var multer = require("multer");
 
-
+var redis = require("redis"),
+redisClient = redis.createClient(6379, '127.0.0.1', {});
 
 qiniu.conf.ACCESS_KEY = '2hF3mJ59eoNP-RyqiKKAheQ3_PoZ_Y3ltFpxXP0K';
 qiniu.conf.SECRET_KEY = 'xvZ15BIIgJbKiBySTV3SHrAdPDeGQyGu_qJNbsfB';
@@ -71,7 +72,13 @@ function qiniu_uploadFile(file, callback ){
 }
 
 
-
+redisClient.on('error', function (err) {
+    console.log('Redis Error ' + err);
+});
+ 
+redisClient.on('connect', function(err){
+  console.log('Connected to Redis server' + err);
+});
 
 
 var app = express();
@@ -92,7 +99,7 @@ var allowCrossDomain = function(req, res, next) {
 }
 app.use(allowCrossDomain);
 
-app.post("/pdf", function (req, res) {
+app.post("/pdfCanvasDataLatex", function (req, res) {
   res.send("You sent ok" );
   //broadcast(req.body);
   var data = req.body;
@@ -116,6 +123,59 @@ app.post("/pdf", function (req, res) {
   });
 });
 
+
+
+app.post("/getJSTicket", function (req, res) {
+  var tryCount = 0;
+  function getTicket(){
+    api.getTicket(function(err, result){
+      if(err && tryCount++<3){
+        getTicket();
+      }else{
+        res.send( result );
+      }
+    });
+  }
+  getTicket();
+
+});
+
+
+app.post("/getJSConfig", function (req, res) {
+
+  var url = 'http://1111hui.com/pdf/client/tree.html';
+  var rkey = 'wx:js:ticket:'+ encodeURIComponent(url);
+
+  var param = {
+    debug:true,
+    jsApiList: ["onMenuShareTimeline","onMenuShareAppMessage","onMenuShareQQ","onMenuShareWeibo","onMenuShareQZone","startRecord","stopRecord","onVoiceRecordEnd","playVoice","pauseVoice","stopVoice","onVoicePlayEnd","uploadVoice","downloadVoice","chooseImage","previewImage","uploadImage","downloadImage","translateVoice","getNetworkType","openLocation","getLocation","hideOptionMenu","showOptionMenu","hideMenuItems","showMenuItems","hideAllNonBaseMenuItem","showAllNonBaseMenuItem","closeWindow","scanQRCode"],
+    url: url
+  };
+
+  var tryCount = 0;
+  function getJsConfig(){
+    api.getJsConfig(param, function(err, result){
+      if(err && tryCount++<3){
+        getJsConfig();
+      }else{
+        console.log('wx:', result);
+        redisClient.set( rkey, JSON.stringify(result), 'ex', 30);
+        res.send( JSON.stringify(result) );
+      }
+    });
+  }
+
+  //redisClient.set('aaa', 100, 'ex', 10);
+  redisClient.get( rkey , function(err, result){
+    if(!result){
+      getJsConfig();
+    } else {
+      console.log('redis:', result );
+      res.send( result );
+    }
+  } );
+
+});
 
 
 function upfileFunc(data, callback) {
@@ -458,12 +518,14 @@ app.post("/getShareMsg", function (req, res) {
   function getMsg (shareA, hash) {
       if(!_.isArray(shareA) ) shareA = [shareA];
 
+
+      shareA = shareA.map( function(v){ return parseInt(v) } );
+
+      var condition = {  role:'shareMsg', shareID:{$in:shareA} };
+
       var hashA = [null];
       if(hash) hashA = hashA.concat(hash);
-      shareA = shareA.map( function(v){ return parseInt(v) } );
-      var condition = {  role:'shareMsg', shareID:{$in:shareA}, hash:{$in:hashA} };
-
-      console.log(hash, condition);
+      //if(hashA.length>1) condition.hash = {$in:hashA};
 
       col.find( condition , {'text.content':1} , {limit:500} ).sort({shareID:1, date:1}).toArray(function(err, docs){
           if(err) {
@@ -645,8 +707,9 @@ app.post("/sendShareMsg", function (req, res) {
   var hash = req.body.hash;
   var path = req.body.path;
   var fileName = req.body.fileName;
+  var fileKey = req.body.fileKey;
 
-  if(path) path = path.slice(2);
+  if(path) path = path.slice(1);
   var fileHash = path.pop();
 
   col.findOne( { role:'share', shareID:shareID }, {}, function(err, data) {
@@ -668,21 +731,21 @@ app.post("/sendShareMsg", function (req, res) {
       var pathName = [];
       path.forEach(function(v,i){
         var a = '/'+path.slice(0,i+1).join('/')+'/';
-        pathName.push( util.format('<a href="%s?path=%s&dest=share">%s</a>', host, encodeURIComponent(a), v) );
+        pathName.push( util.format('<a href="%s?path=%s&shareID=%d">%s</a>', host, encodeURIComponent(a), shareID, v) );
       });
       if(fileHash) {
         var a =  '/'+path.join('/')+'/' + fileHash;
-        pathName.push( util.format('<a href="%s?path=%s&dest=share">%s</a>', host, encodeURIComponent(a), fileName) );
+        pathName.push( util.format('<a href="%s?path=%s&shareID=%d">%s</a>', host, encodeURIComponent(fileKey), shareID, fileName) );
      }
 
      // get OverAllink
       var a = '/'+path.join('/')+'/';
       var link = a;
-      if(fileName && hash ){
-      	link = a+hash;
+      if(fileName && fileKey ){
+      	link = a+fileKey;
       	a = a +fileName;
       }
-     var overAllPath = util.format('<a href="%s?path=%s&dest=share">%s</a>', host, encodeURIComponent(link), a ) ;
+     var overAllPath = util.format('<a href="%s?path=%s&shareID=%d">%s</a>', host, encodeURIComponent(link), shareID, a ) ;
 
       var msg = {
        "touser": data.toPerson.map(function(v){return v.userid}).join('|'),
@@ -773,21 +836,28 @@ app.post("/shareFile", function (req, res) {
 
 function sendWXMessage (msg) {
 
-  col.insert(msg);
+  if(!msg.tryCount){
+    col.insert(msg);
+    msg.tryCount = 1;
+  } 
 
   var msgTo = {};
   if(msg.touser) msgTo.touser = msg.touser;
   if(msg.toparty) msgTo.toparty = msg.toparty;
   if(msg.totag) msgTo.totag = msg.totag;
-  delete msg.touser;
-  delete msg.toparty;
-  delete msg.totag;
+  // delete msg.touser;
+  // delete msg.toparty;
+  // delete msg.totag;
 
   api.send(msgTo, msg, function  (err, result) {
+    console.log('sendWXMessage', msg.tryCount, err, result);
     if(err){
+      if(msg.tryCount++ <=5)
+        setTimeout( function(){ 
+          sendWXMessage(msg);
+        },1000);
       return ('error');
     }
-    console.log(result);
     return "OK";
   });
 }
@@ -805,7 +875,7 @@ MongoClient.connect(authUrl, function(err, _db) {
   assert.equal(null, err);
   _db.authenticate('root', '820125', function(err, res){
   	assert.equal(null, err);
-  	console.log("Connected correctly to server");
+  	console.log("Connected to mongodb server");
 	db = _db.db("test");
   col = db.collection('qiniu_bucket01');
 	// db.collection('test').find().toArray(function(err, items){ console.log(items); });

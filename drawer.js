@@ -7,7 +7,9 @@
 * reset: function PDFPageView_reset(keepAnnotations) {
 *   LINE 3588:  this.drawView.reset();
 *
+* change: all window.location.search to window.location.hash
 */
+
 var DrawView  = (function () {
 
 
@@ -2843,7 +2845,7 @@ function beginSign(){
 	var data = { signPerson:'yangjiming', shareID:window.shareID, file:window.curFile, page:page, scale:window.curScale, pos: pos, urlhash: urlhash, isMobile:isMobile };
 	$.post(host+'/beginSign', {data: data} , function(data){
 		if(data){
-      var url = 'http://1111hui.com/pdf/webpdf/signpad.html?signID='+data+'&hash='+(+new Date());
+      var url = 'http://1111hui.com/pdf/webpdf/signpad.html#signID='+data+'&hash='+(+new Date());
       window.location = url;
     }
 	});
@@ -2882,7 +2884,7 @@ function backCabinet () {
   var filename = curFile.split('/').pop();
   if(filename.match(/\.pdf$/)){
     var shareStr = shareID? '&shareID='+ shareID : '';
-    window.location = "http://1111hui.com/pdf/client/tree.html?path="+filename +shareStr;
+    window.location = "http://1111hui.com/pdf/client/tree.html#path="+filename +shareStr;
   }
 }
 
@@ -2930,7 +2932,7 @@ $(function  () {
       }
     });
 
-  var urlObj = searchToObject(window.location.search);
+  var urlObj = searchToObject(window.location.hash);
   window.curFile = urlObj.file;
   window.shareID = urlObj.shareID;
   window.isSign = urlObj.isSign;
@@ -2958,7 +2960,7 @@ $(function  () {
     });
     if(t.length){
        window.isSigned = true;
-       alert('您已签署过此文档');
+       //alert('您已签署过此文档');
     }else{
       $('.btnSign').css({display: 'table-cell' });
     }

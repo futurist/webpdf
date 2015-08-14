@@ -60,7 +60,7 @@ function initWX() {
 
 	});
 }
-initWX();
+if(isWeiXin) initWX();
 
 
 var DrawView  = (function () {
@@ -105,6 +105,25 @@ var DrawView  = (function () {
               : $('<div id="drawViewer" class="drawViewer">').appendTo( $(container).parent() );
 
     $drawCon.append(div);
+    $drawCon.hide();
+
+
+    // create input Viewer for user input in template area
+    var div = document.createElement('div');
+    div.id = 'inputLayer' + this.id;
+    div.className = 'page inputLayer';
+    div.style.width = Math.floor(this.viewport.width) + 'px';
+    div.style.height = Math.floor(this.viewport.height) + 'px';
+    div.setAttribute('data-page-number', this.id);
+    this.inputDiv = div;
+
+    var $inputCon = $drawCon.next().size()
+              ? $drawCon.next()
+              : $('<div id="inputViewer" class="inputViewer">').appendTo( $drawCon.parent() );
+
+    $inputCon.append(div);
+    //$inputCon.hide();
+
 
     window.viewBox = pageView.viewport.viewBox;
     var R = pageView.viewport.rotation;
@@ -190,8 +209,6 @@ window.addEventListener('scalechange', function scalechange(evt) {
 });
 
 document.addEventListener('pagerendered', function (e) {
-
-
   var pageIndex = e.detail.pageNumber - 1;
   RERenderDrawerLayer(pageIndex);
 
@@ -199,7 +216,7 @@ document.addEventListener('pagerendered', function (e) {
 
 
 function RERenderDrawerLayer(pageIndex){
-
+  var page = pageIndex+1;
 	var pageView = PDFViewerApplication.pdfViewer.getPageView(pageIndex);
 	var oldRotation = window.curRotation||0;
 	window.curScale = pageView.viewport.scale;
@@ -209,9 +226,14 @@ function RERenderDrawerLayer(pageIndex){
 	var W = R%180? viewBox[3] : viewBox[2];
 	var H = R%180? viewBox[2] : viewBox[3];
 
+  $('#drawerLayer'+ page).css({width: ~~pageView.width, height: ~~pageView.height  });
+  $('#inputLayer'+ page).css({width: ~~pageView.width, height: ~~pageView.height  });
+
 	copyDrawerLayerData(pageIndex);
+  copyInputLayerData(pageIndex);
 
 	restoreSignature(pageIndex);
+  //setStage( curStage );
 
 	//text tranlation with rotation
 
@@ -1534,14 +1556,17 @@ var svgns = "http://www.w3.org/2000/svg";
             (evt.metaKey ? 8 : 0);
 
       if (cmd === 0) { // no control key pressed at all.
-        //console.log(evt.keyCode);
+        //console.log(evt, evt.keyCode);
         switch (evt.keyCode) {
-          case 8:  //delete key : Delete the shape
+          case 8:  //backspace key : Delete the shape
+          case 46:  //delete key : Delete the shape
             var el = $('[data-hl]');
             if( el.length ){
               el.remove();
               svgHistory.update();
             }
+            handled = true;
+            break;
         }
       }
 
@@ -1549,6 +1574,7 @@ var svgns = "http://www.w3.org/2000/svg";
       switch (evt.keyCode) {
         case 90:  //Ctrl+Z
           OPHistory.undo();
+            handled = true;
           break;
       }
     }
@@ -1557,11 +1583,32 @@ var svgns = "http://www.w3.org/2000/svg";
       switch (evt.keyCode) {
         case 90:
           OPHistory.redo();
+            handled = true;
           break;
       }
     }
 
+    if(handled){
+      evt.preventDefault();
+      return;
     }
+
+
+  // Some shortcuts should not get handled if a control/input element
+  // is selected.
+  var curElement = document.activeElement || document.querySelector(':focus');
+  var curElementTagName = curElement && curElement.tagName.toUpperCase();
+  if (curElementTagName === 'INPUT' ||
+      curElementTagName === 'TEXTAREA' ||
+      curElementTagName === 'SELECT') {
+    // Make sure that the secondary toolbar is closed when Escape is pressed.
+    if (evt.keyCode !== 27) { // 'Esc'
+      return;
+    }
+  }
+
+
+  }
 
 
   var svgHistory = new function(html) {
@@ -1807,44 +1854,61 @@ var svgns = "http://www.w3.org/2000/svg";
 	      if(oldTop) viewer.scrollTop( ~~oldTop );
     	}
 
-    	var oldVal = $('.textarea').val();
-      ApplyLineBreaks( '.textarea' );
-
-      var $text = $('.editing').find('.text');
-      var val = $('.textarea').val();
-      var prevVal = $text.html();
-
-      if(val==""){
-          try{
-            $('.editing').remove();
-           $('.textarea').remove();
-           $('.handler').remove();
-         }catch(e){}
-         restoreViewerPosition();
-         return;
-      }
-
-      $text.html( val );
-      $($text).get(0).style.removeProperty('width');
-      $($text).get(0).style.removeProperty('height');
-
-      $('.editing').show();
+      var isTemplate = $('.editing').data('template');
 
       var offset = $('.textarea').offset();
-      $('.editing').css( {width:offset.width, height:offset.height} );
+      offset.width /= curScale;
+      offset.height /= curScale;
 
-      var th = $text.prop('scrollHeight'),  tw = $text.prop('scrollWidth');
-      offset.width = tw/curScale;
-      offset.height = th/curScale;
+      $('.editing').show();
+      var $text = $('.editing').find('.text');
+      var oldVal = "";
 
-      var trans = ( $('.editing').data('oldTrans') );
-      if(!trans) trans = [0,0];
-      // offset.left += trans[0];
-      // offset.top += trans[1];
+      if(!isTemplate){
+        oldVal = $('.textarea').val();
 
+        ApplyLineBreaks( '.textarea' );
+        var val = $('.textarea').val();
+        var prevVal = $text.html();
 
-      $('.editing').css( {width:offset.width, height:offset.height} );
-      $('.editing').find('.bbox').css( {width:offset.width, height:offset.height} );
+        if(val==""){
+            try{
+              $('.editing').remove();
+             $('.textarea').remove();
+             $('.handler').remove();
+           }catch(e){}
+           restoreViewerPosition();
+           return;
+        }
+
+        $text.html( val );
+        $($text).get(0).style.removeProperty('width');
+        $($text).get(0).style.removeProperty('height');
+
+        $('.editing').css( {width:offset.width, height:offset.height} );
+
+        var th = $text.prop('scrollHeight'),  tw = $text.prop('scrollWidth');
+        offset.width = tw/curScale;
+        offset.height = th/curScale;
+
+        var trans = ( $('.editing').data('oldTrans') );
+        if(!trans) trans = [0,0];
+        // offset.left += trans[0];
+        // offset.top += trans[1];
+        $text.html( oldVal );
+
+        $('.editing').css( {width:offset.width, height:offset.height} );
+        $('.editing').find('.bbox').css( {width:offset.width, height:offset.height} );
+        offset = $text.offset();
+        offset.width/=curScale;
+        offset.height/=curScale;
+        $('.editing').css( {height:offset.height} );
+        $('.editing').find('.bbox').css( {height:offset.height} );
+      } else {
+        $('.editing').css( {width:offset.width, height:offset.height} );
+        $('.editing').find('.bbox').css( {width:offset.width, height:offset.height} );
+      }
+
 
 
 	var bbox = $('.editing').data('bbox') ;
@@ -1870,7 +1934,7 @@ var svgns = "http://www.w3.org/2000/svg";
           setTimeout(function(){ svgHistory.update(); }, 100);
         }
       } else {
-      	$text.html( oldVal );
+
         //$text.html( val.replace(/\n/g, '') );
         setTimeout(function(){ svgHistory.update(); }, 100);
       }
@@ -1959,6 +2023,7 @@ var svgns = "http://www.w3.org/2000/svg";
       }
 
       path.css({"left":x, "top":y, "width":w, "height":h});
+      if(window.isTemplate) $(path).data('template', window.isTemplate);
 
       if(isCeate){
         var $bbox = $('<div class="bbox"></div>');
@@ -2717,14 +2782,13 @@ function restoreCanvas (isRender) {
     }
 	if(isRender) RERenderDrawerLayer( pageIndex );
   });
-
 }
 
 
 
 function copyDrawerLayerData(pageIndex){
   var drawCon = $('#drawViewer');
-  if(pageIndex) drawCon = drawCon.find('.page').eq(pageIndex);
+  if(typeof pageIndex=='number') drawCon = drawCon.find('.page').eq(pageIndex);
   var svgCon = $('.svgCon', drawCon).toArray();
   svgCon.forEach(function(v,i){
     var page = $(v).parent().data('page-number');
@@ -2738,6 +2802,60 @@ function copyDrawerLayerData(pageIndex){
   });
 
 }
+
+function copyInputLayerData(pageIndex){
+
+  var drawCon = $('#drawViewer');
+
+
+  // var prevDispaly = drawCon.css('display');
+  // drawCon.show();
+  // drawCon.find('.page').each(function(){
+  //   $(this).data('oldDisplay', $(this).css('display') );
+  //   $(this).show();
+  // });
+
+
+  if(typeof pageIndex=='number') drawCon = drawCon.find('.page').eq(pageIndex);
+    var pOff = getRealOffset( $(drawCon) );
+
+  setTimeout(function(){
+
+    var textCon = $('[data-template]', drawCon).toArray();
+    textCon.forEach(function(v,i){
+      var page = $(v).closest('.page').data('page-number');
+      var offset = $(v).offset();
+      var id = $(v).data('id');
+
+      var bbox = $(v).data('bbox');
+      var trans = getTranslateXY(v) ;
+      var left = Math.min(bbox[0][0],bbox[1][0]);
+      var top = Math.min(bbox[0][1],bbox[1][1]);
+      var width = Math.abs( bbox[0][0] - bbox[1][0] ) + trans[0];
+      var height = Math.abs( bbox[0][1] - bbox[1][1] ) + trans[1];
+
+      var text = $('[data-input-id="'+id+'"]');
+
+      if( !text.length ){
+        text = $('<div class="userInputText"><textarea name="userinput'+i+'"></textarea></div>');
+        text.data('input-id', id );
+        text.appendTo( $('#inputLayer'+page ) );
+      }
+      text.css({width: width*curScale, height:height*curScale, left:left*curScale, top:top*curScale });
+      //text.css({width: offset.width, height:offset.height, left:offset.left-pOff.left, top:offset.top-pOff.top });
+    });
+
+    // drawCon.css('display', prevDispaly);
+    // drawCon.find('.page').each(function(){
+    //   $(this).css('display', $(this).data('oldDisplay') );
+    // });
+
+  }, 50);
+
+
+}
+
+
 
 function saveCanvas () {
 
@@ -2964,15 +3082,18 @@ function setStage (stat) {
   $('.signPad, .signPadHandler').hide();
   HandTool.handTool.deactivate();
   $('#viewerContainer').css({overflow:'auto'});
+  $('#drawViewer').hide();
 
 	switch (stat){
 		case 'remark':
       		$('.signImg').hide();
-			showCanvas();
+			   showCanvas();
   			$('#viewerContainer').css({overflow:'hidden'});
+        $('#inputViewer').hide();
   			svgHistory.update('force');
 			break;
 		case 'viewer':
+          $('#inputViewer').show();
 		      $('#drawViewer').hide();
 		      $('#drawTool').hide();
 		      $('#mainMenu').show();
@@ -3053,6 +3174,7 @@ $(function  () {
   window.curFile = urlObj.file;
   window.shareID = urlObj.shareID;
   window.isSign = urlObj.isSign;
+  window.isTemplate = urlObj.isTemplate;
   window.signID = urlObj.signID;
   window.isSigned = false;
   window.shareData = null;

@@ -11,7 +11,7 @@
 */
 
 var host = "http://1111hui.com:88";
-
+var wxOAuthUrl = 'https://open.weixin.qq.com/connect/oauth2/authorize?appid=wx59d46493c123d365&redirect_uri=http%3A%2F%2F1111hui.com%2F/pdf/getUserID.php&response_type=code&scope=snsapi_base&state='+ encodeURIComponent( window.location.href.replace('#','{@@@}') ) +'#wechat_redirect';
 var DEBUG= 1;
 if(!DEBUG)
 {
@@ -19,7 +19,7 @@ if(!DEBUG)
 $(function(){
 var wxUserInfo = Cookies.get( 'wxUserInfo' );
 if( !wxUserInfo ){
-  window.location = 'https://open.weixin.qq.com/connect/oauth2/authorize?appid=wx59d46493c123d365&redirect_uri=http%3A%2F%2F1111hui.com%2F/pdf/getUserID.php&response_type=code&scope=snsapi_base&state='+ encodeURIComponent( window.location.href.replace('#','{@@@}') ) +'#wechat_redirect';
+  window.location = wxOAuthUrl;
 } else {
    wxUserInfo = JSON.parse(wxUserInfo);
     $.post(host+'/getUserInfo', { userid: wxUserInfo.UserId }, function  (userinfo) {
@@ -39,10 +39,10 @@ if( !wxUserInfo ){
 }
 
 
-    
+
 function initWX() {
 	$.post(host+'/getJSConfig', { url:window.location.href.split('#')[0] }, function(data){
-		if(!data){
+		if(!data || data[0]!='{') {
 			alert('获取微信接口错误');
 			wx.closeWindow();
 			return;
@@ -57,7 +57,7 @@ function initWX() {
 			alert('身份验证失败');
 			wx.closeWindow();
 		});
-		
+
 	});
 }
 initWX();
@@ -193,115 +193,124 @@ document.addEventListener('pagerendered', function (e) {
 
 
   var pageIndex = e.detail.pageNumber - 1;
-  var pageView = PDFViewerApplication.pdfViewer.getPageView(pageIndex);
-  var oldRotation = window.curRotation||0;
-  window.curScale = pageView.viewport.scale;
-  window.curRotation = pageView.viewport.rotation;
-  window.viewBox = pageView.viewport.viewBox;
-  var R = pageView.viewport.rotation;
-  var W = R%180? viewBox[3] : viewBox[2];
-  var H = R%180? viewBox[2] : viewBox[3];
-
-  copyDrawerLayerData(pageIndex);
-
-  restoreSignature(pageIndex);
-
-  //text tranlation with rotation
-
-  var transformProp = isAndroid ? '-webkit-transform' : 'transform';
-  $('.textCon').show().css({'-webkit-transform': 'scale('+curScale+')' });
-  window.curRotation = 0;
-
-  // if(curRotation == 0){
-  //   $('.textCon').show().css({'-webkit-transform': 'scale('+curScale+')' });
-  // }
-  // if(curRotation == 90){
-  //   $('.textCon').show().css({'-webkit-transform': 'scale('+curScale+') rotate(90deg) translate(0,-'+ H +'px)' });
-  // }
-  // if(curRotation == 180){
-  //   $('.textCon').show().css({'-webkit-transform': 'scale('+curScale+') rotate(180deg) translate(-'+ W +'px,-'+ H +'px)' });
-  // }
-  // if(curRotation == 270){
-  //   $('.textCon').show().css({'-webkit-transform': 'scale('+curScale+') rotate(270deg) translate(-'+ W +'px,-'+ 0 +'px)' });
-  // }
-
-
-
-  var p = getRealOffset( $('.svgCon').parent() );
-  $('.svgCon').width( p.width );
-  $('.svgCon').height( p.height );
-
-
-  //change direction
-  if(curRotation == oldRotation) return;
-
-  //svg translation with rotation
-
-  var rotClock =  (curRotation==0&&oldRotation==270) ? true :  ( (curRotation==270&&oldRotation==0) ? false :  (curRotation - oldRotation > 0) );
-
-  if(curRotation == 0) {
-    $('svg.canvas').attr('viewBox', '0 0 '+W+' '+H);
-  }
-  if(curRotation == 90){
-    $('svg.canvas').attr('viewBox', '0 0 '+H+' '+W);
-    //$('svg.canvas rect').attr('transform', 'matrix(0,1,1,0,0,0)');
-  }
-  if(curRotation == 180){
-    $('svg.canvas').attr('viewBox', '0 0 '+W+' '+H);
-  }
-  if(curRotation == 270){
-    $('svg.canvas').attr('viewBox', '0 0 '+H+' '+W);
-  }
-
-  var box = $('svg.canvas').attr('viewBox').split(/\s+/g).map(function(v){return parseInt(v)});
-  var bw = box[2];
-  var bh = box[3];
-
-
-  /*****
-  * For SVG Shape, we redraw all the shape according to the rotation.
-  * For text, we rotate all the shape.
-  */
-  $('[data-hl]').attr('data-hl',null);
-
-  var oldShapes = $('svg.canvas .shape').toArray();
-  var oldShapeIDs = oldShapes.map( function(v){ return $(v).data('id'); } );
-  oldShapes.forEach(function(v){
-    rotateShape(v, rotClock? 90:-90 );
-  });
-
-  oldShapeIDs.forEach(function  (v) {
-    $('[data-id="'+ v +'"]').remove();
-  });
-
-
-  $('[data-hl]').attr('data-hl',null);
-
-  return;
-
-  var box = $('svg.canvas').attr('viewBox').split(/\s+/g).map(function(v){return parseInt(v)});
-  var bw = box[2];
-  var bh = box[3];
-
-    $('svg.canvas .shape').each(function(i,v){
-      var trans = getTranslateXY(v);
-      var oldRotation = getRotation(v);
-      var newRotate = ( oldRotation + (rotClock?90:-90) + 3600 ) % 360;
-
-      switch(newRotate) {
-        case 0: rotClock ? trans[0]+=bw : trans[1]+= bh; break;
-        case 90: rotClock ? trans[1]+=-bw : trans[0]+= bh; break;
-        case 180: rotClock ? trans[0]+=-bw : trans[1]+= -bh; break;
-        case 270: rotClock ? trans[1]+=bw : trans[0]+= -bh; break;
-      }
-
-      $(v).attr('transform', 'rotate('+newRotate+') translate('+(trans[0])+','+(trans[1])+')');
-      updateBBox(v);
-
-    });
-
+  RERenderDrawerLayer(pageIndex);
 
 });
+
+
+function RERenderDrawerLayer(pageIndex){
+
+	var pageView = PDFViewerApplication.pdfViewer.getPageView(pageIndex);
+	var oldRotation = window.curRotation||0;
+	window.curScale = pageView.viewport.scale;
+	window.curRotation = pageView.viewport.rotation;
+	window.viewBox = pageView.viewport.viewBox;
+	var R = pageView.viewport.rotation;
+	var W = R%180? viewBox[3] : viewBox[2];
+	var H = R%180? viewBox[2] : viewBox[3];
+
+	copyDrawerLayerData(pageIndex);
+
+	restoreSignature(pageIndex);
+
+	//text tranlation with rotation
+
+	var transformProp = '-webkit-transform';	// isAndroid ? '-webkit-transform' : 'transform';
+	$('.textCon').show().css({'-webkit-transform': 'scale('+curScale+')' });
+	window.curRotation = 0;
+
+	// if(curRotation == 0){
+	//   $('.textCon').show().css({'-webkit-transform': 'scale('+curScale+')' });
+	// }
+	// if(curRotation == 90){
+	//   $('.textCon').show().css({'-webkit-transform': 'scale('+curScale+') rotate(90deg) translate(0,-'+ H +'px)' });
+	// }
+	// if(curRotation == 180){
+	//   $('.textCon').show().css({'-webkit-transform': 'scale('+curScale+') rotate(180deg) translate(-'+ W +'px,-'+ H +'px)' });
+	// }
+	// if(curRotation == 270){
+	//   $('.textCon').show().css({'-webkit-transform': 'scale('+curScale+') rotate(270deg) translate(-'+ W +'px,-'+ 0 +'px)' });
+	// }
+
+
+
+	var p = getRealOffset( $('.svgCon').parent() );
+	$('.svgCon').width( p.width );
+	$('.svgCon').height( p.height );
+
+
+	//change direction
+	if(curRotation == oldRotation) return;
+
+	//svg translation with rotation
+
+	var rotClock =  (curRotation==0&&oldRotation==270) ? true :  ( (curRotation==270&&oldRotation==0) ? false :  (curRotation - oldRotation > 0) );
+
+	if(curRotation == 0) {
+	  $('svg.canvas').attr('viewBox', '0 0 '+W+' '+H);
+	}
+	if(curRotation == 90){
+	  $('svg.canvas').attr('viewBox', '0 0 '+H+' '+W);
+	  //$('svg.canvas rect').attr('transform', 'matrix(0,1,1,0,0,0)');
+	}
+	if(curRotation == 180){
+	  $('svg.canvas').attr('viewBox', '0 0 '+W+' '+H);
+	}
+	if(curRotation == 270){
+	  $('svg.canvas').attr('viewBox', '0 0 '+H+' '+W);
+	}
+
+	var box = $('svg.canvas').attr('viewBox').split(/\s+/g).map(function(v){return parseInt(v)});
+	var bw = box[2];
+	var bh = box[3];
+
+
+	/*****
+	* For SVG Shape, we redraw all the shape according to the rotation.
+	* For text, we rotate all the shape.
+	*/
+	$('[data-hl]').attr('data-hl',null);
+
+	var oldShapes = $('svg.canvas .shape').toArray();
+	var oldShapeIDs = oldShapes.map( function(v){ return $(v).data('id'); } );
+	oldShapes.forEach(function(v){
+	  rotateShape(v, rotClock? 90:-90 );
+	});
+
+	oldShapeIDs.forEach(function  (v) {
+	  $('[data-id="'+ v +'"]').remove();
+	});
+
+
+	$('[data-hl]').attr('data-hl',null);
+
+	  //svgHistory.update('init');
+
+	return;
+
+	var box = $('svg.canvas').attr('viewBox').split(/\s+/g).map(function(v){return parseInt(v)});
+	var bw = box[2];
+	var bh = box[3];
+
+	  $('svg.canvas .shape').each(function(i,v){
+	    var trans = getTranslateXY(v);
+	    var oldRotation = getRotation(v);
+	    var newRotate = ( oldRotation + (rotClock?90:-90) + 3600 ) % 360;
+
+	    switch(newRotate) {
+	      case 0: rotClock ? trans[0]+=bw : trans[1]+= bh; break;
+	      case 90: rotClock ? trans[1]+=-bw : trans[0]+= bh; break;
+	      case 180: rotClock ? trans[0]+=-bw : trans[1]+= -bh; break;
+	      case 270: rotClock ? trans[1]+=bw : trans[0]+= -bh; break;
+	    }
+
+	    $(v).attr('transform', 'rotate('+newRotate+') translate('+(trans[0])+','+(trans[1])+')');
+	    updateBBox(v);
+
+	  });
+
+}
+
 
 function getRealOffset(el){
 	var offset = $(el).offset();
@@ -525,13 +534,13 @@ var PageObj = (function(){
 
 
 $(document).add($(window)).on('touchmove', function(e) {
-    if(window.curStage=='remark') e.preventDefault();
+    if(window.curStage=='remark')e.preventDefault();
   }
 );
 
 var isAndroid = /(android)/i.test(navigator.userAgent);
 var isWeiXin = navigator.userAgent.match(/MicroMessenger\/([\d.]+)/i);
-var isiOS = /iPhone/i.test(navigator.platform) || /iPod/i.test(navigator.platform) || /iPad/i.test(navigator.userAgent);
+var isiOS = /iPhone/i.test(navigator.userAgent) || /iPod/i.test(navigator.userAgent) || /iPad/i.test(navigator.userAgent);
 var isMobile = isAndroid||isWeiXin||isiOS;
 
 // init function
@@ -547,7 +556,7 @@ function init (context) {
   $('.textCon', context).data('id', NewID() );
   $('.textLayer').hide();
 
-  svgHistory.update('init');
+
 
 }
 
@@ -699,6 +708,7 @@ var svgns = "http://www.w3.org/2000/svg";
     function switchOption (con, tool, options) {
     	$(con+' .subtool').hide();
       $(con+' .subtool_'+tool).show().addClass('active');
+      updateViewArea();
     }
 
     function rotatePDF(dir){
@@ -733,7 +743,7 @@ var svgns = "http://www.w3.org/2000/svg";
 
     }
 
-    function setTool (tool, options) {
+    function setTool (tool, options, noUpdateHistory) {
 
       if(!options && curTool!=tool){
         $('[data-hl]').attr('data-hl', null);
@@ -744,6 +754,10 @@ var svgns = "http://www.w3.org/2000/svg";
 
       $('#drawTool .subtool').hide();
       $('#drawTool .subtool_'+tool).show();
+
+      updateViewArea();
+
+      if(noUpdateHistory) return;
 
       var shapeA = [];
       if( $('[data-hl], .editing').size() ){
@@ -831,7 +845,7 @@ var svgns = "http://www.w3.org/2000/svg";
 
         isDirty = true;
       });
-      if(isDirty) svgHistory.update();
+      if(isDirty && !noUpdateHistory) svgHistory.update();
     }
 
 
@@ -899,7 +913,7 @@ var svgns = "http://www.w3.org/2000/svg";
       var els = [];
       $('.shape, .textWrap').each( function  (i,v) {
         var _bb = $(v).data('bbox');
-        var _trans = getTranslateXY(v);
+        var _trans = getTranslateXY(v, 'getElementsFromPoint');
         if(_bb && _trans){
           if( rectsIntersect2( rectPoint, _bb, _trans ) ){
             els.push(v);
@@ -912,7 +926,8 @@ var svgns = "http://www.w3.org/2000/svg";
     function beginDrag () {
        dragging = true;
       $('[data-hl]').each(function  (i,v) {
-        $(v).attr('data-oldTrans', getTranslateXY(v).join(',') );
+      	var oldTrans = getTranslateXY(v, 'beginDrag');
+        $(v).attr('data-oldTrans', oldTrans.join(',') );
       });
     }
 
@@ -1026,7 +1041,7 @@ var svgns = "http://www.w3.org/2000/svg";
         if( isShape || isText ){
 
           addSelectionList( targetEl );
-          beginDrag();
+          //beginDrag();
 
         }else{
           //we are longclick on SVG, selection mode
@@ -1062,7 +1077,6 @@ var svgns = "http://www.w3.org/2000/svg";
       var buttonDown = ( !isMobile? e.which>0 : e.touches.length>0 );
 
       //if( ! $(evt.target).closest('.canvas').size() ) return;
-
       if(!curContext) {
       	return;
       }
@@ -1209,7 +1223,7 @@ var svgns = "http://www.w3.org/2000/svg";
 
           } else {
             $('[data-hl]').each(function  (i,v) {
-              var oldTrans = $(v).attr('data-oldTrans');
+              var oldTrans = $(v).attr('data-oldTrans');              
               oldTrans= !oldTrans?[0,0]:oldTrans.split(',');
 
               if( $(v).hasClass('textWrap') ) {
@@ -1365,11 +1379,14 @@ var svgns = "http://www.w3.org/2000/svg";
 
         var w = $('.textarea').width();
         var h = $('.textarea').height();
+        w/=curScale;
+        h/=curScale;
 
         var bbox = $('.editing').data('bbox') ;
-        bbox[1][0] = bbox[0][0]+ w;
-        bbox[1][1] = bbox[0][1]+ h;
-        $('.editing').data('bbox', JSON.stringify(bbox) ) ;
+        var bboxLeft = Math.min( bbox[1][0], bbox[0][0] );
+        var bboxTop = Math.min( bbox[1][1], bbox[0][1] );
+        newBBox=[ [bboxLeft, bboxTop], [bboxLeft+w, bboxTop+h] ];
+        $('.editing').data('bbox', JSON.stringify(newBBox) ) ;
 
 
         $(evt.target).removeClass('dragHandler');
@@ -1409,7 +1426,7 @@ var svgns = "http://www.w3.org/2000/svg";
       if(dragging){
         dragging=false;
 
-        $(targetEl).attr('data-oldtrans', JSON.stringify( getTranslateXY(targetEl) ) );
+        $(targetEl).attr('data-oldtrans', JSON.stringify( getTranslateXY(targetEl,'dragging') ) );
 
         if(isHandler){
 
@@ -1551,7 +1568,7 @@ var svgns = "http://www.w3.org/2000/svg";
     var self = this;
     $('.selrect').hide();
 
-    this.step=0;
+    this.step=-1;
     this.html={};
     this.texthtml={};
 
@@ -1582,7 +1599,7 @@ var svgns = "http://www.w3.org/2000/svg";
           newTextHtml[i] = $('.textCon', v).html();
         });
 
-        if( JSON.stringify(oldHtml)==JSON.stringify(newHtml) &&
+        if( _status!='force' && JSON.stringify(oldHtml)==JSON.stringify(newHtml) &&
          JSON.stringify(oldTextHtml)==JSON.stringify(newTextHtml) ) return;
 
         //self function sets up the action and performs it
@@ -1605,8 +1622,6 @@ var svgns = "http://www.w3.org/2000/svg";
 
             //the 'undo' function
             function() {
-
-              if(status=='init') return;
 
               self.step--;
 
@@ -1786,6 +1801,13 @@ var svgns = "http://www.w3.org/2000/svg";
 
     function onTextBlur(){
 
+    	function restoreViewerPosition(){
+	      var viewer =$('#viewerContainer');
+	      var oldTop = viewer.data('oldTop');
+	      if(oldTop) viewer.scrollTop( ~~oldTop );
+    	}
+
+    	var oldVal = $('.textarea').val();
       ApplyLineBreaks( '.textarea' );
 
       var $text = $('.editing').find('.text');
@@ -1798,6 +1820,7 @@ var svgns = "http://www.w3.org/2000/svg";
            $('.textarea').remove();
            $('.handler').remove();
          }catch(e){}
+         restoreViewerPosition();
          return;
       }
 
@@ -1811,8 +1834,8 @@ var svgns = "http://www.w3.org/2000/svg";
       $('.editing').css( {width:offset.width, height:offset.height} );
 
       var th = $text.prop('scrollHeight'),  tw = $text.prop('scrollWidth');
-      offset.width = tw;
-      offset.height = th;
+      offset.width = tw/curScale;
+      offset.height = th/curScale;
 
       var trans = ( $('.editing').data('oldTrans') );
       if(!trans) trans = [0,0];
@@ -1824,10 +1847,11 @@ var svgns = "http://www.w3.org/2000/svg";
       $('.editing').find('.bbox').css( {width:offset.width, height:offset.height} );
 
 
-      var bbox = $('.editing').data('bbox') ;
-      bbox[1][0] = bbox[0][0]+ offset.width;
-      bbox[1][1] = bbox[0][1]+ offset.height;
-      $('.editing').data('bbox', JSON.stringify(bbox) ) ;
+	var bbox = $('.editing').data('bbox') ;
+	var bboxLeft = Math.min( bbox[1][0], bbox[0][0] );
+	var bboxTop = Math.min( bbox[1][1], bbox[0][1] );
+	newBBox=[ [bboxLeft, bboxTop], [bboxLeft+offset.width, bboxTop+offset.height] ];
+	$('.editing').data('bbox', JSON.stringify(newBBox) ) ;
 
       var options = $('.editing').data('options');
       $('.editing pre').css({  "color":options.stroke, "font-family": options['font-family'], "font-size": options['stroke-width'] });
@@ -1846,9 +1870,13 @@ var svgns = "http://www.w3.org/2000/svg";
           setTimeout(function(){ svgHistory.update(); }, 100);
         }
       } else {
+      	$text.html( oldVal );
         //$text.html( val.replace(/\n/g, '') );
         setTimeout(function(){ svgHistory.update(); }, 100);
       }
+
+      restoreViewerPosition();
+
     }
 
     setupTextEvent();
@@ -1859,7 +1887,8 @@ var svgns = "http://www.w3.org/2000/svg";
       $(targetEl).addClass('editing').hide();
       var box = $(targetEl).data('bbox');
       var offset = pointsToRect(box[0], box[1], getTranslateXY(targetEl) );
-      offset.width += 30;
+      //offset.width += 30;
+
      $(curContext).find('.textCon').append('<textarea class="text textarea" wrap="hard"></textarea>');
      $(curContext).find('.textCon').append('<div class="handler"></div>');
 
@@ -1877,6 +1906,16 @@ var svgns = "http://www.w3.org/2000/svg";
        .html( $(targetEl)
         .find('.text').html() )
        .focus();
+
+      //if in android, we move textarea to top to show keyboard correctly.
+      if(isAndroid){
+	      var viewer =$('#viewerContainer');
+	      var oldTop = viewer.scrollTop();
+	      viewer.data('oldTop', oldTop);
+	      var offset = $('.textarea').offset();
+	      viewer.scrollTop( oldTop+offset.top - 40 );
+	  }
+
     }
 
 
@@ -1919,7 +1958,7 @@ var svgns = "http://www.w3.org/2000/svg";
 
       }
 
-      path.css({"left":x, "top":y, "width":w, "height":h, transform:'translate(0,0)'});
+      path.css({"left":x, "top":y, "width":w, "height":h});
 
       if(isCeate){
         var $bbox = $('<div class="bbox"></div>');
@@ -2105,7 +2144,8 @@ var svgns = "http://www.w3.org/2000/svg";
     function addSelectionList (el, isNew) {
       if( $(el).data('hl') )return;
       $(el).data('hl', 1);
-      $(el).attr('data-oldTrans', getTranslateXY(el).join(',') );
+      var oldTrans = getTranslateXY(el, 'selectionList');
+      $(el).attr('data-oldTrans', oldTrans.join(',') );
       if(isNew) $(el).get(0).setAttribute('newHL', 1);
       //$(el).appendTo( $(el).parent() );
       updateToolBox();
@@ -2132,15 +2172,18 @@ var svgns = "http://www.w3.org/2000/svg";
           theTool = i;
         }
       }
-      setTool(theTool, {});
+      setTool(theTool, {}, true);
     }
 
-    function getTranslateXY(obj)
+    function getTranslateXY(obj, source)
     {
         if(!obj) return [0,0];
        if(obj.size) obj=obj.get(0);
         var style = obj.style;
         var transform = style.webkitTransform || style.transform || style.mozTransform;
+        // var transform = style.cssText.match(/-webkit-transform:([^;]*);|transform:([^;]*);/i);
+        // if(transform) transform=transform[0];
+        // else transform = 'transform: translate(0px, 0px);';
         var transformAttr =obj.getAttribute('transform');
         transform = (!transformAttr) ? transform :  transformAttr;
         if(!transform ) return [0,0];
@@ -2148,10 +2191,15 @@ var svgns = "http://www.w3.org/2000/svg";
         return zT ? [ parseInt(zT[1]), parseInt(zT[2]) ] : [0,0];
     }
     function setTranslateXY(obj, x, y){
+    	if(!x||!y) return;
        if(!obj) return [0,0];
        if(obj.size) obj=obj.get(0);
         var style = obj.style;
         var transform = style.webkitTransform  || style.transform || style.mozTransform;
+        // var transform = style.cssText.match(/-webkit-transform:([^;]*);|transform:([^;]*);/i);
+        // if(transform) transform=transform[0];
+        // else transform = 'transform: translate(0px, 0px);';
+
         var transformAttr =obj.getAttribute('transform');
         transform = (!transformAttr) ? transform :  transformAttr;
         if(!transform ) transform="translate(0,0)";
@@ -2656,16 +2704,20 @@ var host = "http://1111hui.com:88";
 var savedCanvasData = [];
 var savedSignData = [];
 
-function restoreCanvas () {
+function restoreCanvas (isRender) {
 
   $('#drawViewer .page').each(function(){
     var page = $(this).data('page-number');
-    if(savedCanvasData[page-1]) $(this).html( savedCanvasData[page-1] );
+    var pageIndex = page-1;
+    if(savedCanvasData[page-1]){
+    	$(this).html( savedCanvasData[pageIndex] );
+    }
     else{
       $(this).find('.textWrap, .shape').remove();
     }
+	if(isRender) RERenderDrawerLayer( pageIndex );
   });
-  copyDrawerLayerData();
+
 }
 
 
@@ -2911,10 +2963,14 @@ function setStage (stat) {
   $('.signImg').show();
   $('.signPad, .signPadHandler').hide();
   HandTool.handTool.deactivate();
+  $('#viewerContainer').css({overflow:'auto'});
+
 	switch (stat){
 		case 'remark':
-      $('.signImg').hide();
+      		$('.signImg').hide();
 			showCanvas();
+  			$('#viewerContainer').css({overflow:'hidden'});
+  			svgHistory.update('force');
 			break;
 		case 'viewer':
 		      $('#drawViewer').hide();
@@ -2923,7 +2979,7 @@ function setStage (stat) {
 		      $('.textLayer').show();
 			break;
 		case 'sign':
-      $('#signMenu').show();
+      		$('#signMenu').show();
 			break;
 	}
 
@@ -2931,6 +2987,14 @@ function setStage (stat) {
       endWindowEvent();
   }
 	window.curStage = stat;
+	updateViewArea();
+}
+
+
+function updateViewArea(){
+	var mainHeight = $('.botmenu:visible').height()||0;
+	var subHeight = $('.subtool:visible').height()||0;
+	$('#viewerContainer').css({'margin-bottom': mainHeight+subHeight+'px'} );
 }
 
 function backCabinet () {

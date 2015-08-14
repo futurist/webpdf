@@ -23,11 +23,11 @@ See https://github.com/adobe-type-tools/cmap-resources
 <html dir="ltr" mozdisallowselectionprint moznomarginboxes>
   <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no, maximum-scale=1, minimum-scale=1">
     <meta name="google" content="notranslate">
     <meta http-equiv="cache-control" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
-    
+
     <title>PDF.js viewer</title>
 
 
@@ -46,7 +46,7 @@ See https://github.com/adobe-type-tools/cmap-resources
 
 
     <script src="/js/cookies.js"></script>
-    
+
     <script src="debugger.js"></script>
     <script src="viewer.js"></script>
 
@@ -438,6 +438,10 @@ See https://github.com/adobe-type-tools/cmap-resources
 
 <style type="text/css">
 
+body, #outerContainer, #mainContainer{
+  overflow: hidden;
+}
+
 *:focus, *:active {
     border:none;
     outline: none;
@@ -475,7 +479,7 @@ See https://github.com/adobe-type-tools/cmap-resources
   .drawerLayer .hidden{
     display:none;
   }
-  .drawerLayer *:not(input):not(textarea){
+  .drawerLayer, .drawerLayer *:not(input):not(textarea){
     -webkit-tap-highlight-color: rgba(0,0,0,0);
     -webkit-user-select: none;
     -webkit-touch-callout: none;
@@ -569,9 +573,10 @@ See https://github.com/adobe-type-tools/cmap-resources
     white-space: -pre-wrap; /* Opera 4-6 */
     white-space: -o-pre-wrap; /* Opera 7 */
     word-wrap: break-word; /* Internet Explorer 5.5+ */
-    overflow: hidden;
-    padding-left:3px;
+    overflow: visible;
+    padding-left:0px;
     display: inline-block;
+    width: 100%;
   }
   .page .bbox{
     position: absolute;
@@ -847,14 +852,14 @@ See https://github.com/adobe-type-tools/cmap-resources
   <a href="javascript:;" class="button btnCircle" data-onclick="setTool('circle')">圆形</a>
   <a href="javascript:;" class="button btnText" data-onclick="setTool('text')">文字</a>
   <a href="javascript:;" class="button btnText" data-onclick="switchOption('#drawTool', 'operation')">操作</a>
+  <a href="javascript:;" class="button" data-onclick="saveCanvas(); setStage('viewer')">保存</a>
 
 </div>
 
 <div class="subtool subtool_operation">
-  <a href="javascript:;" class="button" data-onclick="if(confirm('确认不保存退出吗？')){restoreCanvas();setStage('viewer');}">取消</a>
+  <a href="javascript:;" class="button" data-onclick="if(confirm('确认不保存退出吗？')){restoreCanvas(true);setStage('viewer');}">取消</a>
   <a href="javascript:;" class="button btnRedo" data-onclick="OPHistory.redo()">重做</a>
   <a href="javascript:;" class="button btnUndo" data-onclick="OPHistory.undo()">还原</a>
-  <a href="javascript:;" class="button" data-onclick="saveCanvas(); setStage('viewer')">保存</a>
   <a href="javascript:;" class="button btnDel" data-onclick="deleteEl()">删除</a>
 </div>
 

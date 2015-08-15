@@ -122,6 +122,7 @@ var DrawView  = (function () {
               : $('<div id="inputViewer" class="inputViewer">').appendTo( $drawCon.parent() );
 
     $inputCon.append(div);
+    $(div).append('<div class="inputCon"></div>');
     //$inputCon.hide();
 
 
@@ -204,7 +205,6 @@ var DrawView  = (function () {
 
 window.addEventListener('scalechange', function scalechange(evt) {
 
-  $('.textCon').hide();
 
 });
 
@@ -1412,8 +1412,9 @@ var svgns = "http://www.w3.org/2000/svg";
 
 
         $(evt.target).removeClass('dragHandler');
-        $('.textarea').focus();
-
+        setTimeout(function(){
+        	$('.textarea').focus();
+        }, 10);
         return;
       }
 
@@ -1523,7 +1524,10 @@ var svgns = "http://www.w3.org/2000/svg";
           $('.textrect').remove();
           createText( startPoint, endPoint );
 
-          $('.textarea').focus();
+          setTimeout(function(){
+			$('.textarea').focus();
+          },30);
+          
         }
 
 
@@ -1588,10 +1592,6 @@ var svgns = "http://www.w3.org/2000/svg";
       }
     }
 
-    if(handled){
-      evt.preventDefault();
-      return;
-    }
 
 
   // Some shortcuts should not get handled if a control/input element
@@ -1605,10 +1605,15 @@ var svgns = "http://www.w3.org/2000/svg";
     if (evt.keyCode !== 27) { // 'Esc'
       return;
     }
+    handled = false;
   }
 
+    if(handled){
+      evt.preventDefault();
+      return;
+    }
 
-  }
+}
 
 
   var svgHistory = new function(html) {
@@ -1862,10 +1867,9 @@ var svgns = "http://www.w3.org/2000/svg";
 
       $('.editing').show();
       var $text = $('.editing').find('.text');
-      var oldVal = "";
+      var oldVal = $('.textarea').val();
 
       if(!isTemplate){
-        oldVal = $('.textarea').val();
 
         ApplyLineBreaks( '.textarea' );
         var val = $('.textarea').val();
@@ -1907,6 +1911,7 @@ var svgns = "http://www.w3.org/2000/svg";
       } else {
         $('.editing').css( {width:offset.width, height:offset.height} );
         $('.editing').find('.bbox').css( {width:offset.width, height:offset.height} );
+        $text.html( oldVal );
       }
 
 
@@ -1988,7 +1993,9 @@ var svgns = "http://www.w3.org/2000/svg";
       if(!options) options = ToolSet['text'];
       var isCeate = !path;
 
-
+      var size = options['stroke-width'];
+      options['stroke-width'] = Math.max(6, size);
+      
       if(isCeate){
         startPoint = rotateTextPoint( startPoint, curRotation );
         endPoint = rotateTextPoint( endPoint, curRotation );
@@ -2798,61 +2805,62 @@ function copyDrawerLayerData(pageIndex){
   var textCon = $('.textCon', drawCon).toArray();
   textCon.forEach(function(v,i){
     var page = $(v).parent().data('page-number');
-    $(v).clone().insertAfter('#pageContainer'+page+' .canvasWrapper');
+	var con = $('#pageContainer'+page+' .canvasWrapper');
+    $(v).clone().insertAfter(con);
+    $('#pageContainer'+page).find('.textWrap[data-template]').html('');
   });
 
 }
 
 function copyInputLayerData(pageIndex){
 
-  var drawCon = $('#drawViewer');
+  var page = pageIndex+1;
 
+  var drawCon = $('#drawerLayer'+page ).find('.textCon');
+  var pOff = getRealOffset( $(drawCon) );
 
-  // var prevDispaly = drawCon.css('display');
-  // drawCon.show();
-  // drawCon.find('.page').each(function(){
-  //   $(this).data('oldDisplay', $(this).css('display') );
-  //   $(this).show();
-  // });
+  var inputCon = $('#inputLayer'+page ).find('.inputCon');
 
+  var inputCon = $('#inputLayer'+page ).find('.inputCon');
+  inputCon.css({ '-webkit-transform': 'scale('+ curScale +')' });
 
-  if(typeof pageIndex=='number') drawCon = drawCon.find('.page').eq(pageIndex);
-    var pOff = getRealOffset( $(drawCon) );
-
-  setTimeout(function(){
+  setTimeout(function() {
 
     var textCon = $('[data-template]', drawCon).toArray();
-    textCon.forEach(function(v,i){
-      var page = $(v).closest('.page').data('page-number');
+    textCon.forEach(function(v,i) {
       var offset = $(v).offset();
       var id = $(v).data('id');
-
-      var bbox = $(v).data('bbox');
-      var trans = getTranslateXY(v) ;
-      var left = Math.min(bbox[0][0],bbox[1][0]);
-      var top = Math.min(bbox[0][1],bbox[1][1]);
-      var width = Math.abs( bbox[0][0] - bbox[1][0] ) + trans[0];
-      var height = Math.abs( bbox[0][1] - bbox[1][1] ) + trans[1];
 
       var text = $('[data-input-id="'+id+'"]');
 
       if( !text.length ){
         text = $('<div class="userInputText"><textarea name="userinput'+i+'"></textarea></div>');
         text.data('input-id', id );
-        text.appendTo( $('#inputLayer'+page ) );
+        text.appendTo( inputCon );
       }
-      text.css({width: width*curScale, height:height*curScale, left:left*curScale, top:top*curScale });
-      //text.css({width: offset.width, height:offset.height, left:offset.left-pOff.left, top:offset.top-pOff.top });
+      text.get(0).style.cssText = v.style.cssText;
+      if( $(v).find('.text').size() )
+      	text.find('textarea').get(0).style.cssText = $(v).find('.text').get(0).style.cssText;
+      var t = parseTemplate( $(v).text() );
+      text.find('textarea').val( t );
+
     });
 
-    // drawCon.css('display', prevDispaly);
-    // drawCon.find('.page').each(function(){
-    //   $(this).css('display', $(this).data('oldDisplay') );
-    // });
 
   }, 50);
 
 
+}
+
+
+function parseTemplate(str){
+	str = $.trim(str);
+	if(!str || !str.match('^[!！]') ) return '';
+	str = str.replace(/^[!！]\s*/, '');
+	var para = str.split(/[：:]/);
+	var func = TemplateField[para.shift()].callback;
+	if(!func) return '';
+	return func(para);
 }
 
 
@@ -3130,6 +3138,7 @@ function backCabinet () {
 
 $(function  () {
   makeColorPicker();
+  makeTemplatePicker();
   setStage('viewer');
 
   $('.button').on(downE, function  (e) {
@@ -3220,5 +3229,44 @@ function searchToObject(search) {
 
 var rootPerson = {userid: 'yangjiming', name:"杨吉明", depart:"行政" };
 
+var TemplateField = {
+	'姓名':{demo:"!姓名", callback: function(){
+		return rootPerson.name;
+	}},
+	'部门':{demo:"!部门", callback: function(){
+		return rootPerson.depart;
+	}},
+	'年':{demo:"!年", callback: function(){
+		return moment().format('YYYY');
+	}},
+	'月':{demo:"!月", callback: function(){
+		return moment().format('MM');
+	}},
+	'日':{demo:"!日", callback: function(){
+		return moment().format('DD');
+	}},
+	'可':{demo:"!可", callback: function(a){
+		return a.join();
+	}}
+}
+
+function makeTemplatePicker(){
+	var ul = $('<ul class="templateUL clearfix"></ul>');
+
+	$.each(TemplateField, function(k,v) {
+		var li = $('<li class="templateLI"></li>').appendTo(ul);
+		li.text(v.demo);
+		li.click(function(){
+			$('.textarea').val( $(this).text() );
+			$('.templateCon').trigger('dialog-close');
+		});
+	});
+	$('.templateCon').empty().append(ul);
+}
+
+
+function chooseTemplate(){
+	$('.templateCon').trigger('dialog-open');
+}
 
 

@@ -32,8 +32,11 @@ See https://github.com/adobe-type-tools/cmap-resources
 
 
     <link rel="stylesheet" href="viewer.css"/>
+    <link rel="stylesheet" href="js/dialog.css"/>
 
     <script src="compatibility.js"></script>
+    <script src="/js/moment.js"></script>
+
 
 <script type="text/javascript" src="http://res.wx.qq.com/open/js/jweixin-1.0.0.js"></script>
 
@@ -50,9 +53,10 @@ See https://github.com/adobe-type-tools/cmap-resources
     <script src="debugger.js"></script>
     <script src="viewer.js"></script>
 
+    <script src="zepto.js"></script>
+<script src="js/dialog.build.js"></script>
 
     <script src="victor.js"></script>
-    <script src="zepto.js"></script>
     <script src="path.js"></script>
     <script src="drawer.js?t=234345765"></script>
 <script type="text/javascript" src="draggable.js"></script>
@@ -447,7 +451,18 @@ body, #outerContainer, #mainContainer{
     outline: none;
     -webkit-tap-highlight-color: rgba(0,0,0,0);
 }
-
+.clearfix:after {  
+content: ".";  
+display: block;  
+height: 0;  
+clear: both;  
+visibility: hidden;  
+}
+ul,li{
+  list-style: none;
+  margin:0;
+  padding: 0;
+}
 
 .drawViewer{
   direction: ltr;
@@ -477,7 +492,9 @@ body, #outerContainer, #mainContainer{
   height: 100%;
   font:18px/1 '黑体';
   border:none;
-  background: none;
+  background: rgba(255,255,0,0.2);
+      resize: none;
+      overflow: hidden;
   border:1px dotted red;
 }
 .drawerLayer, .inputLayer {
@@ -488,6 +505,14 @@ body, #outerContainer, #mainContainer{
   border: 9px solid rgba(0,0,0,0.01);
 }
 
+.inputLayer .inputCon{
+  position: absolute;
+  overflow: visible;
+  z-index: 999999999999999999;
+  top: 0;
+  left: 0;
+  transform-origin: left top;
+}
 
   .drawerLayer00{
     position: absolute;
@@ -783,6 +808,13 @@ body, #outerContainer, #mainContainer{
   .button.btnSign{
     display: none;
   }
+
+  .templateCon li{
+    float: left;
+    margin: 10px;
+  }
+
+
 </style>
 
 <style type="text/css">
@@ -922,12 +954,16 @@ body, #outerContainer, #mainContainer{
 <div class="subtool subtool_text">
   <a href="javascript:;" class="button btnStrokeWidth2" data-onclick='setTool("text", {"stroke-width": "-"})'>小</a>
   <a href="javascript:;" class="button btnStrokeWidth6" data-onclick='setTool("text", {"stroke-width": "+"})'>大</a>
+  <a href="javascript:;" class="button btnColorCon" data-onclick='chooseTemplate();'>模板</a>
   <a href="javascript:;" class="button btnColorCon" data-onclick='chooseColor()'>颜色</a>
 </div>
 
 </div>
 
 <div class="colorCon">
+</div>
+
+<div class="dialog templateCon">
 </div>
 
 <div class="signPad">

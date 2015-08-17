@@ -19,15 +19,21 @@ var fs = require('fs');
 var util = require('util');
 var url = require('url');
 
+var urllib = require("urllib");
 var express = require("express");
 var bodyParser = require("body-parser");
 var multer = require("multer");
+
+var Datauri = require('datauri');
+var QREncoder = require('qr').Encoder;
+
 
 var redis = require("redis"),
 redisClient = redis.createClient(6379, '127.0.0.1', {});
 
 qiniu.conf.ACCESS_KEY = '2hF3mJ59eoNP-RyqiKKAheQ3_PoZ_Y3ltFpxXP0K';
 qiniu.conf.SECRET_KEY = 'xvZ15BIIgJbKiBySTV3SHrAdPDeGQyGu_qJNbsfB';
+QiniuBucket = 'bucket01';
 
 function qiniu_uploadFile(file, callback ){
 
@@ -48,7 +54,7 @@ function qiniu_uploadFile(file, callback ){
 	};
 
 	var putPolicy = new qiniu.rs.PutPolicy(
-		'bucket01',
+		QiniuBucket,
 		null,
 		null,
 		null,
@@ -72,14 +78,112 @@ function qiniu_uploadFile(file, callback ){
 }
 
 
+/********* Redis Part ************/
 redisClient.on('error', function (err) {
     console.log('Redis Error ' + err);
 });
- 
+
 redisClient.on('connect', function(err){
   console.log('Connected to Redis server' + err);
 });
 
+
+
+/********* WebSocket Part ************/
+var WebSocketServer = require('ws').Server;
+var wss = new WebSocketServer({ port: 3000 });
+
+// each of WSMSG object structure:
+// { msgid: { ws, data  }  }, such as below:
+//
+// { "142342.453":
+//     {
+//       timeStamp:+new Date(),
+//       ws:[ws object],
+//       data:[json data from client]
+//     }
+// }
+var WSMSG = {};
+wss.on('connection', function connection(ws) {
+  ws.on('close', function incoming(code, message) {
+    console.log("WS close: ", code, message);
+  });
+  ws.on('message', function incoming(data) {
+    // Client side data format:
+    // reqData = {  msgid:14324.34, data:{a:2,b:3}  }
+
+    // Server response data format:
+    // resData = { msgid:14324.34, result:{ userid:'yangjiming' } }
+    var msg = JSON.parse(data);
+    var msgid = msg.msgid;
+    delete msg.msgid;
+    console.log(msgid, msg);
+    WSMSG.msgid = {ws:ws, timeStamp:+new Date(), data:msg.data};
+
+  });
+  console.log('new client connected');
+  ws.send('connected');
+});
+
+function getWsData(msgid){
+  if(!msgid || !WSMSG.msgid) return;
+  return WSMSG.msgid.data;
+}
+function sendWsMsg(msgid, resData) {
+  if(!msgid || !WSMSG.msgid) return;
+  var ws = WSMSG.msgid.ws;
+
+  //the sendback should be JSON stringify, else throw TypeError: Invalid non-string/buffer chunk
+  var ret = { msgid:msgid, result: resData };
+  ws.send( JSON.stringify(ret)  );
+}
+
+/**** Client Side example :
+// Dependency: https://github.com/joewalnes/reconnecting-websocket
+
+var wsQueue={};
+var ws;
+function connectToWS(){
+  if(ws) ws.close();
+  ws = new ReconnectingWebSocket('ws://1111hui.com:3000', null, {debug:false, reconnectInterval:300 });
+  ws.onopen = function (e) {
+    ws.onmessage = function (e) {
+      console.log(e.data);
+
+      if(e.data[0]!="{")return;
+          var d=JSON.parse(e.data);
+          var callObj= wsQueue[d.msgid];
+          if(callObj) {
+              callObj[1].call(callObj[0], d.result);
+              delete wsQueue[d.msgid];
+          }
+    }
+    ws.onclose = function (code, reason, bClean) {
+      console.log("ws error: ", code, reason, bClean);
+    }
+    console.log('client ws ready');
+  }
+}
+connectToWS();
+
+
+function wsend(data, that, callback){
+  if(!ws || ws.readyState!=1) return;
+  var json = {data:data};
+  if(callback){
+      json.msgid = +new Date() + Math.random();
+      wsQueue[json.msgid] = [that, callback];
+  }
+
+
+  ws.send(JSON.stringify(json));
+  return json.msgid;
+}
+
+********/
+
+
+/********* Express Part ************/
 
 var app = express();
 
@@ -125,6 +229,102 @@ app.post("/pdfCanvasDataLatex", function (req, res) {
 
 
 
+
+
+app.post("/getFinger", function (req, res) {
+  var msgid = req.body.msgid;
+  var reqData = getWsData(msgid);
+  if(!reqData) return res.send('');
+  var finger = reqData.finger;
+
+  col.findOne({finger:finger, role:'finger'}, function(err, item){
+    if(!item || !item.userid){
+
+      console.log('not found',msgid, finger);
+
+      var qrStr = 'https://open.weixin.qq.com/connect/oauth2/authorize?appid=wx59d46493c123d365&redirect_uri=http%3A%2F%2F1111hui.com%2F/pdf/getFinger.php&response_type=code&scope=snsapi_base&state='+ msgid +'#wechat_redirect';
+      var encoder = new QREncoder;
+      dUri = new Datauri();
+      encoder.on('end', function(png_data){
+          var udata = dUri.format('.png', png_data);
+          res.send( udata.content );
+      });
+
+      encoder.encode(qrStr, null, {dot_size:5, margin:4} );
+
+    }
+
+  } );
+});
+
+
+app.get("/putFingerInfo", function (req, res) {
+  var code = req.query.code;
+  var msgid = req.query.msgid;
+  var reqData = getWsData(msgid);
+  if(!code || !reqData) return res.send('');
+
+  var finger = reqData.finger;
+
+  var tryCount = 0;
+  function doit(){
+
+    api.getLatestToken(function  (err, token) {
+        if( !token && tryCount++<5 ) {
+          doit();return;
+        }
+
+        urllib.request("https://qyapi.weixin.qq.com/cgi-bin/user/getuserinfo?access_token="+ token.accessToken +"&code="+code, function(err, data, meta) {
+          if(!data && tryCount++<5 ){
+            return doit();
+          }
+          console.log("wx client auth: ", finger, data.toString() );
+          var ret = JSON.parse( data.toString() );
+          ret.finger = finger;
+          //ret.state = state;
+          res.send( JSON.stringify(ret) );
+          sendWsMsg( msgid, JSON.stringify(ret) );
+        });
+    });
+
+  }
+  doit();
+
+});
+
+app.get("/getUserID", function (req, res) {
+
+  var code = req.query.code;
+  var state = req.query.state;
+  if(!code){
+    return res.send('');
+  }
+
+  var tryCount = 0;
+  function doit(){
+
+    api.getLatestToken(function  (err, token) {
+        if( !token && tryCount++<5 ) {
+          doit();return;
+        }
+        console.log(code, state, token);
+
+        urllib.request("https://qyapi.weixin.qq.com/cgi-bin/user/getuserinfo?access_token="+ token.accessToken +"&code="+code, function(err, data, meta) {
+          if(!data && tryCount++<5 ){
+            return doit();
+          }
+          console.log("new wx client: ", data.toString() );
+          var ret = JSON.parse( data.toString() );
+          //ret.state = state;
+          res.send( JSON.stringify(ret) );
+        });
+    });
+
+  }
+  doit();
+
+});
+
 app.post("/getJSTicket", function (req, res) {
   var tryCount = 0;
   function getTicket(){
@@ -143,26 +343,28 @@ app.post("/getJSTicket", function (req, res) {
 
 app.post("/getJSConfig", function (req, res) {
 
-  var url = 'http://1111hui.com/pdf/client/tree.html';
+  var url = req.body.url;
   var rkey = 'wx:js:ticket:'+ encodeURIComponent(url);
-
   var param = {
-    debug:true,
+    debug:false,
     jsApiList: ["onMenuShareTimeline","onMenuShareAppMessage","onMenuShareQQ","onMenuShareWeibo","onMenuShareQZone","startRecord","stopRecord","onVoiceRecordEnd","playVoice","pauseVoice","stopVoice","onVoicePlayEnd","uploadVoice","downloadVoice","chooseImage","previewImage","uploadImage","downloadImage","translateVoice","getNetworkType","openLocation","getLocation","hideOptionMenu","showOptionMenu","hideMenuItems","showMenuItems","hideAllNonBaseMenuItem","showAllNonBaseMenuItem","closeWindow","scanQRCode"],
     url: url
   };
 
   var tryCount = 0;
   function getJsConfig(){
-    api.getJsConfig(param, function(err, result){
-      if(err && tryCount++<3){
-        getJsConfig();
-      }else{
-        console.log('wx:', result);
-        redisClient.set( rkey, JSON.stringify(result), 'ex', 30);
-        res.send( JSON.stringify(result) );
-      }
-    });
+  	api.getLatestToken(function () {
+  		api.getJsConfig(param, function(err, result){
+  		  if(err && tryCount++<3){
+  		    getJsConfig();
+  		  }else{
+  		    // console.log('wx:', result);
+  		    redisClient.set( rkey, JSON.stringify(result), 'ex', 30);
+  		    res.send( JSON.stringify(result) );
+  		  }
+  		});
+  	});
+
   }
 
   //redisClient.set('aaa', 100, 'ex', 10);
@@ -170,7 +372,7 @@ app.post("/getJSConfig", function (req, res) {
     if(!result){
       getJsConfig();
     } else {
-      console.log('redis:', result );
+      // console.log('redis:', result );
       res.send( result );
     }
   } );
@@ -186,10 +388,9 @@ function upfileFunc(data, callback) {
 
   console.log(data);
 
-  col.find( { person: person } , {limit:2000} ).sort({order:-1}).limit(1).nextObject(function(err, item) {
+  col.find( { person: person, role:'upfile', status:{$ne:-1} } , {limit:2000} ).sort({order:-1}).limit(1).nextObject(function(err, item) {
     if(err) {
-      res.send('error');
-      return;
+      return res.send('error');
     }
     maxOrder = item? item.order+1 : 1;
     console.log( 'maxOrder:', maxOrder );
@@ -219,8 +420,7 @@ app.post("/rotateFile", function (req, res) {
 	var jsonp = data.callback;
 	var dir = data.dir;
 	if( "LRD".indexOf(dir)==-1 || !file_url.match(/\.pdf$/) ) {
-		res.send("非法参数");
-		return;
+		return res.send("非法参数");
 	}
 
     // extract the file name
@@ -242,8 +442,7 @@ app.post("/rotateFile", function (req, res) {
     			if(item2){
 	    			newFile = item2;
 	    			console.log('exist rotate,', newName);
-	    			res.send( JSON.stringify(newFile) );
-					return;
+	    			return res.SENd( json.stringIfy(newFile) );
 	    		} else {
 					var child = exec('rm -rf '+DOWNLOAD_DIR+'; mkdir -p ' + DOWNLOAD_DIR, function(err, stdout, stderr) {
 					    if (err) throw err;
@@ -252,8 +451,7 @@ app.post("/rotateFile", function (req, res) {
 	    		}
     		});
     	} else {
-    		res.send("非法参数");
-			return;
+    		return res.send("非法参数");
     	}
     });
 
@@ -314,7 +512,91 @@ app.post("/rotateFile", function (req, res) {
 
 
 
+app.post("/getUserInfo", function (req, res) {
 
+  var data = req.body;
+  var userid = data.userid;
+
+  col.findOne( { company:CompanyName, 'stuffList.userid': userid, 'stuffList.status': 1 } , {limit:1, fields:{'stuffList.$':1} }, function(err, item){
+    if(err ||  !item.stuffList || !item.stuffList.length) {
+      return res.send('');
+    }
+      res.send( item.stuffList[0] );
+  });
+
+});
+
+
+
+
+app.post("/applyTemplate", function (req, res) {
+
+	var data = req.body;
+	var info = data.info;
+  	var userid = data.userid;
+  	var key = info.key;
+  	var newKey = moment().format('YYYYMMDDHHmmss') + '-'+ key.split('-').pop();
+
+  	var client = new qiniu.rs.Client();
+	client.copy(QiniuBucket, key, QiniuBucket, newKey, function(err, ret) {
+	  if (err) return res.send('error');
+
+
+    col.findOne( { person: userid, status:{$ne:-1} } , {limit:1, sort:{order:-1}  }, function(err, item) {
+
+    	var maxOrder = item? item.order+1 : 1;
+
+		var fileInfo={
+			role:'upfile',
+			person:userid,
+			client:'',
+			title: info.title+'_'+moment().format('YYYYMMDD'),
+			path: '/',
+			date: new Date(),
+			key: newKey,
+			fname:newKey,
+			fsize:info.fsize,
+			type:info.type,
+			drawData:info.drawData,
+			hash: +new Date()+Math.random()+'',
+			order:maxOrder
+		};
+
+		col.insertOne(fileInfo, {w:1}, function(err,result){
+			var id = result.insertedId;
+			fileInfo._id = id;
+			res.send(fileInfo);
+		});
+
+    });
+
+
+	});
+
+});
+
+
+app.post("/getTemplateFiles", function (req, res) {
+
+  col.find( { role:'upfile', isTemplate:true } , {limit:2000} ).sort({title:1,date:-1}).toArray(function(err, docs){
+    if(err) {
+      return res.send('error');
+    }
+      var count = docs.length;
+      res.send( docs );
+  });
+
+});
+
+
+app.post("/setFileTemplate", function (req, res) {
+  var data = req.body;
+  var hashA = data.hashA;
+  var isSet = eval(data.isSet);
+  col.update({role:'upfile', hash:{$in:hashA} }, { $set:{ isTemplate:isSet } }, {multi:1, w:1}, function(err, result){
+  	return res.send(err);
+  } );
+});
 
 app.post("/getfile", function (req, res) {
   var data = req.body;
@@ -322,8 +604,7 @@ app.post("/getfile", function (req, res) {
 
   col.find( { person: person, role:'upfile', status:{$ne:-1} } , {limit:2000} ).sort({order:-1, title:1}).toArray(function(err, docs){
     if(err) {
-      res.send('error');
-      return;
+      return res.send('error');
     }
       var count = docs.length;
       res.send( JSON.stringify(docs) );
@@ -354,7 +635,7 @@ app.post("/updatefile", function (req, res) {
     console.log('updatefile:', v.hash,  newV.order);
     col.update({hash: v.hash}, newV, {upsert:true, w:1}, function  (err, result) {
       if(err) {
-        res.send('error');return;
+        return res.send('error');
       }
       var pathPart = breakIntoPath(v.path);
       if(err==null && pathPart.length && hashArr.length ) {
@@ -397,19 +678,78 @@ app.post("/saveCanvas", function (req, res) {
 });
 
 
+app.post("/saveInputData", function (req, res) {
+  var textID = req.body.textID;
+  var value = req.body.value;
+  var file = req.body.file;
+  var shareID = parseInt( req.body.shareID );
+  try{
+    var filename = url.parse(file).pathname.split('/').pop();
+  }catch(e){
+    return res.send("");
+  }
+  if(!shareID){
+    var obj = {};
+    obj['inputData.'+textID.replace('.', '\uff0e')] = value;
+    col.update({role:'upfile', 'key':filename }, { $set: obj  }, function(err, result){
+    	return res.send("OK");
+    });
+  } else {
+  	// have to replace keys that contains dot(.) in keyname,
+  	// http://stackoverflow.com/questions/12397118/mongodb-dot-in-key-name
+    var obj = {};
+    obj['files.$.inputData.'+textID.replace('.', '\uff0e')] = value;
+    col.update({ role:'share', shareID:shareID, 'files.key':filename }, { $set: obj  }, function(err, result){
+    	return res.send("OK");
+    });
+  }
+
+});
+
+
+app.post("/getInputData", function (req, res) {
+  var file = req.body.file;
+  var shareID = parseInt( req.body.shareID );
+  try{
+    var filename = url.parse(file).pathname.split('/').pop();
+  }catch(e){
+    return res.send("");
+  }
+  if(!shareID){
+    col.findOne({ role:'upfile', 'key':filename },  {fields: {'inputData':1} }, function(err, result){
+    	//convert unicode Dot into [dot]
+    	var data = {};
+    	_.each(result.inputData, function(v,k){
+    		data[k.replace('\uff0e', '.')] = v;
+    	});
+    	return res.json( data );
+    });
+  } else {
+    col.findOne({ role:'share', shareID:shareID, 'files.key':filename },  {fields: {'files.key.$':1} }, function(err, result){
+    	//convert unicode Dot into [dot]
+    	var data = {};
+    	_.each( result.files[0].inputData , function(v,k){
+    		data[k.replace('\uff0e', '.')] = v;
+    	});
+    	return res.json( data );
+    });
+  }
+
+});
+
 app.post("/getSavedSign", function (req, res) {
   var file = req.body.file;
   var shareID = parseInt( req.body.shareID );
   try{
     var filename = url.parse(file).pathname.split('/').pop();
   }catch(e){
-    res.send("");return;
+    return res.send("");
   }
   if(!shareID){
-    res.send("");return;
+    return res.send("");
   } else{
     col.find({role:'sign', shareID:shareID, file:file, signData:{$ne:null} }, {sort:{signData:1}}).toArray(function(err, docs){
-      if(err){ res.send("");return; }
+      if(err){ return res.send(""); }
       var ids = docs.map(function  (v) {
         return new ObjectID( v.signData );
       });
@@ -436,18 +776,18 @@ app.post("/getCanvas", function (req, res) {
   try{
     var filename = url.parse(file).pathname.split('/').pop();
   }catch(e){
-    res.send("[]");return;
+    return res.send("[]");
   }
   if(!shareID){
     col.findOne({role:'upfile', key:filename }, function(err, result){
-      if(!result){ res.send("[]");return; }
+      if(!result){ return res.send("[]"); }
       res.send(result.drawData || "[]");
     } );
   } else{
     // below we want project result in array that only one element, like $elemMatch, see:
     //  http://stackoverflow.com/questions/29092265/elemmatch-search-on-array-of-subdocument
     col.findOne({role:'share', shareID:shareID, 'files.key':filename }, {fields: {'files.key.$':1} }, function(err, result){
-      if(!result){ res.send("[]");return; }
+      if(!result){ return res.send("[]"); }
       // var files = result.files.filter(function(v){
       //   return v.key == filename;
       // });
@@ -462,7 +802,7 @@ app.post("/getFlowList", function (req, res) {
 
   col.find( { role:'flow' } , {sort:{name:1}, limit:500}).toArray( function(err, docs){
       if(err) {
-        res.send('');return;
+        return res.send('');
       }
       res.send( docs );
   });
@@ -475,7 +815,7 @@ app.post("/getShareData", function (req, res) {
   var shareID = eval(req.body.shareID);
   col.findOne( { 'shareID': shareID, role:'share' } , {limit:500} , function(err, item){
       if(err) {
-        res.send('');return;
+        return res.send('');
       }
       res.send( item );
   });
@@ -486,7 +826,7 @@ app.post("/getShareFrom", function (req, res) {
   var person = req.body.person;
   col.find( { 'fromPerson.userid': person, role:'share' } , {limit:500} ).sort({shareID:-1}).toArray(function(err, docs){
       if(err) {
-        res.send('error');return;
+        return res.send('error');
       }
       var count = docs.length;
       res.send( JSON.stringify(docs) );
@@ -497,7 +837,7 @@ app.post("/getShareTo", function (req, res) {
   var person = req.body.person;
   col.find( { 'toPerson.userid': person, role:'share' } , {limit:500} ).sort({shareID:-1}).toArray(function(err, docs){
       if(err) {
-        res.send('error');return;
+        return res.send('error');
       }
       var count = docs.length;
       res.send( JSON.stringify(docs) );
@@ -529,7 +869,7 @@ app.post("/getShareMsg", function (req, res) {
 
       col.find( condition , {'text.content':1} , {limit:500} ).sort({shareID:1, date:1}).toArray(function(err, docs){
           if(err) {
-            res.send('error');return;
+            return res.send('error');
           }
           var count = docs.length;
           res.send( JSON.stringify(docs) );
@@ -539,11 +879,11 @@ app.post("/getShareMsg", function (req, res) {
   if(fromPerson){
     col.find( { 'fromPerson.userid': fromPerson, role:'share' }, {shareID:1, _id:0} , {limit:500} ).sort({shareID:1}).toArray(function(err, docs){
         if(err) {
-          res.send('error');return;
+          return res.send('error');
         }
         var count = docs.length;
         if(!count){
-          res.send('还没有消息');return;
+          return res.send('还没有消息');
         }
         getMsg( docs.map(function(v){return v.shareID}) );
     });
@@ -553,11 +893,11 @@ app.post("/getShareMsg", function (req, res) {
   if(toPerson){
     col.find( { 'toPerson.userid': toPerson, role:'share' }, {shareID:1, _id:0} , {limit:500} ).sort({shareID:1}).toArray(function(err, docs){
         if(err) {
-          res.send('error');return;
+          return res.send('error');
         }
         var count = docs.length;
         if(!count){
-          res.send('还没有消息');return;
+          return res.send('还没有消息');
         }
         getMsg( docs.map(function(v){return v.shareID}) );
     });
@@ -600,7 +940,7 @@ app.post("/beginSign", function (req, res) {
 app.post("/deleteSign", function (req, res) {
   var id =  req.body.id;
   if(!id.length){
-    res.send('');return;
+    return res.send('');
   }
   col.deleteOne({_id:new ObjectID(id) });
   res.send('OK');
@@ -609,23 +949,23 @@ app.post("/deleteSign", function (req, res) {
 app.post("/finishSign", function (req, res) {
   var shareID =  eval(req.body.shareID);
   var person =  req.body.person;
-  
+
   col.findOne({shareID:shareID, role:'share'}, function(err, colShare){
     var flowName = colShare.flowName;
     var curFlowPos = colShare.toPerson.length;
 
     if(curFlowPos >= colShare.selectRange.length){
-        res.send( util.format( '流程%d(%s-%s)已结束，系统将通知相关人员知悉', 
-                    colShare.shareID, 
-                    colShare.flowName, 
+        res.send( util.format( '流程%d(%s-%s)已结束，系统将通知相关人员知悉',
+                    colShare.shareID,
+                    colShare.flowName,
                     colShare.fromPerson[0].name ) );
       }else{
         var nextPerson = colShare.selectRange[curFlowPos];
         col.update( {_id: colShare._id }, {$push: { toPerson: nextPerson }}, {w:1}, function(){
-          res.send( util.format( '流程%d(%s-%s)已转交给下一经办人：\n%s', 
-                  colShare.shareID, 
-                  colShare.flowName, 
-                  colShare.fromPerson[0].name, 
+          res.send( util.format( '流程%d(%s-%s)已转交给下一经办人：\n%s',
+                  colShare.shareID,
+                  colShare.flowName,
+                  colShare.fromPerson[0].name,
                   nextPerson.depart+'-'+nextPerson.name ) );
         });
       }
@@ -651,7 +991,7 @@ app.post("/saveSign", function (req, res) {
 
     col.findOne({role:'sign', _id:new ObjectID(signID)}, function(err, item){
       if(err || !item){
-        res.send(""); return;
+        return res.send("");
       }
       person = item.signPerson;
 
@@ -686,12 +1026,12 @@ app.post("/getSignHistory", function (req, res) {
 
   col.findOne({role:'sign', _id:new ObjectID(signID)}, function(err, item){
     if(err || !item){
-      res.send(""); return;
+      return res.send("");
     }
     person = item.signPerson;
     col.find({role:'signBase', person:person}, {limit:5, sort:{date:-1} }).toArray(function(err, docs){
       if(err || !docs.length){
-        res.send(""); return;
+        return res.send("");
       }
       //col.deleteMany({role:'signBase', person:person, date:{$lt: docs[docs.length-1].date } });
       res.send( docs );
@@ -714,16 +1054,16 @@ app.post("/sendShareMsg", function (req, res) {
 
   col.findOne( { role:'share', shareID:shareID }, {}, function(err, data) {
       if(err) {
-        res.send('error');return;
+        return res.send('error');
       }
 
       if(!data){
-          res.send('此共享已删除');return;
+          return res.send('此共享已删除');
         }
 
       var users = data.fromPerson.concat(data.toPerson).filter(function(v){return v.userid==person});
       if(!users.length){
-        res.send('没有此组权限');return;
+        return res.send('没有此组权限');
       }
 
       //get segmented path, Target Path segment and A link
@@ -839,7 +1179,7 @@ function sendWXMessage (msg) {
   if(!msg.tryCount){
     col.insert(msg);
     msg.tryCount = 1;
-  } 
+  }
 
   var msgTo = {};
   if(msg.touser) msgTo.touser = msg.touser;
@@ -853,7 +1193,7 @@ function sendWXMessage (msg) {
     console.log('sendWXMessage', msg.tryCount, err, result);
     if(err){
       if(msg.tryCount++ <=5)
-        setTimeout( function(){ 
+        setTimeout( function(){
           sendWXMessage(msg);
         },1000);
       return ('error');
@@ -1016,11 +1356,103 @@ var config = {
 var wechat = require('wechat-enterprise');
 app.use('/wx',
 wechat(config, wechat
-.text(function (message, req, res, next) {
+.link(function (message, req, res, next) {
   console.log(message);
+  return res.reply(message);
+})
+.location(function (message, req, res, next) {
+//**** message format:
+// { ToUserName: 'wx59d46493c123d365',
+//   FromUserName: 'yangjiming',
+//   CreateTime: '1439364875',
+//   MsgType: 'event',
+//   Event: 'LOCATION',
+//   Latitude: '30.069601',
+//   Longitude: '120.488655',
+//   Precision: '120.000000',
+//   AgentID: '1' }
 
-  res.reply(message);
-  return;
+  console.log(message);
+  return res.reply(message);
+})
+.video(function (message, req, res, next) {
+  console.log(message);
+  return res.reply(message);
+})
+.voice(function (message, req, res, next) {
+//**** message format:
+// { ToUserName: 'wx59d46493c123d365',
+//   FromUserName: 'yangjiming',
+//   CreateTime: '1439363658',
+//   MsgType: 'voice',
+//   MediaId: '1TirVJnXpbd93ddYfVMop_9cYy538dCsnz4N07pgxdYLj5GPWtSHzthH40mF_7quJ1Jyrf22Lj9uWXsVZ64h01Q',
+//   Format: 'amr',
+//   MsgId: '4561277396023509015',
+//   AgentID: '1',
+//   Recognition: '' }
+
+  console.log(message);
+  return res.reply(message);
+})
+.event(function (message, req, res, next) {
+
+//****when click MENU LINK, will receive message:
+// { ToUserName: 'wx59d46493c123d365',
+//   FromUserName: 'ceshi1',
+//   CreateTime: '1439428547',
+//   MsgType: 'event',
+//   AgentID: '1',
+//   Event: 'view',
+//   EventKey: 'http://1111hui.com/pdf/client/tree.html' }
+
+//****when enter Agent, will receive message:
+// { ToUserName: 'wx59d46493c123d365',
+//   FromUserName: 'yangjiming',
+//   CreateTime: '1439364874',
+//   MsgType: 'event',
+//   AgentID: '1',
+//   Event: 'enter_agent',
+//   EventKey: '' }
+
+
+//**** when click event menu, message format:
+// { ToUserName: 'wx59d46493c123d365',
+//   FromUserName: 'yangjiming',
+//   CreateTime: '1439363611',
+//   MsgType: 'event',
+//   AgentID: '1',
+//   Event: 'click',
+//   EventKey: 'file_msg' }
+
+  console.log(message);
+  return res.reply(message);
+})
+.image(function (message, req, res, next) {
+//**** message format:
+// { ToUserName: 'wx59d46493c123d365',
+//   FromUserName: 'yangjiming',
+//   CreateTime: '1439363357',
+//   MsgType: 'image',
+//   PicUrl: 'http://mmbiz.qpic.cn/mmbiz/UF3WGRScRh8uhCJcIYcfsH5c5wV6H41lbvkIDzibLMBABZpHBChgfaFbwf2GxTyyUSmd2hy1icqzahicjybtWexoQ/0',
+//   MsgId: '4561277396023509014',
+//   MediaId: '1x5uMWjTL9tEjewN8IuJCJDPyQCQitHmwnhEzG6dw5q18q_AidkVivdVeNJ0C_eM7s_FWnVBFzYdvo10FOllFQQ',
+//   AgentID: '1' }
+
+  console.log(message);
+  return res.reply(message);
+})
+.text(function (message, req, res, next) {
+//**** message format:
+// { ToUserName: 'wx59d46493c123d365',
+//   FromUserName: 'yangjiming',
+//   CreateTime: '1439363336',
+//   MsgType: 'text',
+//   Content: '好的',
+//   MsgId: '4561277396023509013',
+//   AgentID: '1' }
+
+  console.log(message);
+  return res.reply(message);
 
   res.reply([
   {
@@ -1075,6 +1507,10 @@ wechat(config, wechat
 var CompanyName = 'lianrun';
 var API = require('wechat-enterprise-api');
 var api = new API("wx59d46493c123d365", "5dyRsI3Wa5gS2PIOTIhJ6jISHwkN68cryFJdW_c9jWDiOn2D7XkDRYUgHUy1w3Hd", 1);
+// get accessToken for first time to cache it.
+api.getLatestToken(function () {});
+
+
 
 function updateCompanyTree () {
   var companyTree = [];
@@ -1082,13 +1518,26 @@ function updateCompanyTree () {
   api.getDepartments(function  (err, result) {
     var i=0;
     var departs = result.department;
+
     departs.forEach(function  (v) {
       api.getDepartmentUsersDetail(1, 1, 0, function  (err, users) {
         i++;
-        v.children = users.userlist;
+        //v.children = users.userlist;
+        v.pId = v.parentid;
         companyTree.push(v);
+
         users.userlist.forEach(function(s){
+          if( s.department.indexOf(v.id)==-1) return true;
+          var namedDep = s.department.map(function  (depID) {
+            return _.where(departs, { id: depID} )[0].name;
+          });
+
+          s.pId = s.department[0];
+          s.departmentNames = namedDep;
+          s.depart = namedDep?namedDep[0]:'';
+          companyTree.push(s);
           if( ! _.where(stuffList, {userid:s.userid }).length ) stuffList.push(s);
+
         });
         if(i==departs.length){
 
@@ -1127,8 +1576,14 @@ app.post("/getCompanyTree", function (req, res) {
   });
 });
 
-
-
+app.get("/createDepartment", function (req, res) {
+  var name=req.query.name;
+  var pid=req.query.pid;
+  api.createDepartment(name, {parentid:pid}, function(err, result){
+    console.log(err, result);
+    return res.send('OK');
+  } );
+});
 
 
 

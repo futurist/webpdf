@@ -167,7 +167,6 @@ var DrawView  = (function () {
     update: function (scale, rotation) {
 
 
-
     },
     updatePosition: function () {
 
@@ -230,6 +229,7 @@ function RERenderDrawerLayer(pageIndex){
   $('#inputLayer'+ page).css({width: ~~pageView.width, height: ~~pageView.height  });
 
 	copyDrawerLayerData(pageIndex);
+  
   copyInputLayerData(pageIndex);
 
 	restoreSignature(pageIndex);
@@ -2749,6 +2749,12 @@ function makeColorPicker () {
     	color = 'rgb('+parseInt('0x'+letters[i]+letters[i],16)+','+parseInt('0x'+letters[j]+letters[j],16)+','+parseInt('0x'+letters[k]+letters[k],16)+')';
         if(std>8) colorA.push( color );
     }
+    //push 5-level gray scale
+    for(var i=0; i<=255; i+=(255/4) ){
+	    colorA.push( 'rgb('+Math.round(i)+','+Math.round(i)+','+Math.round(i)+')' );
+	}
+
+
     var W = $(window).width();
     //W = ~~(W / 60)*60;
     $('.colorCon').empty().width(300);
@@ -2775,6 +2781,7 @@ function chooseColor () {
 var host = "http://1111hui.com:88";
 var savedCanvasData = [];
 var savedSignData = [];
+var savedInputData = {};
 
 function restoreCanvas (isRender) {
 
@@ -2837,12 +2844,35 @@ function copyInputLayerData(pageIndex){
         text = $('<div class="userInputText"><textarea name="userinput'+i+'"></textarea></div>');
         text.data('input-id', id );
         text.appendTo( inputCon );
+        
+        function saveInputData() {
+          var val =  $(this).val();
+          var id = $(this).parent().data('input-id');
+          if( savedInputData[id]==val ) return;
+          savedInputData[id] = val;
+          var inter1;
+          function saveInterval(){
+            $.post(host+'/saveInputData', { shareID:window.shareID, file:curFile, value:val, textID: id }, function(data){
+              console.log(data);
+              if(data!='OK'){
+                clearTimeout(inter1);
+                inter1 = setTimeout(function(){saveInterval()}, 1000);
+              }
+            } );
+          }
+          saveInterval();
+        }
+
+        text.find('textarea').off().on('keyup', $.debounce(1000, saveInputData) );
+        text.find('textarea').on('change', saveInputData );
       }
+
       text.get(0).style.cssText = v.style.cssText;
       if( $(v).find('.text').size() )
       	text.find('textarea').get(0).style.cssText = $(v).find('.text').get(0).style.cssText;
-      var t = parseTemplate( $(v).text() );
-      text.find('textarea').val( t );
+      var t = parseTemplate( $(v).text(), v );
+      t = savedInputData[id] || t;
+      setInputTextValue(id, t);
 
     });
 
@@ -2852,15 +2882,42 @@ function copyInputLayerData(pageIndex){
 
 }
 
+function setInputTextValue(id, val){
+  var text = $('[data-input-id="'+id+'"]');
+  text.find('textarea,select').val( val );
+}
 
-function parseTemplate(str){
-	str = $.trim(str);
-	if(!str || !str.match('^[!！]') ) return '';
-	str = str.replace(/^[!！]\s*/, '');
-	var para = str.split(/[：:]/);
-	var func = TemplateField[para.shift()].callback;
-	if(!func) return '';
-	return func(para);
+// Template parser:
+// {param} str: [姓名]osdif[这里不会解析]oisjdofj[部门]等等
+// if [keyword] not exists in TemplateField, then it will not touched.
+// {param} templateEl: the element which has [data-template] attr, used as select element
+
+function parseTemplate(str, templateEl){
+	if(!str) return '';
+
+	var repA = [];
+	var re = /[\[［]([^\]］]+)[\]］]/;
+	function parseT(s){
+		str = s.replace(re, function(match, $1, offset, origin) {
+			var para = $1.split(/[：:]/);
+			var tempObj = TemplateField[para.shift()];
+			var func = tempObj && tempObj.callback;
+			repA.push(match);
+			if(!func){
+				return '{{'+repA.length+'}}';
+			}
+			var ret = func(para, templateEl);
+			return ret;
+		});
+		if( re.test(str) ) parseT(str);
+	}
+	parseT(str);
+
+	str = str.replace(/{{(\d+)}}/, function(match, $1, offset, origin) {
+		return repA[$1-1];
+	});
+
+	return str;
 }
 
 
@@ -3198,6 +3255,10 @@ $(function  () {
     if(data && data.map) savedSignData = data;
   } );
 
+  $.post( host + '/getInputData', { file:curFile, shareID:shareID }, function(data){
+    if(data) savedInputData = data;
+  } );
+
 
   $.post( host + '/getShareData', { shareID:shareID }, function(data){
     if(data)   window.shareData = data;
@@ -3227,29 +3288,77 @@ function searchToObject(search) {
 }
 
 
+
 var rootPerson = {userid: 'yangjiming', name:"杨吉明", depart:"行政" };
 
 var TemplateField = {
-	'姓名':{demo:"!姓名", callback: function(){
+	'姓名':{demo:"[姓名]", callback: function(){
 		return rootPerson.name;
 	}},
-	'部门':{demo:"!部门", callback: function(){
+	'部门':{demo:"[部门]", callback: function(){
 		return rootPerson.depart;
 	}},
-	'年':{demo:"!年", callback: function(){
+	'年':{demo:"[年]", callback: function(){
 		return moment().format('YYYY');
 	}},
-	'月':{demo:"!月", callback: function(){
+	'月':{demo:"[月]", callback: function(){
 		return moment().format('MM');
 	}},
-	'日':{demo:"!日", callback: function(){
+	'日':{demo:"[日]", callback: function(){
 		return moment().format('DD');
 	}},
-	'可':{demo:"!可", callback: function(a){
+	'可':{demo:"[可]", callback: function(a){
 		return a.join();
-	}}
+	}},
+	'列表':{demo:"[列表:部门1,部门2]", callback: function(a, el){
+		a=a[0].split(/[,，]/);
+		var id = $(el).data('id');
+		var inputCon = $('[data-input-id="'+id+'"]');
+		var textarea = inputCon.find('textarea');
+
+    var sel = $('[data-text-id="'+id+'"]');
+    if (!sel.length){
+  		sel = $('<select></select>');
+  		sel.data('text-id', id);
+      sel.appendTo( inputCon );
+    }
+    sel.html('<option value="">请选择</option>');
+
+		a.forEach(function(v){
+			var option = $('<option>'+v+'</option>');
+			sel.append(option);
+		});
+		sel.off().change(function(){
+			textarea.val( $(this).val() );
+        textarea.trigger('change');
+		});
+		textarea.hide();
+		sel.get(0).style.cssText = $(el).find('pre').get(0).style.cssText;
+		return '';
+	}},
+
 }
 
+
+
+function insertAtCursor(myField, myValue) {
+    //IE support
+    if (document.selection) {
+        myField.focus();
+        sel = document.selection.createRange();
+        sel.text = myValue;
+    }
+    //MOZILLA and others
+    else if (myField.selectionStart || myField.selectionStart == '0') {
+        var startPos = myField.selectionStart;
+        var endPos = myField.selectionEnd;
+        myField.value = myField.value.substring(0, startPos)
+            + myValue
+            + myField.value.substring(endPos, myField.value.length);
+    } else {
+        myField.value += myValue;
+    }
+}
 function makeTemplatePicker(){
 	var ul = $('<ul class="templateUL clearfix"></ul>');
 
@@ -3257,7 +3366,8 @@ function makeTemplatePicker(){
 		var li = $('<li class="templateLI"></li>').appendTo(ul);
 		li.text(v.demo);
 		li.click(function(){
-			$('.textarea').val( $(this).text() );
+			//$('.textarea').val( $(this).text() );
+			insertAtCursor( $('.textarea').get(0), $(this).text() );
 			$('.templateCon').trigger('dialog-close');
 		});
 	});

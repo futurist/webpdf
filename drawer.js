@@ -12,7 +12,7 @@
 
 var host = "http://1111hui.com:88";
 var wxOAuthUrl = 'https://open.weixin.qq.com/connect/oauth2/authorize?appid=wx59d46493c123d365&redirect_uri=http%3A%2F%2F1111hui.com%2F/pdf/getUserID.php&response_type=code&scope=snsapi_base&state='+ encodeURIComponent( window.location.href.replace('#','{@@@}') ) +'#wechat_redirect';
-var DEBUG= 1;
+var DEBUG= 0;
 if(!DEBUG)
 {
 
@@ -598,8 +598,8 @@ var svgns = "http://www.w3.org/2000/svg";
     var curScale = 1;
 
     //dot distance
-    var DOT_DISTANCE=10;
-    var DRAW_TOLERANCE=10;
+    var DOT_DISTANCE=6;
+    var DRAW_TOLERANCE=3;
     var drawing = false;
     var dragging = false;
     var selecting = false;
@@ -744,6 +744,7 @@ var svgns = "http://www.w3.org/2000/svg";
         var newUrl = oldUrl.join('/');
         console.log(newUrl);
         window.location = newUrl;
+        window.location.reload();
       } );
 
       return;
@@ -767,6 +768,7 @@ var svgns = "http://www.w3.org/2000/svg";
 
     function setTool (tool, options, noUpdateHistory) {
 
+    	if(!tool) return;
       if(!options && curTool!=tool){
         $('[data-hl]').attr('data-hl', null);
       }
@@ -1425,7 +1427,7 @@ var svgns = "http://www.w3.org/2000/svg";
 
       enableSelection($('.textarea'));
 
-      if(isText && !e.shiftKey && dist<10 && !$(targetEl).data('hl') ){
+      if(isText && !e.shiftKey && dist<DRAW_TOLERANCE && !$(targetEl).data('hl') ){
          textEditMode(targetEl);
       }
 
@@ -1489,7 +1491,6 @@ var svgns = "http://www.w3.org/2000/svg";
 
         // yes motion, drawing path
         drawing = false;
-
 
         if(curTool=='curve'){
           createPath(rPath);
@@ -2874,6 +2875,12 @@ function copyInputLayerData(pageIndex){
       t = savedInputData[id] || t;
       setInputTextValue(id, t);
 
+      if(shareID){
+      	$('body').addClass('shareMode');
+      	text.find('textarea').show();
+      	text.find('select').hide();
+      }
+
     });
 
 
@@ -2885,6 +2892,7 @@ function copyInputLayerData(pageIndex){
 function setInputTextValue(id, val){
   var text = $('[data-input-id="'+id+'"]');
   text.find('textarea,select').val( val );
+  text.find('textarea').trigger('change');
 }
 
 // Template parser:
@@ -3265,12 +3273,13 @@ $(function  () {
     else return;
 
     var t = data.toPerson.filter(function(v){
-      return v.userid = rootPerson.userid && v.isSigned
+      return v.userid == rootPerson.userid && v.isSigned
     });
+
     if(t.length){
        window.isSigned = true;
        //alert('您已签署过此文档');
-    }else{
+    }else if(isSign) {
       $('.btnSign').css({display: 'table-cell' });
     }
   } );

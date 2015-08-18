@@ -35,6 +35,10 @@ qiniu.conf.ACCESS_KEY = '2hF3mJ59eoNP-RyqiKKAheQ3_PoZ_Y3ltFpxXP0K';
 qiniu.conf.SECRET_KEY = 'xvZ15BIIgJbKiBySTV3SHrAdPDeGQyGu_qJNbsfB';
 QiniuBucket = 'bucket01';
 
+QiniuHost = 'http://7xkeim.com1.z0.glb.clouddn.com/';
+TREE_URL = "http://1111hui.com/pdf/client/tree.html";
+
+
 function qiniu_uploadFile(file, callback ){
 
 	var ext = path.extname(file);
@@ -442,7 +446,7 @@ app.post("/rotateFile", function (req, res) {
     			if(item2){
 	    			newFile = item2;
 	    			console.log('exist rotate,', newName);
-	    			return res.SENd( json.stringIfy(newFile) );
+	    			return res.send( JSON.stringify(newFile) );
 	    		} else {
 					var child = exec('rm -rf '+DOWNLOAD_DIR+'; mkdir -p ' + DOWNLOAD_DIR, function(err, stdout, stderr) {
 					    if (err) throw err;
@@ -717,6 +721,7 @@ app.post("/getInputData", function (req, res) {
   }
   if(!shareID){
     col.findOne({ role:'upfile', 'key':filename },  {fields: {'inputData':1} }, function(err, result){
+      if(!result) return res.send("");
     	//convert unicode Dot into [dot]
     	var data = {};
     	_.each(result.inputData, function(v,k){
@@ -725,7 +730,9 @@ app.post("/getInputData", function (req, res) {
     	return res.json( data );
     });
   } else {
+    console.log({ role:'share', shareID:shareID, 'files.key':filename })
     col.findOne({ role:'share', shareID:shareID, 'files.key':filename },  {fields: {'files.key.$':1} }, function(err, result){
+      if(!result) return res.send("");
     	//convert unicode Dot into [dot]
     	var data = {};
     	_.each( result.files[0].inputData , function(v,k){
@@ -946,6 +953,13 @@ app.post("/deleteSign", function (req, res) {
   res.send('OK');
 });
 
+
+function getSubStr (str, len) {
+  len = len || 10;
+  return str.length<=len? str : str.substr(0, len)+'...';
+}
+
+
 app.post("/finishSign", function (req, res) {
   var shareID =  eval(req.body.shareID);
   var person =  req.body.person;
@@ -953,14 +967,95 @@ app.post("/finishSign", function (req, res) {
   col.findOne({shareID:shareID, role:'share'}, function(err, colShare){
     var flowName = colShare.flowName;
     var curFlowPos = colShare.toPerson.length;
+    var file = colShare.files[0];
+
+    var fileKey = file.key;
+    var flowName = colShare.flowName;
+    var msg = colShare.msg;
+    var title = getSubStr( '流程-'+shareID+flowName+ (msg), 50);
+    var overAllPath = util.format('%s#path=%s&shareID=%d', TREE_URL, encodeURIComponent(fileKey), shareID ) ;
 
     if(curFlowPos >= colShare.selectRange.length){
-        res.send( util.format( '流程%d(%s-%s)已结束，系统将通知相关人员知悉',
+        res.send( util.format( '流程%d %s (%s-%s)已结束，系统将通知相关人员知悉',
                     colShare.shareID,
+                    msg,
                     colShare.flowName,
                     colShare.fromPerson[0].name ) );
+
+
+              var wxmsg = {
+               "touser": colShare.toPerson.map(function(v){return v.userid}).join('|'),
+               "msgtype": "text",
+               "text": {
+                 "content":
+                 util.format('<a href="%s">流程%d %s (%s-%s)</a>已由%s签署,此流程已结束',
+                    overAllPath,  // if we need segmented path:   pathName.join('-'),
+                    colShare.shareID,
+                    msg,
+                    colShare.flowName,
+                    colShare.fromPerson[0].name,
+                    colShare.toPerson.pop().name
+                  )
+               },
+               "safe":"0",
+                date : new Date(),
+                role : 'shareMsg',
+                shareID:shareID
+              };
+
+              sendWXMessage(wxmsg);
+
+
       }else{
         var nextPerson = colShare.selectRange[curFlowPos];
+        var toPerson = colShare.toPerson;
+        
+        //info to all person about the status
+        var wxmsg = {
+         "touser": colShare.toPerson.map(function(v){return v.userid}).join('|'),
+         "msgtype": "text",
+         "text": {
+           "content":
+           util.format('<a href="%s">流程%d %s (%s-%s)</a>已由 %s 签署,此流程已转交给下一经办人：%s',
+              overAllPath,  // if we need segmented path:   pathName.join('-'),
+              colShare.shareID,
+              msg,
+              colShare.flowName,
+              colShare.fromPerson[0].name,
+              toPerson[toPerson.length-1].name,
+              nextPerson.name
+            )
+         },
+         "safe":"0",
+          date : new Date(),
+          role : 'shareMsg',
+          shareID:shareID
+        };
+        sendWXMessage(wxmsg);
+        
+        //info to next Person via WX
+        var wxmsg = {
+         "touser": nextPerson.userid,
+         "msgtype": "text",
+         "text": {
+           "content":
+           util.format('您有一个新流程需要签署：<a href="%s">流程%d %s (%s-%s)</a>, %s此前已完成签署。',
+              overAllPath,  // if we need segmented path:   pathName.join('-'),
+              colShare.shareID,
+              msg,
+              colShare.flowName,
+              colShare.fromPerson[0].name,
+              toPerson.map(function(v){return v.name}).join(',')
+            )
+         },
+         "safe":"0",
+          date : new Date(),
+          role : 'shareMsg',
+          privateShareID:shareID
+        };
+        sendWXMessage(wxmsg);
+
+
         col.update( {_id: colShare._id }, {$push: { toPerson: nextPerson }}, {w:1}, function(){
           res.send( util.format( '流程%d(%s-%s)已转交给下一经办人：\n%s',
                   colShare.shareID,
@@ -1067,15 +1162,14 @@ app.post("/sendShareMsg", function (req, res) {
       }
 
       //get segmented path, Target Path segment and A link
-      var host = "http://1111hui.com/pdf/client/tree.html";
       var pathName = [];
       path.forEach(function(v,i){
         var a = '/'+path.slice(0,i+1).join('/')+'/';
-        pathName.push( util.format('<a href="%s?path=%s&shareID=%d">%s</a>', host, encodeURIComponent(a), shareID, v) );
+        pathName.push( util.format('<a href="%s#path=%s&shareID=%d">%s</a>', TREE_URL, encodeURIComponent(a), shareID, v) );
       });
       if(fileHash) {
         var a =  '/'+path.join('/')+'/' + fileHash;
-        pathName.push( util.format('<a href="%s?path=%s&shareID=%d">%s</a>', host, encodeURIComponent(fileKey), shareID, fileName) );
+        pathName.push( util.format('<a href="%s#path=%s&shareID=%d">%s</a>', TREE_URL, encodeURIComponent(fileKey), shareID, fileName) );
      }
 
      // get OverAllink
@@ -1085,7 +1179,7 @@ app.post("/sendShareMsg", function (req, res) {
       	link = a+fileKey;
       	a = a +fileName;
       }
-     var overAllPath = util.format('<a href="%s?path=%s&shareID=%d">%s</a>', host, encodeURIComponent(link), shareID, a ) ;
+     var overAllPath = util.format('<a href="%s#path=%s&shareID=%d">%s</a>', TREE_URL, encodeURIComponent(link), shareID, a ) ;
 
       var msg = {
        "touser": data.toPerson.map(function(v){return v.userid}).join('|'),
@@ -1130,23 +1224,25 @@ app.post("/shareFile", function (req, res) {
         console.log(data.toPerson.map(function(v){return v.userid}).join('|') );
 
         if(!data.isSign){
+          var treeUrl = TREE_URL + '#path=' + data.files[0].key +'&shareID='+ shareID;
           var content = util.format('%s%s分享了 %d 个文档：%s，收件人：%s%s\n共享ID：%d',
               data.isSign ? "【请求签名】" : "",
-              data.fromPerson.map(function(v){return '<a href="http://www.baidu.com/">【'+v.depart + '-' + v.name+'】</a>'}).join('|'),
+              data.fromPerson.map(function(v){return '<a href="'+ treeUrl + '&fromPerson='+ v.userid + '">【'+v.depart + '-' + v.name+'】</a>'}).join('|'),
               data.files.length,
-              data.files.map(function(v){return '<a href="http://www.baidu.com/">'+v.title+'</a>'}).join('，'),
+              data.files.map(function(v){return '<a href="'+ treeUrl +'">'+v.title+'</a>'}).join('，'),
               data.selectRange.map(function(v){
-                return v.depart? '<a href="http://www.baidu.com/">'+v.depart+'-'+v.name+'</a>' : '<a href="http://www.baidu.com/">【'+v.name+'】</a>' }).join('；'),
+                return v.depart? '<a href="'+treeUrl + '&toPerson='+ v.userid +'">'+v.depart+'-'+v.name+'</a>' : '<a href="'+treeUrl + '&toDepart='+ v.name +'">【'+v.name+'】</a>' }).join('；'),
               data.msg ? '，附言：\n'+data.msg : '',
               shareID
             );
         } else {
+          var treeUrl = TREE_URL + '#path=' + data.files[0].key +'&shareID='+ shareID;
           var content = util.format('%s发起了流程：%s，文档：%s，经办人：%s%s\n共享ID：%d',
-              data.fromPerson.map(function(v){return '<a href="http://www.baidu.com/">【'+v.depart + '-' + v.name+'】</a>'}).join('|'),
+              data.fromPerson.map(function(v){return '<a href="'+treeUrl+ '&fromPerson='+ v.userid + '">【'+v.depart + '-' + v.name+'】</a>'}).join('|'),
               data.flowName,
-              data.files.map(function(v){return '<a href="http://www.baidu.com/">'+v.title+'</a>'}).join('，'),
+              data.files.map(function(v){return '<a href="'+ treeUrl +'">'+v.title+'</a>'}).join('，'),
               data.selectRange.map(function(v){
-                return v.depart? '<a href="http://www.baidu.com/">'+v.depart+'-'+v.name+'</a>' : '<a href="http://www.baidu.com/">【'+v.name+'】</a>' }).join('；'),
+                return v.depart? '<a href="'+treeUrl + '&toPerson='+ v.userid +'">'+v.depart+'-'+v.name+'</a>' : '<a href="'+treeUrl + '&toDepart='+ v.name +'">【'+v.name+'】</a>' }).join('；'),
               data.msg ? '，附言：\n'+data.msg : '',
               shareID
             );

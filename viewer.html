@@ -496,6 +496,15 @@ ul,li{
       resize: none;
       overflow: hidden;
 }
+
+body.shareMode .userInputText textarea{
+  font:18px/1 '黑体';
+  border:none;
+  background: none;
+      resize: none;
+      overflow: hidden;
+}
+
 .userInputText select{
   position: absolute;
   left:0;
@@ -628,6 +637,11 @@ ul,li{
   .page .textWrap[data-template]{
     border: 1px dotted red;
   }
+
+  body.shareMode  .page .textWrap[data-template]{
+    border: none;
+  }
+
 
   .page .textWrap pre{
     white-space: pre-wrap; /* css-3 */

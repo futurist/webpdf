@@ -35,8 +35,9 @@ qiniu.conf.ACCESS_KEY = '2hF3mJ59eoNP-RyqiKKAheQ3_PoZ_Y3ltFpxXP0K';
 qiniu.conf.SECRET_KEY = 'xvZ15BIIgJbKiBySTV3SHrAdPDeGQyGu_qJNbsfB';
 QiniuBucket = 'bucket01';
 
-QiniuHost = 'http://7xkeim.com1.z0.glb.clouddn.com/';
+FILE_HOST = 'http://7xkeim.com1.z0.glb.clouddn.com/';
 TREE_URL = "http://1111hui.com/pdf/client/tree.html";
+VIEWER_URL = "http://1111hui.com/pdf/webpdf/viewer.html";
 
 
 function qiniu_uploadFile(file, callback ){
@@ -666,6 +667,7 @@ app.post("/removeFolder", function (req, res) {
 app.post("/saveCanvas", function (req, res) {
   var data = req.body.data;
   var file = req.body.file;
+  var personName = req.body.personName;
   var shareID = parseInt( req.body.shareID );
 
   var filename = url.parse(file).pathname.split('/').pop();
@@ -674,8 +676,51 @@ app.post("/saveCanvas", function (req, res) {
       res.send(err);
     } );
   } else{
-    col.update({role:'share', shareID:shareID, 'files.key':filename }, { $set: { 'files.$.drawData':data }  }, function(err, result){
+    col.findOneAndUpdate({role:'share', shareID:shareID, 'files.key':filename }, { $set: { 'files.$.drawData':data }  }, 
+                        { projection:{'files':1, msg:1, fromPerson:1, toPerson:1, flowName:1, isSign:1  } }, 
+                        function(err, result){
       res.send(err);
+
+            var colShare = result.value;
+            var file = colShare.files.filter(function(v){ return v.key==filename; })[0];
+            var fileKey = file.key;
+            var flowName = colShare.flowName;
+            var msg = colShare.msg;
+            var isSign = colShare.isSign;
+            var overAllPath = util.format('%s#file=%s&shareID=%d&isSign=%d', VIEWER_URL, FILE_HOST+ encodeURIComponent(fileKey), shareID, isSign?1:0 ) ;
+            var content = 
+            colShare.isSign?
+            util.format('<a href="%s">流程%d %s (%s-%s)标注已由%s更新，点此查看</a>',
+                    overAllPath,  // if we need segmented path:   pathName.join('-'),
+                    shareID,
+                    msg,
+                    colShare.flowName,
+                    colShare.fromPerson[0].name,
+                    personName
+                  ) :
+            util.format('<a href="%s">共享%d %s (%s)标注已由%s更新，点此查看</a>',
+                    overAllPath,  // if we need segmented path:   pathName.join('-'),
+                    shareID,
+                    msg,
+                    colShare.fromPerson[0].name,
+                    personName
+                  )
+
+
+             var wxmsg = {
+               "touser": colShare.toPerson.map(function(v){return v.userid}).join('|'),
+               "msgtype": "text",
+               "text": {
+                 "content":content
+               },
+               "safe":"0",
+                date : new Date(),
+                role : 'shareMsg',
+                shareID:shareID
+              };
+
+              sendWXMessage(wxmsg);
+
     } );
   }
 
@@ -730,7 +775,6 @@ app.post("/getInputData", function (req, res) {
     	return res.json( data );
     });
   } else {
-    console.log({ role:'share', shareID:shareID, 'files.key':filename })
     col.findOne({ role:'share', shareID:shareID, 'files.key':filename },  {fields: {'files.key.$':1} }, function(err, result){
       if(!result) return res.send("");
     	//convert unicode Dot into [dot]
@@ -1219,32 +1263,32 @@ app.post("/shareFile", function (req, res) {
     data.shareID = shareID;
     data.role = 'share';
     col.insert(data, {w:1}, function(err, r){
-      res.send( {err:err, insertedCount: r.insertedCount } );
+      //res.send( {err:err, insertedCount: r.insertedCount } );
       if(!err){
         console.log(data.toPerson.map(function(v){return v.userid}).join('|') );
 
         if(!data.isSign){
-          var treeUrl = TREE_URL + '#path=' + data.files[0].key +'&shareID='+ shareID;
-          var content = util.format('%s%s分享了 %d 个文档：%s，收件人：%s%s\n共享ID：%d',
-              data.isSign ? "【请求签名】" : "",
-              data.fromPerson.map(function(v){return '<a href="'+ treeUrl + '&fromPerson='+ v.userid + '">【'+v.depart + '-' + v.name+'】</a>'}).join('|'),
+          var treeUrl = VIEWER_URL + '#file=' + FILE_HOST+ data.files[0].key +'&shareID='+ shareID;
+          var content = util.format('<a href="'+ treeUrl + '">共享ID：%d %s分享了 %d 个文档：%s，收件人：%s%s</a>',
+              shareID,
+              //data.fromPerson.map(function(v){return '<a href="'+ treeUrl + '&fromPerson='+ v.userid + '">【'+v.depart + '-' + v.name+'】</a>'}).join('|'),
+              data.fromPerson.map(function(v){return '【'+v.depart + '-' + v.name+'】'}).join('|'),
               data.files.length,
-              data.files.map(function(v){return '<a href="'+ treeUrl +'">'+v.title+'</a>'}).join('，'),
+              data.files.map(function(v){return ''+v.title+''}).join('，'),
               data.selectRange.map(function(v){
-                return v.depart? '<a href="'+treeUrl + '&toPerson='+ v.userid +'">'+v.depart+'-'+v.name+'</a>' : '<a href="'+treeUrl + '&toDepart='+ v.name +'">【'+v.name+'】</a>' }).join('；'),
-              data.msg ? '，附言：\n'+data.msg : '',
-              shareID
+                return v.depart? ''+v.depart+'-'+v.name+'' : '【'+v.name+'】' }).join('；'),
+              data.msg ? '，附言：\n'+data.msg : ''
             );
         } else {
-          var treeUrl = TREE_URL + '#path=' + data.files[0].key +'&shareID='+ shareID;
-          var content = util.format('%s发起了流程：%s，文档：%s，经办人：%s%s\n共享ID：%d',
-              data.fromPerson.map(function(v){return '<a href="'+treeUrl+ '&fromPerson='+ v.userid + '">【'+v.depart + '-' + v.name+'】</a>'}).join('|'),
+          var treeUrl = VIEWER_URL + '#file=' + FILE_HOST+ data.files[0].key +'&shareID='+ shareID + '&isSign=1';
+          var content = util.format('<a href="'+treeUrl+ '">流程ID：%d %s发起了流程：%s，文档：%s，经办人：%s%s</a>',
+              shareID,
+              data.fromPerson.map(function(v){return '【'+v.depart + '-' + v.name+'】'}).join('|'),
               data.flowName,
-              data.files.map(function(v){return '<a href="'+ treeUrl +'">'+v.title+'</a>'}).join('，'),
+              data.files.map(function(v){return ''+v.title+''}).join('，'),
               data.selectRange.map(function(v){
-                return v.depart? '<a href="'+treeUrl + '&toPerson='+ v.userid +'">'+v.depart+'-'+v.name+'</a>' : '<a href="'+treeUrl + '&toDepart='+ v.name +'">【'+v.name+'】</a>' }).join('；'),
-              data.msg ? '，附言：\n'+data.msg : '',
-              shareID
+                return v.depart? ''+v.depart+'-'+v.name+'' : '【'+v.name+'】' }).join('；'),
+              data.msg ? '，附言：\n'+data.msg : ''
             );
         }
         var msg = {
@@ -1258,8 +1302,8 @@ app.post("/shareFile", function (req, res) {
           role : 'shareMsg',
           shareID:shareID
         };
-
-        res.send( sendWXMessage(msg) );
+        sendWXMessage(msg);
+        res.send( data );
 
       }
     });

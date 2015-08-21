@@ -155,31 +155,6 @@ window.jQuery = window.Zepto || window.jQuery || window.shoestring;
 				}
 			});
 
-			// open on matching a[href=#id] click
-			$( doc ).bind( "click", function( e ){
-        var $matchingDialog, $a;
-
-        $a = $( e.target ).closest( "a" );
-
-				if( !dialog.isOpen && $a.length && $a.attr( "href" ) ){
-					e.preventDefault();
-					var href = $a.attr( "href" );
-					if( !href.match(/^[#.]/) ) return;
-					// catch invalid selector exceptions
-					try {
-						$matchingDialog = $( href );
-					} catch ( error ) {
-						// TODO should check the type of exception, it's not clear how well
-						//      the error name "SynatxError" is supported
-						return;
-					}
-
-					if( $matchingDialog.length && $matchingDialog.is( $el ) ){
-						$matchingDialog.trigger( Dialog.events.open );
-						e.preventDefault();
-					}
-				}
-			});
 
 			// close on escape key
 			$( doc ).bind( "keyup", function( e ){
@@ -187,6 +162,35 @@ window.jQuery = window.Zepto || window.jQuery || window.shoestring;
 					dialog.close();
 				}
 			});
+
+			return;
+			// open on matching a[href=#id] click
+			$( doc ).bind( "click", function( e ){
+	        var $matchingDialog, $a;
+
+	        $a = $( e.target ).closest( "a" );
+
+					if( !dialog.isOpen && $a.length && $a.attr( "href" ) ){
+						e.preventDefault();
+						var href = $a.attr( "href" );
+						if( !href.match(/^[#.]/) ) return;
+						// catch invalid selector exceptions
+						try {
+							$matchingDialog = $( href );
+						} catch ( error ) {
+							// TODO should check the type of exception, it's not clear how well
+							//      the error name "SynatxError" is supported
+							return;
+						}
+
+						if( $matchingDialog.length && $matchingDialog.is( $el ) ){
+							$matchingDialog.trigger( Dialog.events.open );
+							e.preventDefault();
+						}
+					}
+				});
+
+
 		});
 	};
 

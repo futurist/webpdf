@@ -10,6 +10,11 @@
 * change: all window.location.search to window.location.hash
 */
 
+
+FILE_HOST = 'http://7xkeim.com1.z0.glb.clouddn.com/';
+TREE_URL = "http://1111hui.com/pdf/client/tree.html";
+VIEWER_URL = "http://1111hui.com/pdf/webpdf/viewer.html";
+
 var host = "http://1111hui.com:88";
 var wxOAuthUrl = 'https://open.weixin.qq.com/connect/oauth2/authorize?appid=wx59d46493c123d365&redirect_uri=http%3A%2F%2F1111hui.com%2F/pdf/getUserID.php&response_type=code&scope=snsapi_base&state='+ encodeURIComponent( window.location.href.replace('#','{@@@}') ) +'#wechat_redirect';
 var DEBUG= 1;
@@ -2877,7 +2882,8 @@ function copyInputLayerData(pageIndex){
 
       if(shareID){
       	$('body').addClass('shareMode');
-      	text.find('textarea').show().prop('readonly', true);
+        text.find('textarea').show().prop('readonly', true);
+      	//text.find('textarea').show().prop('disabled', true);
       	text.find('select').hide();
       }
 
@@ -3174,9 +3180,25 @@ function setStage (stat) {
 		      $('#mainMenu').show();
 		      $('.textLayer').show();
 			break;
-		case 'sign':
-      		$('#signMenu').show();
-			break;
+    case 'sign':
+      $('#signMenu').show();
+      break;
+    case 'share':
+      var file = window.curFile.split('/').pop();
+      var toUrl = TREE_URL+'#path='+encodeURIComponent(file)+ '&openShare=1'+ (shareID ? '&shareID='+shareID :''); 
+      console.log(toUrl);
+      window.location = toUrl;
+      break;
+    case 'message':
+      var file = window.curFile.split('/').pop();
+      var toUrl = TREE_URL+'#path='+encodeURIComponent(file)+ '&openMessage=1'+ (shareID ? '&shareID='+shareID :''); 
+      window.location = toUrl;
+      break;
+    case 'print':
+      var file = window.curFile.split('/').pop();
+      var toUrl = TREE_URL+'#path='+encodeURIComponent(file)+ '&openMessage=1'+ (shareID ? '&shareID='+shareID :''); 
+      window.location = toUrl;
+      break;
 	}
 
   if(stat!='remark'){
@@ -3246,12 +3268,12 @@ $(function  () {
       }
     });
 
-  var urlObj = searchToObject(window.location.hash);
-  window.curFile = urlObj.file;
-  window.shareID = urlObj.shareID;
-  window.isSign = urlObj.isSign;
-  window.isTemplate = urlObj.isTemplate;
-  window.signID = urlObj.signID;
+  var urlQuery = searchToObject(window.location.hash);
+  window.curFile = urlQuery.file;
+  window.shareID = urlQuery.shareID;
+  window.isSign = urlQuery.isSign;
+  window.isTemplate = urlQuery.isTemplate;
+  window.signID = urlQuery.signID;
   window.isSigned = false;
   window.shareData = null;
 
@@ -3284,8 +3306,12 @@ $(function  () {
     }else if(isSign) {
       $('.btnSign').css({display: 'table-cell' });
     }
+
   } );
 
+  if(window.shareID){
+    $('.btnMessage').css({display: 'table-cell' });
+  }
 
 });
 

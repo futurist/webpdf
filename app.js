@@ -607,9 +607,16 @@ app.post("/getfile", function (req, res) {
   var data = req.body;
   var person = data.person;
 
-  col.find( { person: person, role:'upfile', status:{$ne:-1} } , {limit:2000} ).sort({order:-1, title:1}).toArray(function(err, docs){
+  var timeout = false;
+  var connInter = setTimeout(function(){
+    timeout = true;
+    return res.send('');
+  }, 5000);
+
+  col.find( { person: person, role:'upfile', status:{$ne:-1} } , {limit:2000, timeout:true} ).sort({order:-1, title:1}).toArray(function(err, docs){
+      clearTimeout(connInter); if(timeout)return;
     if(err) {
-      return res.send('error');
+      return res.send('');
     }
       var count = docs.length;
       res.send( JSON.stringify(docs) );
@@ -709,6 +716,7 @@ app.post("/saveCanvas", function (req, res) {
 
              var wxmsg = {
                "touser": colShare.toPerson.map(function(v){return v.userid}).join('|'),
+               "touserName": colShare.toPerson.map(function(v){return v.name}).join('|'),
                "msgtype": "text",
                "text": {
                  "content":content
@@ -875,7 +883,13 @@ app.post("/getShareData", function (req, res) {
 
 app.post("/getShareFrom", function (req, res) {
   var person = req.body.person;
-  col.find( { 'fromPerson.userid': person, role:'share' } , {limit:500} ).sort({shareID:-1}).toArray(function(err, docs){
+  var timeout = false;
+  var connInter = setTimeout(function(){
+    timeout = true;
+    return res.send('');
+  }, 5000);
+  col.find( { 'fromPerson.userid': person, role:'share' } , {limit:500, timeout:true} ).sort({shareID:-1}).toArray(function(err, docs){
+      clearTimeout(connInter); if(timeout)return;
       if(err) {
         return res.send('error');
       }
@@ -886,7 +900,13 @@ app.post("/getShareFrom", function (req, res) {
 
 app.post("/getShareTo", function (req, res) {
   var person = req.body.person;
-  col.find( { 'toPerson.userid': person, role:'share' } , {limit:500} ).sort({shareID:-1}).toArray(function(err, docs){
+  var timeout = false;
+  var connInter = setTimeout(function(){
+    timeout = true;
+    return res.send('');
+  }, 5000);
+  col.find( { 'toPerson.userid': person, role:'share' } , {limit:500, timeout:true} ).sort({shareID:-1}).toArray(function(err, docs){
+      clearTimeout(connInter); if(timeout)return;
       if(err) {
         return res.send('error');
       }
@@ -918,7 +938,7 @@ app.post("/getShareMsg", function (req, res) {
       if(hash) hashA = hashA.concat(hash);
       //if(hashA.length>1) condition.hash = {$in:hashA};
 
-      col.find( condition , {'text.content':1} , {limit:500} ).sort({shareID:1, date:1}).toArray(function(err, docs){
+      col.find( condition , {'text.content':1,touser:1, touserName:1} , {limit:500} ).sort({shareID:1, date:1}).toArray(function(err, docs){
           if(err) {
             return res.send('error');
           }
@@ -1029,6 +1049,7 @@ app.post("/finishSign", function (req, res) {
 
               var wxmsg = {
                "touser": colShare.toPerson.map(function(v){return v.userid}).join('|'),
+               "touserName": colShare.toPerson.map(function(v){return v.name}).join('|'),
                "msgtype": "text",
                "text": {
                  "content":
@@ -1057,6 +1078,7 @@ app.post("/finishSign", function (req, res) {
         //info to all person about the status
         var wxmsg = {
          "touser": colShare.toPerson.map(function(v){return v.userid}).join('|'),
+         "touserName": colShare.toPerson.map(function(v){return v.name}).join('|'),
          "msgtype": "text",
          "text": {
            "content":
@@ -1227,6 +1249,7 @@ app.post("/sendShareMsg", function (req, res) {
 
       var msg = {
        "touser": data.toPerson.map(function(v){return v.userid}).join('|'),
+       "touserName": data.toPerson.map(function(v){return v.name}).join('|'),
        "msgtype": "text",
        "text": {
          "content":
@@ -1269,30 +1292,33 @@ app.post("/shareFile", function (req, res) {
 
         if(!data.isSign){
           var treeUrl = VIEWER_URL + '#file=' + FILE_HOST+ data.files[0].key +'&shareID='+ shareID;
-          var content = util.format('<a href="'+ treeUrl + '">共享ID：%d %s分享了 %d 个文档：%s，收件人：%s%s</a>',
+          var content = util.format('共享ID：%d %s%s分享了 %d 个文档：%s，收件人：%s%s\n%s',
               shareID,
-              //data.fromPerson.map(function(v){return '<a href="'+ treeUrl + '&fromPerson='+ v.userid + '">【'+v.depart + '-' + v.name+'】</a>'}).join('|'),
-              data.fromPerson.map(function(v){return '【'+v.depart + '-' + v.name+'】'}).join('|'),
+              data.isSign ? "【请求签名】" : "",
+              data.fromPerson.map(function(v){return '<a href="'+ treeUrl + '&fromPerson='+ v.userid + '">【'+v.depart + '-' + v.name+'】</a>'}).join('|'),
               data.files.length,
-              data.files.map(function(v){return ''+v.title+''}).join('，'),
+              data.files.map(function(v){return '<a href="'+ treeUrl +'">'+v.title+'</a>'}).join('，'),
               data.selectRange.map(function(v){
-                return v.depart? ''+v.depart+'-'+v.name+'' : '【'+v.name+'】' }).join('；'),
-              data.msg ? '，附言：\n'+data.msg : ''
+                return v.depart? '<a href="'+treeUrl + '&toPerson='+ v.userid +'">'+v.depart+'-'+v.name+'</a>' : '<a href="'+treeUrl + '&toDepart='+ v.name +'">【'+v.name+'】</a>' }).join('；'),
+              data.msg ? '，附言：\n'+data.msg : '',
+              '<a href="'+ treeUrl +'">点此查看</a>'
             );
         } else {
-          var treeUrl = VIEWER_URL + '#file=' + FILE_HOST+ data.files[0].key +'&shareID='+ shareID + '&isSign=1';
-          var content = util.format('<a href="'+treeUrl+ '">流程ID：%d %s发起了流程：%s，文档：%s，经办人：%s%s</a>',
+          var treeUrl = VIEWER_URL + '#file=' + FILE_HOST+ data.files[0].key +'&isSign=1&shareID='+ shareID;
+          var content = util.format('流程ID：%d %s发起了流程：%s，文档：%s，经办人：%s%s\n%s',
               shareID,
-              data.fromPerson.map(function(v){return '【'+v.depart + '-' + v.name+'】'}).join('|'),
+              data.fromPerson.map(function(v){return '<a href="'+treeUrl+ '&fromPerson='+ v.userid + '">【'+v.depart + '-' + v.name+'】</a>'}).join('|'),
               data.flowName,
-              data.files.map(function(v){return ''+v.title+''}).join('，'),
+              data.files.map(function(v){return '<a href="'+ treeUrl +'">'+v.title+'</a>'}).join('，'),
               data.selectRange.map(function(v){
-                return v.depart? ''+v.depart+'-'+v.name+'' : '【'+v.name+'】' }).join('；'),
-              data.msg ? '，附言：\n'+data.msg : ''
+                return v.depart? '<a href="'+treeUrl + '&toPerson='+ v.userid +'">'+v.depart+'-'+v.name+'</a>' : '<a href="'+treeUrl + '&toDepart='+ v.name +'">【'+v.name+'】</a>' }).join('；'),
+              data.msg ? '，附言：\n'+data.msg : '',
+              '<a href="'+ treeUrl +'">点此查看</a>'
             );
         }
         var msg = {
          "touser": data.toPerson.map(function(v){return v.userid}).join('|'),
+         "touserName": data.toPerson.map(function(v){return v.name}).join('|'),
          "msgtype": "text",
          "text": {
            "content": content
@@ -1710,6 +1736,7 @@ app.post("/getCompanyTree", function (req, res) {
   var data = req.body;
   var company = data.company;
   col.find( { company: company } , {limit:2000} ).toArray(function(err, docs){
+      if(err|| !docs || !docs.length) return res.send('');
       var count = docs.length;
       if(count)
       res.send( JSON.stringify( docs[0].companyTree ) );

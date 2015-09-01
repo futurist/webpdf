@@ -747,7 +747,11 @@ var svgns = "http://www.w3.org/2000/svg";
         oldUrl.pop();
         oldUrl.push(data.key);
         var newUrl = oldUrl.join('/');
-        console.log(newUrl);
+        
+        if(global){
+          global.popupList[ newUrl ] = global.popupList[ window.location.href ];
+          delete global.popupList[ window.location.href ];
+        }
         window.location = newUrl;
         window.location.reload();
       } );
@@ -2895,7 +2899,7 @@ function copyInputLayerData(pageIndex){
 
 }
 
-function setInputTextValue(id, val){
+function setInputTextValue(id, val) {
   var text = $('[data-input-id="'+id+'"]');
   text.find('textarea,select').val( val );
   text.find('textarea').trigger('change');
@@ -2941,16 +2945,26 @@ function saveCanvas () {
 
 	$('[data-hl]').attr('data-hl',null);
 
-	var saveObj = $('#drawViewer .page').toArray().map(function(v){
-		return $(v).html()
-	});
-  savedCanvasData = saveObj;
+  // defer some time to make un highlight work
+  setTimeout( function  () {
+    
+    var saveObj = $('#drawViewer .page').toArray().map(function(v){
+      return $(v).html()
+    });
 
-	setTimeout(function(){
-		$.post( host + '/saveCanvas', { file:curFile, shareID:shareID, personName:rootPerson.name, data: JSON.stringify(saveObj) } );
-	},0);
+    if(saveObj.join()!=savedCanvasData.join()){
 
-  copyDrawerLayerData();
+      savedCanvasData = saveObj;
+
+      setTimeout(function(){
+        $.post( host + '/saveCanvas', { file:curFile, shareID:shareID, personName:rootPerson.name, data: JSON.stringify(saveObj) } );
+      },0);
+
+    } 
+
+    copyDrawerLayerData();
+
+  }, 30 );
 
 }
 
@@ -3156,17 +3170,22 @@ function beginSign(){
 }
 
 function setStage (stat) {
+
   $('.active').removeClass('active');
-  $('.subtool').hide();
-  $('.botmenu').hide();
-  $('.signImg').show();
-  $('.signPad, .signPadHandler').hide();
-  HandTool.handTool.deactivate();
-  $('#viewerContainer').css({overflow:'auto'});
-  $('#drawViewer').hide();
+
+  function resetState () {
+    $('.subtool').hide();
+    $('.botmenu').hide();
+    $('.signImg').show();
+    $('.signPad, .signPadHandler').hide();
+    HandTool.handTool.deactivate();
+    $('#viewerContainer').css({overflow:'auto'});
+    $('#drawViewer').hide();
+  }
 
 	switch (stat){
 		case 'remark':
+        resetState();
       		$('.signImg').hide();
 			   showCanvas();
   			$('#viewerContainer').css({overflow:'hidden'});
@@ -3174,6 +3193,7 @@ function setStage (stat) {
   			svgHistory.update('force');
 			break;
 		case 'viewer':
+        resetState();
           $('#inputViewer').show();
 		      $('#drawViewer').hide();
 		      $('#drawTool').hide();
@@ -3181,23 +3201,23 @@ function setStage (stat) {
 		      $('.textLayer').show();
 			break;
     case 'sign':
+      resetState();
       $('#signMenu').show();
       break;
     case 'share':
       var file = window.curFile.split('/').pop();
-      var toUrl = TREE_URL+'#path='+encodeURIComponent(file)+ '&openShare=1'+ (shareID ? '&shareID='+shareID :''); 
-      console.log(toUrl);
-      window.location = toUrl;
+      var toUrl = TREE_URL+'#path='+(file)+ '&openShare=1'+ (shareID ? '&shareID='+shareID :''); 
+      openLinkNW(toUrl);
       break;
     case 'message':
       var file = window.curFile.split('/').pop();
-      var toUrl = TREE_URL+'#path='+encodeURIComponent(file)+ '&openMessage=1'+ (shareID ? '&shareID='+shareID :''); 
-      window.location = toUrl;
+      var toUrl = TREE_URL+'#path='+(file)+ '&openMessage=1'+ (shareID ? '&shareID='+shareID :''); 
+      openLinkNW(toUrl);
       break;
     case 'print':
       var file = window.curFile.split('/').pop();
-      var toUrl = TREE_URL+'#path='+encodeURIComponent(file)+ '&openMessage=1'+ (shareID ? '&shareID='+shareID :''); 
-      window.location = toUrl;
+      var toUrl = TREE_URL+'#path='+(file)+ '&openMessage=1'+ (shareID ? '&shareID='+shareID :''); 
+      openLinkNW(toUrl);
       break;
 	}
 
@@ -3216,13 +3236,28 @@ function updateViewArea(){
 }
 
 function backCabinet () {
+    $('.active').removeClass('active');
   var filename = curFile.split('/').pop();
-  if(filename.match(/\.pdf$/)){
+  if(filename.match(/\.pdf$/)) {
     var shareStr = shareID? '&shareID='+ shareID : '';
-    window.location = "http://1111hui.com/pdf/client/tree.html#path="+filename +shareStr;
+    var link  = "http://1111hui.com/pdf/client/tree.html#path="+filename +shareStr;
+    openLinkNW(link);
   }
 }
 
+
+function openLinkNW (link) {
+  if(global) {
+      try{
+        global._nwMain.mainWin.show();
+        global._nwMain.mainWin.focus();
+        global._nwMain.mainWin.window.location = link;
+        global._nwMain.mainWin.window.location.reload();
+      } catch(e){}
+    } else{
+      window.location = link;
+    }
+}
 
 
 $(function  () {

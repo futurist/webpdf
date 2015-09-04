@@ -12,7 +12,7 @@
 
 
 FILE_HOST = 'http://7xkeim.com1.z0.glb.clouddn.com/';
-TREE_URL = "http://1111hui.com/pdf/client/tree.html";
+TREE_URL = "http://1111hui.com:88/tree.html";
 VIEWER_URL = "http://1111hui.com/pdf/webpdf/viewer.html";
 
 var host = "http://1111hui.com:88";
@@ -214,7 +214,10 @@ window.addEventListener('scalechange', function scalechange(evt) {
 
 document.addEventListener('pagerendered', function (e) {
   var pageIndex = e.detail.pageNumber - 1;
-  RERenderDrawerLayer(pageIndex);
+  
+  setTimeout(function(){
+    RERenderDrawerLayer(pageIndex);
+  }, 300);
 
 });
 
@@ -235,7 +238,7 @@ function RERenderDrawerLayer(pageIndex){
 
 	copyDrawerLayerData(pageIndex);
 
-  copyInputLayerData(pageIndex);
+  	if(!isTemplate) copyInputLayerData(pageIndex);
 
 	restoreSignature(pageIndex);
   //setStage( curStage );
@@ -747,8 +750,8 @@ var svgns = "http://www.w3.org/2000/svg";
         oldUrl.pop();
         oldUrl.push(data.key);
         var newUrl = oldUrl.join('/');
-        
-        if(global){
+
+        if(typeof global!='undefined' ) {
           global.popupList[ newUrl ] = global.popupList[ window.location.href ];
           delete global.popupList[ window.location.href ];
         }
@@ -2824,7 +2827,7 @@ function copyDrawerLayerData(pageIndex){
     var page = $(v).parent().data('page-number');
 	var con = $('#pageContainer'+page+' .canvasWrapper');
     $(v).clone().insertAfter(con);
-    $('#pageContainer'+page).find('.textWrap[data-template]').show().html('');
+    if(!isTemplate) $('#pageContainer'+page).find('.textWrap[data-template]').show().html('');
   });
 
 }
@@ -2889,6 +2892,7 @@ function copyInputLayerData(pageIndex){
         text.find('textarea').show().prop('readonly', true);
       	//text.find('textarea').show().prop('disabled', true);
       	text.find('select').hide();
+      	$('.userInputText').show();
       }
 
     });
@@ -2947,7 +2951,7 @@ function saveCanvas () {
 
   // defer some time to make un highlight work
   setTimeout( function  () {
-    
+
     var saveObj = $('#drawViewer .page').toArray().map(function(v){
       return $(v).html()
     });
@@ -2960,7 +2964,7 @@ function saveCanvas () {
         $.post( host + '/saveCanvas', { file:curFile, shareID:shareID, personName:rootPerson.name, data: JSON.stringify(saveObj) } );
       },0);
 
-    } 
+    }
 
     copyDrawerLayerData();
 
@@ -2976,7 +2980,10 @@ function showCanvas () {
 
 	  $('.svgCon, .textCon', $('#viewer')).remove();
 
-	  if(!isTemplate) $('#drawViewer').find('.textWrap[data-template]').hide();
+	  if(!isTemplate) {
+	  	$('#drawViewer').find('.textWrap[data-template]').hide();
+
+	  }
 
 		$('#drawViewer').show();
 		$('#drawTool').show();
@@ -3009,10 +3016,11 @@ var optionsDrag = {
   }
 };
 
+var MINIMAL_SIGN_WIDTH = 55;
 var optionsResize = {
   limit: function (x,y,x0,y0) {
   	var offset = getRealOffset($('.signPad') );
-  	if(offset.width<118) return {x:offset.left+offset.width, y:offset.top+offset.height }
+  	if(offset.width<MINIMAL_SIGN_WIDTH) return {x:offset.left+offset.width, y:offset.top+offset.height }
   	else return {x:x, y:y};
   },
   setCursor: 'move',
@@ -3026,16 +3034,15 @@ var optionsResize = {
   },
   onDragEnd: function(element, x, y, e) {
   	var offset = getRealOffset($('.signPad') );
-  	if(offset.width<118) {
-  		$('.signPad').width(118);
-  		$('.signPad').height(118*456/984);
-  		$(element).css('left', offset.left+118);
-	    $(element).css('top', offset.top+118*456/984 );
+  	if(offset.width<MINIMAL_SIGN_WIDTH) {
+  		$('.signPad').width(MINIMAL_SIGN_WIDTH);
+  		$('.signPad').height(MINIMAL_SIGN_WIDTH*456/984);
+  		$(element).css('left', offset.left+MINIMAL_SIGN_WIDTH);
+	    $(element).css('top', offset.top+MINIMAL_SIGN_WIDTH*456/984 );
   	}
   },
   onDrag: function (element, x, y, e) {
   	var offset = getRealOffset($('.signPad') );
-    console.log(x,y);
   	var top = offset.top;
   	var left = offset.left;
   	var W = x- left;
@@ -3049,6 +3056,13 @@ var optionsResize = {
     }else{
       $('.signPadInfo div').show();
     }
+    if(W<108){
+      $('.signBtnCancel, .signPadCanvas span').hide();
+    }else{
+      $('.signBtnCancel, .signPadCanvas span').show();
+    }
+
+
   }
 };
 
@@ -3060,10 +3074,12 @@ function getSignData (page) {
   return data ? data[0] : null;
 }
 
+
+
 function restoreSignature (pageIndex) {
 
   savedSignData.forEach(function  (v,i) {
-    if(!v.sign) return true;
+    //if(!v.sign) return true;
     var page = pageIndex+1;
     if(v.page!=page) return true;
     var scale = v.scale? window.curScale/v.scale : 1;
@@ -3071,17 +3087,59 @@ function restoreSignature (pageIndex) {
     var img = $('<div class="signImg"><img class="img"></div></div>');
     img.appendTo( $('#viewer .page').eq(v.page-1) );
     img.css({left:v.pos.left*scale+'px', top:v.pos.top*scale+'px', width:v.pos.width*scale+'px', height:v.pos.height*scale+'px' });
-    img.find('.img').attr({ 'src': v.sign.signData });
+
+    // http://stackoverflow.com/questions/11753485/set-img-src-to-dynamic-svg-element
+    // var svg = $('#signImgSVG').attr('viewBox', '0 0 '+v.pos.width*scale+' '+v.pos.height*scale ).get(0);
+    // var xml = "data:image/svg+xml;charset=utf-8,"+(new XMLSerializer).serializeToString(svg);
+
+
+    if(v.sign){
+      img.find('.img').attr({ 'src': v.sign.signData });
+    } else {
+      img.html('<span>点此签名</span>').autoFontSize();
+
+    }
+
     img.data('id', v._id);
+    img.data('idx', i);
+    if(v.signPerson) img.data('signPerson', v.signPerson);
+
     img.click(function(){
       if( window.isSigned ) return;
+      var signPerson = $(this).data('signPerson');
+      if( signPerson && signPerson!= rootPerson.userid ) return;
+
       if($(this).hasClass('active')){
         setStage('viewer');
         $(this).removeClass('active');
       }else{
         setStage('sign');
         $(this).addClass('active');
+
+          $('#signMenu a').hide();
+        if(shareID){
+        	if( $(this).find('img').size() ){
+        		$('.btnCommon, .btnSigned').css('display', 'table-cell');
+        	} else {
+        		$('.btnCommon, .btnNotSigned').css('display', 'table-cell');
+        	}
+        } else {
+          if(isTemplate){
+        	   $('.btnCommon, .btnDelete').css('display', 'table-cell');
+          } else {
+            if( $(this).find('img').size() ){
+              $('.btnCommon, .btnSigned').css('display', 'table-cell');
+            } else {
+              $('.btnCommon, .btnNotSigned').css('display', 'table-cell');
+            }
+            $('.btnSignComplete').hide();
+          }
+        }
+
+
+
       }
+
 
     });
 
@@ -3103,9 +3161,17 @@ function restoreSignature (pageIndex) {
 
 function deleteSign(){
   var img = $('.signImg.active');
-  $.post(host+'/deleteSign', {id:img.data('id')} );
-  img.remove();
-  setStage('viewer');
+  if(isTemplate) {
+  	  $.post(host+'/deleteSign', { person:rootPerson.userid, file:curFile, id:img.data('id')} );
+  	  img.remove();
+  	  setStage('viewer');
+	} else {
+		$.post(host+'/deleteSignOnly', {id:img.data('id'), idx:img.data('idx'), person:rootPerson.userid, file:curFile, shareID:shareID  } );
+		img.find('img').remove();
+		img.html('<span>点此签名</span>').autoFontSize();
+		img.click();
+		img.click();
+	}
 }
 
 function finishSign(){
@@ -3129,7 +3195,9 @@ function showSign(){
 }
 
 
-function beginSign(){
+function drawSign () {
+
+	if( !isTemplate || !$('.signPad').is(':visible') ) return;
 	var padOffset = getRealOffset($('.signPad'));
 	var el = $('#viewer .page').filter(function(){
 		var offset = getRealOffset($(this));
@@ -3159,14 +3227,42 @@ function beginSign(){
 	var hashtop = viewBox[3] + offset.top/window.curScale - 30;
 
 	var urlhash = 'page='+page+'&zoom='+ scaleValue +','+ ~~hashleft+','+ ~~hashtop;
+	var data = { signPerson:'yangjiming', file:window.curFile, page:page, scale:window.curScale, pos: pos, urlhash: urlhash, isMobile:isMobile };
 
-	var data = { signPerson:'yangjiming', shareID:window.shareID, file:window.curFile, page:page, scale:window.curScale, pos: pos, urlhash: urlhash, isMobile:isMobile };
-	$.post(host+'/beginSign', {data: data} , function(data){
-		if(data){
-      var url = 'http://1111hui.com/pdf/webpdf/signpad.html#signID='+data+'&hash='+(+new Date());
-      window.location = url;
-    }
+	$.post(host+'/drawSign', {data: data} , function(data){
+		console.log('sign id', data);
+		$('.signPad, .signPadHandler').hide();
+
+		$.post( host + '/getSavedSign', { file:curFile }, function(data){
+		  if(!data || !data.map) return;
+		  savedSignData = data;
+		  $('.page').eq(curPage-1).find('.signImg').remove();
+		  restoreSignature( curPage-1 );
+		} );
 	});
+
+}
+
+function beginSign(){
+
+  var signID = $('.signImg.active').data('id');
+	var idx = $('.signImg.active').data('idx');
+  var fileKey = curFile.split('/').pop();
+
+	var url = 'http://1111hui.com/pdf/webpdf/signpad.html#fileKey='+ fileKey +'&shareID='+ (shareID||'') +'&idx='+ idx +'&signID='+signID+'&hash='+(+new Date());
+	window.location = url;
+
+	return;
+
+	if(!signID) return;
+
+	var data = savedSignData.filter(function  (v, i) {
+		return v._id == signID;
+	}).shift();
+
+	if(!data) return;
+
+
 }
 
 function setStage (stat) {
@@ -3203,20 +3299,21 @@ function setStage (stat) {
     case 'sign':
       resetState();
       $('#signMenu').show();
+
       break;
     case 'share':
       var file = window.curFile.split('/').pop();
-      var toUrl = TREE_URL+'#path='+(file)+ '&openShare=1'+ (shareID ? '&shareID='+shareID :''); 
+      var toUrl = TREE_URL+'#path='+(file)+ '&openShare=1'+ (shareID ? '&shareID='+shareID :'');
       openLinkNW(toUrl);
       break;
     case 'message':
       var file = window.curFile.split('/').pop();
-      var toUrl = TREE_URL+'#path='+(file)+ '&openMessage=1'+ (shareID ? '&shareID='+shareID :''); 
+      var toUrl = TREE_URL+'#path='+(file)+ '&openMessage=1'+ (shareID ? '&shareID='+shareID :'');
       openLinkNW(toUrl);
       break;
     case 'print':
       var file = window.curFile.split('/').pop();
-      var toUrl = TREE_URL+'#path='+(file)+ '&openMessage=1'+ (shareID ? '&shareID='+shareID :''); 
+      var toUrl = TREE_URL+'#path='+(file)+ '&openMessage=1'+ (shareID ? '&shareID='+shareID :'');
       openLinkNW(toUrl);
       break;
 	}
@@ -3240,14 +3337,14 @@ function backCabinet () {
   var filename = curFile.split('/').pop();
   if(filename.match(/\.pdf$/)) {
     var shareStr = shareID? '&shareID='+ shareID : '';
-    var link  = "http://1111hui.com/pdf/client/tree.html#path="+filename +shareStr;
+    var link  = TREE_URL+ "#path="+filename +shareStr;
     openLinkNW(link);
   }
 }
 
 
 function openLinkNW (link) {
-  if(global) {
+  if( typeof global!= 'undefined' ) {
       try{
         global._nwMain.mainWin.show();
         global._nwMain.mainWin.focus();
@@ -3313,6 +3410,7 @@ $(function  () {
   window.shareData = null;
 
   if(!window.isSign) $('.btnSign').hide();
+  if(window.isTemplate) $('.btnSign').css('display', 'table-cell');
 
   $.post( host + '/getCanvas', { file:curFile, shareID:shareID }, function(data){
     if(data) savedCanvasData = JSON.parse( data );
@@ -3451,4 +3549,40 @@ function chooseTemplate(){
 	$('.templateCon').trigger('dialog-open');
 }
 
+
+
+
+;(function($) {
+    $.fn.autoFontSize2 = function(maxSize) {
+        var fontSize = maxSize||36;
+        var ourText = $('span:visible', this);
+        var offset = $(this).offset();
+        var maxHeight = offset.height;
+        var maxWidth = offset.width;
+        var textHeight;
+        var textWidth;
+        do {
+            ourText.css('font-size', fontSize/curScale);
+            ourText.css('white-space', 'pre');
+            var offset2 = $(ourText).offset(); console.log(offset2);
+            textHeight = offset2.height;
+            textWidth = offset2.width;
+            fontSize = fontSize - 0.5;
+        } while ((textHeight > maxHeight || textWidth > maxWidth) && fontSize > 3);
+        return this;
+    }
+})(window.Zepto||window.jQuery);
+
+
+;(function($) {
+    $.fn.autoFontSize = function(maxSize) {
+        var fontSize = maxSize||36;
+        var text = $('span:visible', this);
+        var width = $(this).width();
+        var height = $(this).height();
+        text.css( 'font-size', width*.8/4 );
+        text.css('white-space', 'pre');
+        return this;
+    }
+})(window.Zepto||window.jQuery);
 

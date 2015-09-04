@@ -58,7 +58,7 @@ See https://github.com/adobe-type-tools/cmap-resources
 
     <script src="victor.js"></script>
     <script src="path.js"></script>
-    <script src="drawer.js?t=3456345"></script>
+    <script src="drawer.js?t=456345"></script>
 <script type="text/javascript" src="draggable.js"></script>
 
   </head>
@@ -593,6 +593,15 @@ body.shareMode .userInputText textarea{
     outline: 0;
     z-index: 999999999;
   }
+  .page .signImg span {
+    position: absolute;
+    bottom: 0;
+    width: 100%;
+    text-align: center;
+    border-bottom: 2px solid #F00;
+    color: #F00;
+    font-weight: bold;
+  }
 
   .page .signImg .img{
     position: absolute;
@@ -600,7 +609,7 @@ body.shareMode .userInputText textarea{
     width:100%;
     height: auto;
   }
-  .page .signImg.active .img{
+  .page .signImg.active{
     border:1px solid red;
   }
 
@@ -897,9 +906,10 @@ body.shareMode .userInputText textarea{
 <div id="signMenu" class="botmenu noselect">
 
   <div class="maintool">
-    <a href="javascript:;" class="button" data-onclick="setStage('viewer')">返回主菜单</a>
-    <a href="javascript:;" class="button" data-onclick="deleteSign()">删除签名</a>
-    <a href="javascript:;" class="button btnSign" data-onclick="finishSign()">完成签名</a>
+    <a href="javascript:;" class="btnCommon button" data-onclick="setStage('viewer')">返回主菜单</a>
+    <a href="javascript:;" class="btnSigned button btnDelete" data-onclick="deleteSign()">删除签名</a>
+    <a href="javascript:;" class="btnSigned button btnSignComplete" data-onclick="finishSign()">完成签名</a>
+    <a href="javascript:;" class="btnNotSigned button btnSign" data-onclick="beginSign()">签名</a>
   </div>
 
 </div>
@@ -997,18 +1007,19 @@ body.shareMode .userInputText textarea{
 <div class="dialog templateCon">
 </div>
 
-<div class="signPad">
+<div class="signPad" style="display:none;">
   <div class="signPadCanvas"><span>签名处</span></div>
   <div class="signPadInfo">
     <div>移动＜签名处＞字样到需要签名的位置，然后按确定。</div>
-    <a href="javascript:;" class="button signBtnOK" data-onclick="beginSign()">确定</a>
+    <a href="javascript:;" class="button signBtnOK" data-onclick="drawSign()">确定</a>
     <a href="javascript:;" class="button signBtnCancel" data-onclick="setStage('viewer')">取消</a>
   </div>
 </div>
-<div class="signPadHandler"></div>
+<div class="signPadHandler" style="display:none;"></div>
 
 
 <div id="debug" style="display:none; position:absolute; z-index:99999999; top:0; left:0;"></div>
+
 
   </body>
 </html>

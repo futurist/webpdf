@@ -1,3 +1,31 @@
+
+var isAndroid = /(android)/i.test(navigator.userAgent);
+var isWeiXin = navigator.userAgent.match(/MicroMessenger\/([\d.]+)/i);
+var isiOS = /iPhone/i.test(navigator.userAgent) || /iPod/i.test(navigator.userAgent) || /iPad/i.test(navigator.userAgent);
+var isMobile = isAndroid||isWeiXin||isiOS;
+
+var wxUserInfo={};
+var wxOAuthUrl = 'https://open.weixin.qq.com/connect/oauth2/authorize?appid=wx59d46493c123d365&redirect_uri=http%3A%2F%2F1111hui.com%2F/pdf/getUserID.php&response_type=code&scope=snsapi_base&state='+ encodeURIComponent( window.location.href.replace('#','{@@@}') ) +'#wechat_redirect';
+var DEBUG= 1;
+if(!DEBUG)
+{
+
+$(function(){
+ wxUserInfo = Cookies.get( 'wxUserInfo' );
+if( !wxUserInfo ){
+  window.location = wxOAuthUrl;
+} else {
+   wxUserInfo = JSON.parse(wxUserInfo);
+}
+});
+
+}else{
+  wxUserInfo.UserId = 'yangjiming';
+}
+
+
+FILE_HOST = 'http://7xkeim.com1.z0.glb.clouddn.com/';
+
 var wrapper = document.getElementById("signature-pad"),
     clearButton = wrapper.querySelector("[data-action=clear]"),
     saveButton = wrapper.querySelector("[data-action=save]"),
@@ -18,6 +46,9 @@ function searchToObject(search) {
 window.scaleRatio = 456/984;
 window.historyData = null;
 var signID = searchToObject(window.location.hash).signID;
+var fileKey = searchToObject(window.location.hash).fileKey;
+var shareID = searchToObject(window.location.hash).shareID;
+var signIDX = searchToObject(window.location.hash).idx;
 var hash = searchToObject(window.location.hash).hash;
 
 // Adjust canvas coordinate space taking into account pixel ratio,
@@ -41,12 +72,15 @@ function resizeCanvas() {
 window.onresize = resizeCanvas;
 resizeCanvas();
 
-if(signID) initSignPad();
+if(signID && wxUserInfo.UserId) initSignPad();
 else alert('请求非法');
 
 window.signHisID = '';
 
 function initSignPad(){
+
+    if(!wxUserInfo.UserId) return alert('无法获取身份信息');
+
     signPAD = new SignaturePad(signCanvas);
     signPAD.onBegin = function(e){
         window.signHisID = '';
@@ -72,11 +106,18 @@ function initSignPad(){
               ctx.drawImage(signCanvas, 0, 0);
               var signData = canvas.toDataURL("image/png");
               
-            var data = window.signHisID? { signID:signID, hisID: window.signHisID} : {data: signData, width:canvas.width, height:canvas.height, signID:signID};
+            var data = window.signHisID? { signID:signID, fileKey:fileKey, shareID:shareID, hisID: window.signHisID, signIDX:signIDX} : {data: signData, width:canvas.width, height:canvas.height, signID:signID,  fileKey:fileKey, shareID:shareID, signIDX:signIDX };
+
+            data.signPerson = wxUserInfo.UserId;
+
             $.post( 'http://1111hui.com:88/saveSign', data , function(data){
+                
+                // return console.log(data);
+
                 if(data){
+                    //data = data.signIDS.filter(function(v){ return v._id == signID  }  ).shift();
                     alert( window.signHisID?'签名应用成功，确定后返回文档': '签名应用成功，并保存到历史签名。确定后返回文档');
-                    var url = 'http://1111hui.com/pdf/webpdf/viewer.html#file='+data.file+'&isSign=1&signID='+ signID +'&shareID='+data.shareID+'&pos='+data.urlhash.replace('#','');
+                    var url = 'http://1111hui.com/pdf/webpdf/viewer.html#file='+ FILE_HOST+fileKey +'&isSign=1&signID='+ signID +'&shareID='+(shareID||'')+'&pos='+data.urlhash.replace('#','');
                     window.location = url;
                 }
             });            
@@ -84,7 +125,9 @@ function initSignPad(){
     });
 
     $('.cancel').click(function(){
-        window.close();
+        if(isWeiXin)  return wx.closeWindow();
+        window.history.length>1 ? window.history.go(-1) : window.close() ;
+        //window.close();
     });
 
     $('.hisBack').click(function(){
@@ -124,7 +167,7 @@ function initSignPad(){
         if(window.historyData){
             displayHistory(window.historyData);
         } else {
-            $.post( 'http://1111hui.com:88/getSignHistory', {signID:signID}, function(data){
+            $.post( 'http://1111hui.com:88/getSignHistory', {signID:signID, person: wxUserInfo.UserId }, function(data){
                 window.historyData = data;
                 displayHistory(data);
             });

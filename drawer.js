@@ -10,6 +10,20 @@
 * change: all window.location.search to window.location.hash
 */
 
+var isNWJS = typeof global !='undefined';
+var curNWWin=null;
+if(isNWJS){
+  curNWWin = nwDispatcher.nwGui.Window.get();
+}
+function toggleDevTools (){
+  if(!curNWWin) return;
+  if( !curNWWin.isDevToolsOpen() ){
+    curNWWin.showDevTools();
+  } else {
+    curNWWin.closeDevTools();
+  }
+}
+
 
 FILE_HOST = 'http://7xkeim.com1.z0.glb.clouddn.com/';
 TREE_URL = "http://1111hui.com:88/tree.html";
@@ -17,7 +31,8 @@ VIEWER_URL = "http://1111hui.com/pdf/webpdf/viewer.html";
 
 var host = "http://1111hui.com:88";
 var wxOAuthUrl = 'https://open.weixin.qq.com/connect/oauth2/authorize?appid=wx59d46493c123d365&redirect_uri=http%3A%2F%2F1111hui.com%2F/pdf/getUserID.php&response_type=code&scope=snsapi_base&state='+ encodeURIComponent( window.location.href.replace('#','{@@@}') ) +'#wechat_redirect';
-var DEBUG= 1;
+var DEBUG= 0;
+if(isWeiXin)
 if(!DEBUG)
 {
 
@@ -212,12 +227,12 @@ window.addEventListener('scalechange', function scalechange(evt) {
 
 });
 
-document.addEventListener('pagerendered', function (e) {
+document.addEventListener('textlayerrendered', function (e) {  //textlayerrendered, pagerendered
   var pageIndex = e.detail.pageNumber - 1;
   
   setTimeout(function(){
     RERenderDrawerLayer(pageIndex);
-  }, 300);
+  }, 0);
 
 });
 
@@ -1584,6 +1599,13 @@ var svgns = "http://www.w3.org/2000/svg";
             }
             handled = true;
             break;
+          case 116:  //F5 key
+            window.location.reload();
+            handled = true;
+            break;
+          case 123: //F12 Key
+            toggleDevTools();
+            break;
         }
       }
 
@@ -1882,11 +1904,11 @@ var svgns = "http://www.w3.org/2000/svg";
       var $text = $('.editing').find('.text');
       var oldVal = $('.textarea').val();
 
-      if(!isTemplate){
+      if(0&& !isTemplate) {
 
-        ApplyLineBreaks( '.textarea' );
+        // ApplyLineBreaks( '.textarea' );
         var val = $('.textarea').val();
-        var prevVal = $text.html();
+        var prevVal = $text.val();
 
         if(val==""){
             try{
@@ -1898,7 +1920,7 @@ var svgns = "http://www.w3.org/2000/svg";
            return;
         }
 
-        $text.html( val );
+        $text.val( val );
         $($text).get(0).style.removeProperty('width');
         $($text).get(0).style.removeProperty('height');
 
@@ -1912,7 +1934,7 @@ var svgns = "http://www.w3.org/2000/svg";
         if(!trans) trans = [0,0];
         // offset.left += trans[0];
         // offset.top += trans[1];
-        $text.html( oldVal );
+        $text.val( oldVal );
 
         $('.editing').css( {width:offset.width, height:offset.height} );
         $('.editing').find('.bbox').css( {width:offset.width, height:offset.height} );
@@ -1924,9 +1946,8 @@ var svgns = "http://www.w3.org/2000/svg";
       } else {
         $('.editing').css( {width:offset.width, height:offset.height} );
         $('.editing').find('.bbox').css( {width:offset.width, height:offset.height} );
-        $text.html( oldVal );
+        $text.val( oldVal ).html(oldVal);
       }
-
 
 
 	var bbox = $('.editing').data('bbox') ;
@@ -1936,7 +1957,7 @@ var svgns = "http://www.w3.org/2000/svg";
 	$('.editing').data('bbox', JSON.stringify(newBBox) ) ;
 
       var options = $('.editing').data('options');
-      $('.editing pre').css({  "color":options.stroke, "font-family": options['font-family'], "font-size": options['stroke-width'] });
+      $('.editing textarea.pre').css({  "color":options.stroke, "font-family": options['font-family'], "font-size": options['stroke-width'], width: offset.width, height:offset.height });
 
       try{
          $('.textarea').remove();
@@ -1946,6 +1967,7 @@ var svgns = "http://www.w3.org/2000/svg";
 
       $('.editing').removeClass('editing');
 
+      // return;
       if(val==''){
         $('.editing').remove();
         if(prevVal!=''){
@@ -1985,8 +2007,8 @@ var svgns = "http://www.w3.org/2000/svg";
      $('.textarea')
        .data('targetId', $(targetEl).data('id') )
        .css(offset).css({ 'font-family': style['font-family'], 'font-size':style['font-size'] })
-       .html( $(targetEl)
-        .find('.text').html() )
+       .val( $(targetEl)
+        .find('.text').val() )
        .focus();
 
       //if in android, we move textarea to top to show keyboard correctly.
@@ -2015,7 +2037,7 @@ var svgns = "http://www.w3.org/2000/svg";
       }
 
       if(!path){
-        path = $('<div class="textWrap"><pre class="text textholder"></pre></div>');
+        path = $('<div class="textWrap"><textarea class="pre text textholder"></textarea></div>');
         curShapeID = +new Date+Math.random();
         $('.textCon', curContext).append( path );
         path.attr("data-id", curShapeID );
@@ -2814,6 +2836,7 @@ function restoreCanvas (isRender) {
 
 
 function copyDrawerLayerData(pageIndex){
+  
   var drawCon = $('#drawViewer');
   if(typeof pageIndex=='number') drawCon = drawCon.find('.page').eq(pageIndex);
   var svgCon = $('.svgCon', drawCon).toArray();
@@ -2924,8 +2947,11 @@ function parseTemplate(str, templateEl){
 			var para = $1.split(/[：:]/);
 			var tempObj = TemplateField[para.shift()];
 			var func = tempObj && tempObj.callback;
+      // Save all tag into repA array
 			repA.push(match);
+
 			if(!func){
+        // Place a placeholder of string {{1}} etc into original string
 				return '{{'+repA.length+'}}';
 			}
 			var ret = func(para, templateEl);
@@ -2936,7 +2962,7 @@ function parseTemplate(str, templateEl){
 	parseT(str);
 
 	str = str.replace(/{{(\d+)}}/, function(match, $1, offset, origin) {
-		return repA[$1-1];
+		return ''; // repA[$1-1]; // If we want to replace back unknow tag using the code;  here we don't show it place it with a empty string.
 	});
 
 	return str;
@@ -3095,9 +3121,17 @@ function restoreSignature (pageIndex) {
 
     if(v.sign){
       img.find('.img').attr({ 'src': v.sign.signData });
-    } else {
-      img.html('<span>点此签名</span>').autoFontSize();
+      $.post(host+'/getUserInfo', { userid: v.sign.person }, function  (userinfo) {
+        img.append('<div class="signPerson">'+ userinfo.name +'</div>');
+      });
 
+    } else {
+      
+      if(isSigned || isFinished ){
+        img.hide();
+      } else {
+        img.html('<span>点此签名</span>').autoFontSize();
+      }
     }
 
     img.data('id', v._id);
@@ -3105,14 +3139,20 @@ function restoreSignature (pageIndex) {
     if(v.signPerson) img.data('signPerson', v.signPerson);
 
     img.click(function(){
-      if( window.isSigned ) return;
+      if( window.isSigned || window.isFinished ){
+          //alert('您已签署过此文档，此签名位置将留给其它经办人');
+         return;
+      }
       var signPerson = $(this).data('signPerson');
       if( signPerson && signPerson!= rootPerson.userid ) return;
 
       if($(this).hasClass('active')){
+
         setStage('viewer');
         $(this).removeClass('active');
+
       }else{
+
         setStage('sign');
         $(this).addClass('active');
 
@@ -3122,6 +3162,8 @@ function restoreSignature (pageIndex) {
         		$('.btnCommon, .btnSigned').css('display', 'table-cell');
         	} else {
         		$('.btnCommon, .btnNotSigned').css('display', 'table-cell');
+            beginSign();
+            setStage('viewer');
         	}
         } else {
           if(isTemplate){
@@ -3250,7 +3292,17 @@ function beginSign(){
   var fileKey = curFile.split('/').pop();
 
 	var url = 'http://1111hui.com/pdf/webpdf/signpad.html#fileKey='+ fileKey +'&shareID='+ (shareID||'') +'&idx='+ idx +'&signID='+signID+'&hash='+(+new Date());
-	window.location = url;
+
+  if(isWeiXin){
+    window.location = url;
+  } else {
+    $.post(host+'/signInWeiXin', {url:url, shareID:shareID, fileKey:fileKey, person: rootPerson.userid }, function(data){
+
+      if(!data) return alert('发送微信错误');
+      alert('签署微信已发送到手机，请查看微信并点击签署');
+
+    } );
+  }
 
 	return;
 
@@ -3407,6 +3459,7 @@ $(function  () {
   window.isTemplate = urlQuery.isTemplate;
   window.signID = urlQuery.signID;
   window.isSigned = false;
+  window.isFinished = false;
   window.shareData = null;
 
   if(!window.isSign) $('.btnSign').hide();
@@ -3439,6 +3492,8 @@ $(function  () {
     }else if(isSign) {
       $('.btnSign').css({display: 'table-cell' });
     }
+
+    window.isFinished = data.isFinish;
 
   } );
 
@@ -3503,7 +3558,9 @@ var TemplateField = {
         textarea.trigger('change');
 		});
 		textarea.hide();
-		sel.get(0).style.cssText = $(el).find('pre').get(0).style.cssText;
+    try{
+  		sel.get(0).style.cssText = $(el).find('textarea.pre').get(0).style.cssText;
+    }catch(e){}
 		return '';
 	}},
 

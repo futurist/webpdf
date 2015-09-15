@@ -442,6 +442,23 @@ See https://github.com/adobe-type-tools/cmap-resources
 
 <style type="text/css">
 
+.signPerson {
+    font-size: 10px;
+    border-right: 1px solid rgba(0,0,0,0.2);
+    border-left: 1px solid rgba(0,0,0,0.2);
+    margin-top: -10px;
+    color: rgba(0,0,0,0.2);
+    text-align: center;
+}
+
+.toolbar{
+  display: none;
+}
+
+#viewerContainer{
+  top:0;
+}
+
 body, #outerContainer, #mainContainer{
   overflow: hidden;
 }
@@ -585,6 +602,11 @@ body.shareMode .userInputText textarea{
   }
   .page .textCon .text{
     position: absolute;
+    -webkit-appearance: none;
+    overflow: hidden;
+    outline: none;
+    border: none;
+    resize: none;
   }
 
   .page .signImg{
@@ -601,6 +623,7 @@ body.shareMode .userInputText textarea{
     border-bottom: 2px solid #F00;
     color: #F00;
     font-weight: bold;
+    cursor: pointer;
   }
 
   .page .signImg .img{

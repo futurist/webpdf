@@ -6,7 +6,8 @@ var isMobile = isAndroid||isWeiXin||isiOS;
 
 var wxUserInfo={};
 var wxOAuthUrl = 'https://open.weixin.qq.com/connect/oauth2/authorize?appid=wx59d46493c123d365&redirect_uri=http%3A%2F%2F1111hui.com%2F/pdf/getUserID.php&response_type=code&scope=snsapi_base&state='+ encodeURIComponent( window.location.href.replace('#','{@@@}') ) +'#wechat_redirect';
-var DEBUG= 1;
+var DEBUG= 0;
+if(isWeiXin)
 if(!DEBUG)
 {
 
@@ -16,7 +17,10 @@ if( !wxUserInfo ){
   window.location = wxOAuthUrl;
 } else {
    wxUserInfo = JSON.parse(wxUserInfo);
-}
+   
+    if(signID && wxUserInfo.UserId) initSignPad();
+    else alert('请求非法');
+} 
 });
 
 }else{
@@ -72,8 +76,7 @@ function resizeCanvas() {
 window.onresize = resizeCanvas;
 resizeCanvas();
 
-if(signID && wxUserInfo.UserId) initSignPad();
-else alert('请求非法');
+
 
 window.signHisID = '';
 

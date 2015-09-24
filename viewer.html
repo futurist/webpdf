@@ -53,13 +53,17 @@ See https://github.com/adobe-type-tools/cmap-resources
     <script src="debugger.js"></script>
     <script src="viewer.js"></script>
 
-    <script src="zepto.js"></script>
+    <script src="js/zepto.js"></script>
 <script src="js/dialog.build.js"></script>
 
     <script src="victor.js"></script>
     <script src="path.js"></script>
     <script src="drawer.js?t=546trwer456345342gd45"></script>
 <script type="text/javascript" src="draggable.js"></script>
+
+<link href="js/select2.css" rel="stylesheet" />
+<script src="js/select2.js"></script>
+<script src="js/select2_locale_zh-CN.js"></script>
 
   </head>
 
@@ -878,7 +882,13 @@ body.shareMode .userInputText textarea{
     margin: 10px;
   }
 
-
+  div.select2-drop{
+    z-index: 99999999999;
+  }
+.select2-container, .select2-drop, .select2-search, .select2-search input
+{
+  min-width: 120px;
+}
 </style>
 
 <style type="text/css">
@@ -926,7 +936,10 @@ body.shareMode .userInputText textarea{
 }
 </style>
 
-
+<div class="select2DIV" style="display:none; position:absolute; z-index:99999999999; top:0; left:0;">
+  <select class="select2">
+  </select>
+</div>
 
 <div id="signMenu" class="botmenu noselect">
 
@@ -1041,6 +1054,7 @@ body.shareMode .userInputText textarea{
   </div>
 </div>
 <div class="signPadHandler" style="display:none;"></div>
+
 
 
 <div id="debug" style="display:none; position:absolute; z-index:99999999; top:0; left:0;"></div>

@@ -358,16 +358,40 @@ function RERenderDrawerLayer(pageIndex){
 
 
 function getRealOffset(el){
+  var offset = $(el).offset();
+  var compStyle =window.getComputedStyle( $(el).get(0) );
+  var borderL = parseInt(compStyle['border-left-width'], 10);
+  var borderR = parseInt(compStyle['border-right-width'], 10);
+  var borderT = parseInt(compStyle['border-top-width'], 10);
+  var borderB = parseInt(compStyle['border-bottom-width'], 10);
+  offset.left += borderL;
+  offset.top += borderT;
+  offset.width -= borderL+borderR;
+  offset.height -= borderT+borderB;
+  return offset;
+}
+
+function getRealOffset2(el){
 	var offset = $(el).offset();
 	var compStyle =window.getComputedStyle( $(el).get(0) );
-	var borderL = parseInt(compStyle['border-left-width'], 10);
-	var borderR = parseInt(compStyle['border-right-width'], 10);
-	var borderT = parseInt(compStyle['border-top-width'], 10);
-	var borderB = parseInt(compStyle['border-bottom-width'], 10);
+  var borderL = parseInt(compStyle['border-left-width'], 10);
+  var borderR = parseInt(compStyle['border-right-width'], 10);
+  var borderT = parseInt(compStyle['border-top-width'], 10);
+  var borderB = parseInt(compStyle['border-bottom-width'], 10);
+  offset.left += borderL;
+  offset.top += borderT;
+  offset.width -= borderL+borderR;
+  offset.height -= borderT+borderB;
+
+	var borderL = parseInt(compStyle['padding-left'], 10);
+	var borderR = parseInt(compStyle['padding-right'], 10);
+	var borderT = parseInt(compStyle['padding-top'], 10);
+	var borderB = parseInt(compStyle['padding-bottom'], 10);
 	offset.left += borderL;
 	offset.top += borderT;
 	offset.width -= borderL+borderR;
 	offset.height -= borderT+borderB;
+
 	return offset;
 }
 
@@ -929,6 +953,7 @@ var svgns = "http://www.w3.org/2000/svg";
       else{
         $('[data-hl]').remove();
       }
+      $('.select2DIV').hide();
     }
 
     function calcDist (a,b) {
@@ -981,6 +1006,30 @@ var svgns = "http://www.w3.org/2000/svg";
         $(v).attr('data-oldTrans', oldTrans.join(',') );
       });
     }
+
+
+        function showSelect2 (targetEl, clientY){
+          var offset = $(targetEl).offset();
+          if(clientY > $(window).height()/2 )
+            offset.top -= 32;
+          else
+            offset.top += 32;
+
+          $('.select2').data('id', $(targetEl).data('id') );
+          
+          var trans = getTranslateXY(targetEl);
+          offset.left -= trans[0]*curScale;
+          offset.top -= trans[1]*curScale;
+
+          var oldTrans = $(targetEl).data('oldtrans');
+          oldTrans = !oldTrans ? [0,0] : oldTrans.split(',').map(function(v){ return parseFloat(v) });
+
+          setTranslateXY( $('.select2DIV'), oldTrans[0]*curScale||0.01, oldTrans[1]*curScale||0.01 );
+          $('.select2DIV').show().css( offset );
+
+          var person = $(targetEl).data('person');
+          $('.select2').select2('val', person);
+        }
 
 
     function downFunc (e) {
@@ -1102,6 +1151,8 @@ var svgns = "http://www.w3.org/2000/svg";
         }
       }, 5000);
 
+
+
       // if( $(targetEl).data('hl') || (isText) ){
       if( isShape || isText ){
 
@@ -1109,8 +1160,16 @@ var svgns = "http://www.w3.org/2000/svg";
         addSelectionList( targetEl );
         beginDrag();
 
+        if(isTemplate && isText){
+          showSelect2(targetEl, evt.clientY);
+          // $('.select2').select2('val', ['AL']);
+        } else {
+          $('.select2DIV').hide();
+        }
+
       } else {
 
+        $('.select2DIV').hide();
         dragging = false;
 
         if(!e.shiftKey)
@@ -1121,6 +1180,7 @@ var svgns = "http://www.w3.org/2000/svg";
       }
 
     }
+    
 
     function moveFunc(e)
     {
@@ -1289,6 +1349,10 @@ var svgns = "http://www.w3.org/2000/svg";
               var ty = dy+ ~~oldTrans[1];
 
               setTranslateXY(v, tx, ty);
+              
+              if(isText) {
+                setTranslateXY( $('.select2DIV'), tx*curScale, ty*curScale);
+              }
 
             });
 
@@ -1584,6 +1648,19 @@ var svgns = "http://www.w3.org/2000/svg";
     function handleShortKey (evt) {
       if( $('.editing').size() ) return;
       var handled = false;
+      var isInput = false;
+      // Some shortcuts should not get handled if a control/input element
+      // is selected.
+      var curElement = document.activeElement || document.querySelector(':focus');
+      var curElementTagName = curElement && curElement.tagName.toUpperCase();
+      if (curElementTagName === 'INPUT' ||
+          curElementTagName === 'TEXTAREA' ||
+          curElementTagName === 'SELECT') {
+
+        isInput = true;
+      }
+
+
       var cmd = (evt.ctrlKey ? 1 : 0) |
             (evt.altKey ? 2 : 0) |
             (evt.shiftKey ? 4 : 0) |
@@ -1594,9 +1671,11 @@ var svgns = "http://www.w3.org/2000/svg";
         switch (evt.keyCode) {
           case 8:  //backspace key : Delete the shape
           case 46:  //delete key : Delete the shape
+            if(isInput) break;
             var el = $('[data-hl]');
             if( el.length ){
               el.remove();
+              $('.select2DIV').hide();
               svgHistory.update();
             }
             handled = true;
@@ -1629,21 +1708,13 @@ var svgns = "http://www.w3.org/2000/svg";
       }
     }
 
-
-
-  // Some shortcuts should not get handled if a control/input element
-  // is selected.
-  var curElement = document.activeElement || document.querySelector(':focus');
-  var curElementTagName = curElement && curElement.tagName.toUpperCase();
-  if (curElementTagName === 'INPUT' ||
-      curElementTagName === 'TEXTAREA' ||
-      curElementTagName === 'SELECT') {
-    // Make sure that the secondary toolbar is closed when Escape is pressed.
-    if (evt.keyCode !== 27) { // 'Esc'
-      return;
+    if(isInput){
+        // Make sure that the secondary toolbar is closed when Escape is pressed.
+        if (evt.keyCode !== 27) { // 'Esc'
+          return;
+        }
+        handled = false;
     }
-    handled = false;
-  }
 
     if(handled){
       evt.preventDefault();
@@ -2318,7 +2389,7 @@ var svgns = "http://www.w3.org/2000/svg";
         return zT ? [ parseInt(zT[1]), parseInt(zT[2]) ] : [0,0];
     }
     function setTranslateXY(obj, x, y){
-    	if(!x||!y) return;
+    	if(!(x)||!(y)) return;
        if(!obj) return [0,0];
        if(obj.size) obj=obj.get(0);
         var style = obj.style;
@@ -2581,7 +2652,7 @@ $.fn.disableSelection = function () {
         }
     });
 };
-})(Zepto);
+})(jQuery);
 
 
 function ApplyLineBreaks(strTextAreaId) {
@@ -3158,9 +3229,11 @@ function restoreSignature (pageIndex) {
     img.data('id', v._id);
     img.data('idx', i);
     if(v.signPerson) img.data('signPerson', v.signPerson);
-    if(!shareID && !isTemplate ) img.hide();
+    // if(!shareID && !isTemplate ) img.hide();
 
-    img.click(function(){
+    img.click(function(e){
+      var evt = /touch/.test(e.type) ? e.touches[0] : e;
+
       if( window.isSigned || window.isFinished ){
           //alert('您已签署过此文档，此签名位置将留给其它经办人');
          return;
@@ -3175,6 +3248,7 @@ function restoreSignature (pageIndex) {
 
         setStage('viewer');
         $(this).removeClass('active');
+        $('.select2DIV').hide();
 
       }else{
 
@@ -3192,6 +3266,7 @@ function restoreSignature (pageIndex) {
         	}
         } else {
           if(isTemplate){
+              showSelect2(img, evt.clientY);
         	   $('.btnCommon, .btnDelete').css('display', 'table-cell');
           } else {
             if( $(this).find('img').size() ){
@@ -3434,11 +3509,84 @@ function openLinkNW (link) {
     }
 }
 
+function padString (str, count){
+  var ret = '';
+  while(count--){
+    ret+=str;
+  }
+  return ret;
+}
+
 
 $(function  () {
   makeColorPicker();
   makeTemplatePicker();
   setStage('viewer');
+
+
+  $.post('http://1111hui.com:88/getCompanyTree', {company:'lianrun'}, function(data){
+    if(!data) return;
+    data=JSON.parse(data);
+
+    data = data.sort(function(a,b){
+
+      if(a.pId != b.pId)
+        return a.pId-b.pId;
+      var apid = a.parentid===undefined? -1 : a.parentid;
+      var bpid = b.parentid===undefined? -1 : b.parentid;
+      return apid-bpid;
+
+    });
+
+
+    var depart = data.filter(function(v){ return v.pId>=0 && v.parentid>=0 });
+    var opData = [];
+    depart.forEach(function(v){
+      opData.push(v);
+      opData = opData.concat( 
+        data.filter(function(x){ return x.pId==v.id && x.parentid===undefined })
+        .sort(function(a,b){return a.userid>b.userid } )
+       );
+    });
+    //console.log(opData);
+
+    var html = '', prevID = 0;
+    opData.forEach(function(v){
+      if(v.parentid>=0){
+        var option = v.parentid>0 ? '</optgroup>' : '';
+        option += '<optgroup label="'+ v.name +'">';
+        html += (option);
+        prevID = v.parentid;
+      } else {
+        var option = '<option value="'+ v.userid +'" data-info="'+ JSON.stringify(v) +'">'+ v.name +'</option>';
+        html += (option);
+      }
+    });
+
+    html+='</optgroup>';
+
+    $('select.select2').append( html );
+
+  });
+
+
+  $('select.select2').select2({
+    language: "zh-CN",
+    placeholder:'选择填表人..'
+  });
+
+
+  $('.select2').on("change", function (e) { 
+    if( $(this).find('option').length <2) return;
+    var id = $('.select2').data('id');
+    if(!id) return;
+    var targetEl = $('[data-id="'+ id +'"]');
+    $(targetEl).data('person', e.val );
+  });
+
+  $('#mainContainer').on(downE, function(e){
+    $('.select2').select2('close').blur();
+  });
 
   $('.button').on(downE, function  (e) {
     e.stopPropagation();
@@ -3668,4 +3816,36 @@ function chooseTemplate(){
         return this;
     }
 })(window.Zepto||window.jQuery);
+
+;(function($) {
+    $.fn.outerWidth = function() {
+        var offset= getRealOffset(this);
+        return offset.width;
+    }
+    $.fn.outerHeight = function() {
+        var offset= getRealOffset(this);
+        return offset.height;
+    }
+    $.data = function(obj, key, val){
+      if(val){
+        $(obj).data2(key, val );
+      } else {
+        return $(obj).data2(key);
+      }
+      return $(obj);
+    }
+    $.removeData = function(obj, key){
+
+      $(obj).data2(key, null );
+      return $(obj);
+    }
+    $.fn.removeData = function(key){
+      $(this).data2(key, null );
+      return $(this);
+    }
+
+})(window.Zepto||window.jQuery);
+
+
+
 

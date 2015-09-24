@@ -18,14 +18,20 @@ var assert = require('assert');
 var fs = require('fs');
 var util = require('util');
 var url = require('url');
+var request = require('request');
 
 var urllib = require("urllib");
 var express = require("express");
 var bodyParser = require("body-parser");
+var cookieParser = require("cookie-parser");
 var multer = require("multer");
+var session = require('express-session')
 
 var Datauri = require('datauri');
 var QREncoder = require('qr').Encoder;
+var mime = require('mime');
+var handlebars = require('express-handlebars');
+var flash = require('connect-flash');
 
 
 var redis = require("redis"),
@@ -38,15 +44,35 @@ QiniuBucket = 'bucket01';
 FILE_HOST = 'http://7xkeim.com1.z0.glb.clouddn.com/';
 TREE_URL = "http://1111hui.com/pdf/client/tree.html";
 VIEWER_URL = "http://1111hui.com/pdf/webpdf/viewer.html";
+IMAGE_UPFOLDER = 'uploads/' ;
+
+var fileStorage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, IMAGE_UPFOLDER)
+  },
+  filename: function (req, file, cb) {
+    cb(null, file.fieldname + '-' + Date.now())
+  }
+})
+
+var fileUploader = multer({ storage: fileStorage })
 
 
-function qiniu_uploadFile(file, callback ){
+function safeEval (str) {
+  try{
+    var ret = JSON.parse(str);
+  }catch(e){
+    ret = str
+  }
+  return /object/i.test(typeof ret) ? (ret===null?null:str) : ret;
+}
 
-	var ext = path.extname(file);
-	var saveFile = path.basename(file); //formatDate('yyyymmdd-hhiiss') + Math.random().toString().slice(1,5) + ext;
 
+function qiniu_getUpToken() {
 	var responseBody =
 	{
+    "shareID":"$(x:shareID)",
+    "srcPath":"$(x:path)",
 		"key":"$(key)",
 		"hash":"$(hash)",
 		"imageWidth":"$(imageInfo.width)",
@@ -67,8 +93,18 @@ function qiniu_uploadFile(file, callback ){
 	);
 
 	var uptoken = putPolicy.token();
+	return uptoken;
+}
 
-	console.log( uptoken,saveFile, file );
+
+function qiniu_uploadFile(file, callback ) {
+
+	var ext = path.extname(file);
+	var saveFile = path.basename(file); //formatDate('yyyymmdd-hhiiss') + Math.random().toString().slice(1,5) + ext;
+
+	var uptoken = qiniu_getUpToken();
+
+	//console.log( uptoken,saveFile, file );
 
 	qiniu.io.putFile(uptoken, saveFile, file, null, function(err, ret) {
 	  console.log(err, ret);
@@ -76,11 +112,26 @@ function qiniu_uploadFile(file, callback ){
 	  // ret.person = "yangjiming";
 	  // ret.savePath = savePath;
 	  //ret.path = "/abc/";
-	  callback( ret );
+	  if(callback) callback( ret );
 
 	});
 
 }
+
+
+/********* Net Socket Part ************/
+// server
+require('net').createServer(function (socket) {
+    //console.log("connected");
+	socket.on('error', function(err){
+        //console.log(err);
+    });
+    socket.on('data', function (data) {
+        console.log(data.toString());
+    });
+})
+//.listen(81, function(){ console.log('socket ready') });
+
 
 
 /********* Redis Part ************/
@@ -108,10 +159,25 @@ var wss = new WebSocketServer({ port: 3000 });
 //       data:[json data from client]
 //     }
 // }
-var WSMSG = {};
+
+
+var JOBS = {};  // store printer jobs same format as WSMSG
+var WSMSG = {}; // store client persistent message
+var WSCLIENT = {};
 wss.on('connection', function connection(ws) {
   ws.on('close', function incoming(code, message) {
-    console.log("WS close: ", code, message);
+    //console.log("WS close: ", code, message);
+
+    // Find clientName from ws
+    var clientName = _.findKey(WSCLIENT, function(v){ return v.ws&&v.ws==ws } );
+    console.log('client leave:', clientName, code, message);
+    delete WSCLIENT[clientName];
+
+    //_.where( WSCLIENT, {ws:ws} ).forEach();
+    // _.where( WSCLIENT, {ws:ws} ).forEach(function(v){
+    //     var idx = WSCLIENT.indexOf(v);
+    //     if(idx>-1) WSCLIENT.splice( idx , 1  );
+    //   });
   });
   ws.on('message', function incoming(data) {
     // Client side data format:
@@ -119,16 +185,89 @@ wss.on('connection', function connection(ws) {
 
     // Server response data format:
     // resData = { msgid:14324.34, result:{ userid:'yangjiming' } }
-    var msg = JSON.parse(data);
+    try{
+      var msg = JSON.parse(data);
+    } catch(e){
+      return console.log(data);
+    }
+
+    if(msg.type=='clientConnected' && msg.clientName && msg.clientRole){
+
+      // msg format: { clientName:clientName, clientRole:'printer', clientOrder:1 }
+      var suffix = (msg.from? ':'+msg.from: '');
+      console.log( 'client up', msg.clientName+suffix );
+      WSCLIENT[msg.clientName+suffix] = _.extend( msg, {ws:ws, timeStamp:+new Date()} );
+      return;
+    }
+
+    if(msg.type=='printerMsg' && msg.msgid) {
+      var res = JOBS[msg.msgid].res;
+      console.log('job:', msg.printerName, msg.data.key, msg.errMsg);
+      if(! res.finished) res.send( msg );
+      return;
+    }
+
     var msgid = msg.msgid;
-    delete msg.msgid;
-    console.log(msgid, msg);
-    WSMSG.msgid = {ws:ws, timeStamp:+new Date(), data:msg.data};
+    if(msgid){
+        delete msg.msgid;
+        console.log(msgid, msg);
+        WSMSG.msgid = {ws:ws, timeStamp:+new Date(), data:msg.data};
+    }
+
 
   });
   console.log('new client connected');
   ws.send('connected');
 });
+
+function wsSendClient (clientName, msg) {
+  console.log('wssend', clientName);
+  var lastClient;
+  ['',':mobile',':pc'].forEach(function sendToClient (v) {
+    var client = WSCLIENT[clientName+v];
+    if(!client || !client.ws) return true;
+    msg.clientName = clientName;
+
+    client.ws.send( JSON.stringify(msg)  );
+    lastClient = client;
+  });
+
+  return lastClient;
+}
+
+function choosePrinter () {
+  var printers = _.sortBy( _.where(WSCLIENT, {clientRole:'printer'}) , 'clientOrder'  );
+  return printers.length ? printers[0] : null;
+}
+
+function wsSendPrinter (msg, printerName, res) {
+
+  if(!printerName) {
+
+    var printer = choosePrinter();
+    if(!printer) return res.send('');
+
+    printerName = printer.clientName;
+  }
+
+  var client = wsSendClient(printerName, msg);
+
+  if(!client) return res.send('');
+
+  JOBS[msg.msgid] = { ws:client.ws, res:res, printerName:client.clientName, timeStamp:+new Date(), data:msg};
+
+  return printerName;
+
+}
+
+
+function wsBroadcast(data) {
+  wss.clients.forEach(function each(client) {
+    try{
+      client.send( JSON.stringify(data)  );
+    }catch(e) { console.log('err send ws', data) }
+  });
+};
 
 function getWsData(msgid){
   if(!msgid || !WSMSG.msgid) return;
@@ -140,7 +279,11 @@ function sendWsMsg(msgid, resData) {
 
   //the sendback should be JSON stringify, else throw TypeError: Invalid non-string/buffer chunk
   var ret = { msgid:msgid, result: resData };
-  ws.send( JSON.stringify(ret)  );
+  try{
+	  ws.send( JSON.stringify(ret)  );
+	}catch(e){
+
+	}
 }
 
 /**** Client Side example :
@@ -192,25 +335,63 @@ function wsend(data, that, callback){
 
 var app = express();
 
-app.use(bodyParser.urlencoded({limit: '2mb', extended: true })); // for parsing application/x-www-form-urlencoded
-app.use(bodyParser.json({limit: '2mb'}));
-
-app.use(multer()); // for parsing multipart/form-data
-
-var DOWNLOAD_DIR = './downloads/';
-
-
 var allowCrossDomain = function(req, res, next) {
     res.header('Access-Control-Allow-Origin', '*');
     res.header('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE');
-    res.header('Access-Control-Allow-Headers', '*');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Content-Range, Content-Disposition, Content-Description, X-Requested-With,X-File-Type,Origin,Accept,*');
+    res.header('Access-Control-Allow-Credentials', 'true');
+
     next();
 }
 app.use(allowCrossDomain);
 
+app.set('views', path.join(__dirname, 'client'));
+app.engine('hbs', handlebars({
+  extname: '.hbs'
+}));
+app.set('view engine', 'hbs');
+
+
+app.use(cookieParser(
+	"theunsecuritykey837",
+	{
+		path:'/',
+		expires:moment().add(1, 'days')
+	}
+));
+app.use(session({
+  secret: 'theunsecuritykey837',
+  resave: false,
+  saveUninitialized: true,
+  cookie: { path: '/', secure: false, maxAge: 600 }
+}));
+
+app.use(bodyParser.urlencoded({limit: '2mb', extended: true })); // for parsing application/x-www-form-urlencoded
+app.use(bodyParser.json({limit: '2mb'}));
+app.use(flash());
+
+
+//app.use(multer()); // for parsing multipart/form-data
+
+var DOWNLOAD_DIR = './downloads/';
+
+
+
+
+app.get("/app.js", function (req, res) {
+	res.end();
+});
+
+
+app.get("/main.html", function (req, res) {
+  res.render('main',{
+    abc:1
+  });
+});
+
 app.post("/pdfCanvasDataLatex", function (req, res) {
   res.send("You sent ok" );
-  //broadcast(req.body);
+  //wsBroadcast(req.body);
   var data = req.body;
   var src = data.src.replace(/^data:image\/png+;base64,/, "").replace(/ /g, '+');
 
@@ -236,14 +417,21 @@ app.post("/pdfCanvasDataLatex", function (req, res) {
 
 
 
+app.post("/getUpToken", function (req, res) {
+	res.send( qiniu_getUpToken() );
+});
+
 app.post("/getFinger", function (req, res) {
   var msgid = req.body.msgid;
   var reqData = getWsData(msgid);
   if(!reqData) return res.send('');
   var finger = reqData.finger;
+  var condition = {finger:finger, role:'finger', status:{$ne:-1}, date:{$gt: new Date(moment().subtract(1, 'days')) } };
 
-  col.findOne({finger:finger, role:'finger'}, function(err, item){
-    if(!item || !item.userid){
+  res.cookie('finger', finger);
+
+  col.findOne( condition , function(err, item){
+    if(!item || !item.userid) {
 
       console.log('not found',msgid, finger);
 
@@ -252,24 +440,81 @@ app.post("/getFinger", function (req, res) {
       dUri = new Datauri();
       encoder.on('end', function(png_data){
           var udata = dUri.format('.png', png_data);
-          res.send( udata.content );
+          res.send( { userid:'', qrcode: udata.content } );
       });
 
       encoder.encode(qrStr, null, {dot_size:5, margin:4} );
 
+    } else {
+    	res.send( item );
     }
 
   } );
 });
 
 
-app.get("/putFingerInfo", function (req, res) {
-  var code = req.query.code;
-  var msgid = req.query.msgid;
+app.post("/exitApp", function (req, res) {
+  if(!req.cookies.finger) return;
+	console.log('logout', req.cookies.finger);
+  col.updateMany( { finger:req.cookies.finger, role:'finger' }, { $set:{status:-1} } );
+  req.cookies.finger = null;
+	req.cookies.userid = null;
+	res.clearCookie('finger');
+	res.clearCookie('userid');
+	res.send('ok');
+});
+
+app.post("/getLoginUserInfo", function (req, res) {
+
+	var finger = req.cookies.finger;
+  console.log('login', finger);
+  if(!finger) return res.send('');
+
+  col.findOne( { finger:finger, role:'finger', status:{$ne:-1} }, { sort:{date:-1} } , function(err, item){
+
+    if(!item || !item.userid) {
+	     return res.send('');
+     }else{
+        res.cookie('userid', item.userid);
+    	 getUserInfo(item.userid, res);
+       //col.updateOne({ msgid:msgid, role:'finger' }, { $set:{msgid:null} } );
+     }
+
+  });
+});
+
+app.post("/confirmFingerInfo", function (req, res) {
+  	var data = req.body;
+  	var msgid = data.msgid;
+
+  	// the DATA: data format:
+  	// {"UserId":"yangjiming","DeviceId":"d2d4b44c51f855c4e96a9ab0f169a2e5","finger":"727b08525269ddd8fee24a1eac276a76","msgid":"1441194684860.234"}
+
+
+	col.insertOne(
+		{ finger:data.finger, role:'finger', userid:data.UserId, deviceID: data.DeviceId, date:new Date(), msgid:msgid },
+		{w:1},
+		function(err, result) {
+
+			sendWsMsg( msgid, JSON.stringify(data) );
+			getUserInfo(data.UserId, res);
+
+		}
+	);
+
+
+});
+
+
+
+app.post("/putFingerInfo", function (req, res) {
+  var code = req.body.code;
+  var msgid = req.body.msgid;
   var reqData = getWsData(msgid);
   if(!code || !reqData) return res.send('');
 
   var finger = reqData.finger;
+  console.log(finger, msgid, code);
 
   var tryCount = 0;
   function doit(){
@@ -284,11 +529,14 @@ app.get("/putFingerInfo", function (req, res) {
             return doit();
           }
           console.log("wx client auth: ", finger, data.toString() );
-          var ret = JSON.parse( data.toString() );
+          try{
+            var ret = JSON.parse( data.toString() );
+          }catch(e){ return res.send(''); }
           ret.finger = finger;
           //ret.state = state;
-          res.send( JSON.stringify(ret) );
-          sendWsMsg( msgid, JSON.stringify(ret) );
+          ret.msgid = msgid;
+          res.send( ret );
+
         });
     });
 
@@ -319,7 +567,9 @@ app.get("/getUserID", function (req, res) {
             return doit();
           }
           console.log("new wx client: ", data.toString() );
+          try{
           var ret = JSON.parse( data.toString() );
+          }catch(e){ return res.send(''); }
           //ret.state = state;
           res.send( JSON.stringify(ret) );
         });
@@ -345,6 +595,260 @@ app.post("/getJSTicket", function (req, res) {
 
 });
 
+
+function imageToPDF (person, fileName, res, oldData, folder ){
+	var ext = path.extname(fileName);
+	var baseName = path.basename(fileName, ext);
+  var cmd = ' rm -f '+IMAGE_UPFOLDER+'/*.pdf; cd '+IMAGE_UPFOLDER+'; /bin/cp -f ../make.tex '+ baseName +'.tex; xelatex "\\def\\IMG{'+ baseName +'} \\input{'+ baseName +'.tex}"';
+  exec(cmd, function(err,stdout,stderr){
+    //console.log(stdout);
+    console.log('pdf file info: ' + baseName,  err, stderr);
+    if (err||stderr) return res.send( '' );
+
+    exec('cd '+IMAGE_UPFOLDER+'; rm -f '+baseName+'.tex *.log *.aux; ');
+
+    qiniu_uploadFile(IMAGE_UPFOLDER+ baseName+ '.pdf', function(ret){
+
+
+      if(ret.error) return res.send('');
+
+      if(oldData){
+
+        ret.person = oldData.person;
+        ret.client = oldData.client;
+        ret.title = oldData.title+'.pdf';
+        ret.path = oldData.path;
+        ret.srcFile = oldData.key;
+        if(oldData.shareID){
+        	ret.shareID = oldData.shareID;
+	        ret.role = 'addToShare';
+        } else {
+        	ret.role = 'upfile';
+        }
+        if(oldData.order) ret.order = oldData.order;
+	      console.log(ret);
+
+	      upfileFunc(ret, function(ret2){
+	        res.send(ret2);
+	        wsBroadcast(ret2);
+	      });
+
+
+      } else {
+
+      	ret.role = 'upfile';
+        ret.person = person;
+        ret.client = '';
+        ret.title = '图片上传-'+baseName+'.pdf';
+        ret.path = folder || '/';
+        ret.srcFile = fileName;
+
+        console.log('upload wx image:', fileName);
+	    qiniu_uploadFile(fileName, function(srcRet) {
+
+	    	srcRet.role = 'upfile';
+	        srcRet.person = person;
+	        srcRet.client = '';
+	        srcRet.title = fileName.split('/').pop();
+	        srcRet.path = folder || '/';
+
+		    upfileFunc(srcRet, function(srcRet2){
+		      upfileFunc(ret, function(ret2){
+		        res.send(ret2);
+		        wsBroadcast(ret2);
+		      });
+		    });
+		 });
+
+      }
+
+
+
+    } );
+  });
+}
+
+app.post("/generatePDFAtPrinter", function (req, res) {
+
+  var CONVERT_TIMEOUT = 2*60*1000 ;
+  var data = req.body;
+  data.task = 'generatePDF';
+  data.msgid = +new Date()+Math.random();
+  wsSendPrinter(data, null, res);
+  // will wait for job done WS Message from printer client app. check ws message: type=printerMsg
+
+  setTimeout(function printTimeout () {
+    if(res.finished) return;
+    var job = JOBS[data.msgid];
+    if(!job ) return res.send('');
+    console.log('job timeout:' , job.printerName, job.data.key);
+    return res.send('');
+  }, CONVERT_TIMEOUT );
+
+  return;
+
+  var count =0;
+  var inter1=setInterval(function  () {
+    if( count++ > 120 ){
+      clearInterval(inter1);
+      res.send('');
+    }
+    if( JOBS[data.msgid].done ){
+      clearInterval(inter1);
+      res.send(data);
+    }
+  }, 1000);
+
+
+});
+
+app.post("/printPDF", function (req, res) {
+	// req data: {server, printer, fileKey, shareID, person }
+  var data = req.body;
+  data.task = 'printPDF';
+  data.msgid = +new Date()+Math.random();
+  wsSendPrinter(data, data.server, res);
+
+});
+
+
+app.post("/uploadPCImage", function (req, res) {
+  var data = req.body.data;
+  var filename = req.body.filename;
+  var person = req.body.person;
+  var shareID = req.body.shareID;
+
+  var MAX_WIDTH = 2000;
+  var MAX_HEIGHT = 2000;
+  // we convert from QINIU cloud
+  if(data) {
+
+    if(data.shareID) data.shareID = safeEval( data.shareID );
+    filename = data.key;
+     var ext = filename.split(/\./).pop();
+
+    var baseName = moment().format('YYYYMMDDHHmmss') ;
+    var destPath = IMAGE_UPFOLDER+ baseName + '.'+ ext;
+    var UPFOLDER = IMAGE_UPFOLDER+ baseName+'/';
+
+    var wget = 'mkdir '+ UPFOLDER +'; wget -P ' + UPFOLDER + ' -N "' + FILE_HOST+filename +'"';
+    var child = exec(wget, function(err, stdout, stderr) {
+      console.log( err, stdout, stderr );
+      if(err) return res.send('');
+
+      filename = filename.split(/\//).pop();
+
+      exec( util.format('identify "%s"', UPFOLDER+ filename ), function(err, stdout, stderr) {
+      	console.log(err, stdout, stderr);
+      	if(err) return res.send('');
+
+      	var fileds = stdout.toString().split(/\s+/);
+      	var dim = fileds[2].split('x').map( function(v){ return parseInt(v, 10) } );
+      	console.log('dimension', filename, dim );
+
+      	var scale = '';
+      	var r = dim[0]/dim[1];
+      	if( r>=1 && dim[0]>MAX_WIDTH ) scale = ' -resize '+ MAX_WIDTH;
+      	if( r<1 && dim[1]>MAX_HEIGHT ) scale = ' -resize '+ MAX_HEIGHT/dim[1]*100 + '%';
+
+      	var cmd =  util.format( 'convert "%s" -quality 85 -density 72 %s "%s"', UPFOLDER+ filename, scale, destPath);
+      	console.log(cmd);
+
+	     exec(cmd, function(err, stdout, stderr) {
+	      	console.log(err,stdout,stderr);
+	      	if(err) return res.send('');
+
+	        imageToPDF(person, destPath, res, data);
+
+	      });
+
+      });
+
+
+
+    });
+
+  } else{
+    // we convert from our server uploaded already from client
+
+
+      var ext = filename.split(/\./).pop();
+
+     var baseName = moment().format('YYYYMMDDHHmmss') ;
+     var destPath = IMAGE_UPFOLDER+ baseName + '.'+ ext;
+
+     exec( util.format( 'convert "%s" -density 72 "%s"', IMAGE_UPFOLDER+ filename, destPath), function(err, stdout, stderr) {
+     	if(err) return res.send('');
+
+       imageToPDF(person, destPath, res);
+
+     });
+
+  }
+
+
+});
+
+app.get("/uploadWXImage", function (req, res) {
+  var mediaID = req.query.mediaID;
+  var person = req.query.person;
+  var path = req.query.path;
+  var shareID = req.query.shareID;
+    console.log(path);
+
+  api.getMedia(mediaID, function(err, buffer, httpRes){
+    if(err) {console.log(err); return res.send('');}
+
+    var filename = httpRes.headers['content-disposition'].match(/filename="(.*)"/i).pop();
+    var ext = filename.split(/\./).pop();
+
+    var baseName = moment().format('YYYYMMDDHHmmss') ;
+    var fileName = IMAGE_UPFOLDER+ baseName + '.'+ ext;
+
+    fs.writeFile(fileName, buffer, function(err){
+      console.log(err, 'image file written', fileName);
+      if (err) return res.send( '' );
+      // imageToPDF(person, fileName, res, null, path);
+
+
+      qiniu_uploadFile(fileName, function(srcRet) {
+
+          srcRet.role = 'upfile';
+          srcRet.person = person;
+          srcRet.client = '';
+          srcRet.title = fileName.split('/').pop();
+          srcRet.path = path || '/';
+          if(shareID){
+            srcRet.shareID = shareID;
+            srcRet.role = 'share';
+          }
+
+        upfileFunc(srcRet, function(srcRet2){
+            res.send(srcRet2);
+            wsBroadcast(srcRet2);
+        });
+      });
+
+    });
+
+
+    return;
+    fs.open(path, 'w', function(err, fd) {
+        if (err) {
+            throw 'error opening file: ' + err;
+        }
+
+        fs.write(fd, buffer, 0, buffer.length, null, function(err) {
+            if (err) throw 'error writing file: ' + err;
+            fs.close(fd, function() {
+                console.log('file written');
+                res.send('file:'+path);
+            })
+        });
+    });
+
+  });
+});
 
 app.post("/getJSConfig", function (req, res) {
 
@@ -385,36 +889,121 @@ app.post("/getJSConfig", function (req, res) {
 });
 
 
-function upfileFunc(data, callback) {
+function upfileFunc (data, callback) {
   var person = data.person;
-  var savePath = data.savePath || data.path || '/';   //first upload to root path
+  var savePath = data.path || data.savePath || '/';   //first upload to root path
   var fname = data.fname;
   var maxOrder = 0;
 
-  console.log(data);
+  if( data.shareID ) {
 
-  col.find( { person: person, role:'upfile', status:{$ne:-1} } , {limit:2000} ).sort({order:-1}).limit(1).nextObject(function(err, item) {
-    if(err) {
-      return res.send('error');
-    }
-    maxOrder = item? item.order+1 : 1;
-    console.log( 'maxOrder:', maxOrder );
+      data.shareID = safeEval( data.shareID );
+      data.isInMsg = safeEval( data.isInMsg );
 
-    var newData = { person: person, role:'upfile', date: new Date(), client:data.client, title:data.title, path:savePath, key:data.key, fname:fname, hash:data.hash, type:data.type, fsize:data.fsize, imageWidth:data.imageWidth, imageHeight:data.imageHeight, order:maxOrder };
+      var newData = _.extend( data, { person: person, date: new Date(), path:savePath } );
 
-    col.update({ hash:data.hash }, newData , {upsert:true, w: 1}, function(err, result) {
-        console.log('upfile: ', newData.hash, newData.key, result.result.nModified);
-        callback( newData );
-     });
+      if(data.isInMsg){
+      	newData.path = '/消息附件/';
+      }
 
-  });
+      col.update({ role:'share', shareID:data.shareID }, { $addToSet:{ files: newData } } , {upsert:true, w: 1}, function(err, result) {
+          if(err) callback('');
+          console.log('up shared file: ', { role:'share', shareID:data.shareID, 'files.key': data.key }, data.shareID, data.key, err);
+          newData.role = 'share';
+          callback( newData );
+       });
+
+  } else {
+
+    col.find( { person: person, role:'upfile', status:{$ne:-1} } , {limit:2000} ).sort({order:-1}).limit(1).nextObject(function(err, item) {
+      if(err) {
+        return res.send('error');
+      }
+      maxOrder = item? item.order+1 : 1;
+      console.log( 'maxOrder:', maxOrder );
+
+      var newData = _.extend( data, { person: person, role:'upfile', date: new Date(), path:savePath, order:maxOrder } );
+
+      col.update({ hash:data.hash }, newData , {upsert:true, w: 1}, function(err, result) {
+          console.log('upfile: ', newData.hash, newData.key, result.result.nModified);
+          callback( newData );
+       });
+
+    });
+
+  }
+
+
 }
 
 app.post("/upfile", function (req, res) {
+  var data = req.body;
 
-	upfileFunc(req.body, function(ret){
-		res.send( JSON.stringify(ret) );
-	});
+  function upFun (ret) {
+    res.send( JSON.stringify(ret) );
+    wsBroadcast(ret);
+
+    // Send WX Message when it's upload images & sound files to share Folder
+
+
+    if(! ret.isInMsg) return;
+
+    var shareID = ret.shareID;
+
+    col.findOne(
+      {role:'share', shareID:shareID, 'files.key': ret.key }, { fields: {'files': { $elemMatch:{ files: { key: ret.key } } }, toPerson:1, fromPerson:1, msg:1  }   },  function(err, data){
+
+
+        //get segmented path, Target Path segment and A link
+       var overAllPath = util.format('<a href="%s#path=%s&shareID=%d&openMessage=1">%s</a>', TREE_URL, ret.key, shareID, ret.shareName ) ;
+
+
+
+        var msg = {
+         "touser": data.toPerson.concat(data.fromPerson).map(function(v){return v.userid}).join('|'),
+         "touserName": data.toPerson.concat(data.fromPerson).map(function(v){return v.name}).join('|'),
+         "msgtype": "news",
+         "news": {
+           "articles":[
+           {
+            "title": util.format('%s 在%s 上传了图片',
+              data.fromPerson.shift().name,
+              ret.shareName  // if we need segmented path:   pathName.join('-'),
+            ),
+            "description": "点击查看消息记录",
+            "url": util.format('%s#path=%s&shareID=%d&openMessage=1', TREE_URL, ret.key, shareID ),
+           "picurl": FILE_HOST+ret.key
+         }
+         ] },
+         "safe":"0",
+          date : new Date(),
+          role : 'shareMsg',
+          shareID:shareID
+        };
+
+        sendWXMessage(msg);
+
+    });
+  }
+
+  _.each(data, function(v,i){
+    data[i] = safeEval(v);
+  });
+
+  if(data.person){
+    upfileFunc(data, upFun);
+  } else if(data.client) {
+
+    var client = data.client.replace(/\\/g,'').toLowerCase();
+
+    col.findOne({role:'stuff', 'stuffList.client': client }, {fields: {'stuffList': {$elemMatch: { client: client } }  } }, function(err, ret){
+      if(err|| !ret) return res.send('');
+      var stuff = ret.stuffList.shift();
+      data.person = stuff.userid;
+      upfileFunc(data, upFun);
+    }  );
+  }
+
 
 } );
 
@@ -429,7 +1018,7 @@ app.post("/rotateFile", function (req, res) {
 	}
 
     // extract the file name
-    var file_name = url.parse(file_url).pathname.split('/').pop();
+    var file_name = file.replace(FILE_HOST, '');
     //var newName = file_name.replace(/(\(.*\))?\.pdf$/, '('+ 90 +').pdf' );
     var oldRotate = file_name.match(/(\(.*\))?\.pdf$/)[1];
     oldRotate = oldRotate ? parseInt(oldRotate.replace('(','')) : 0;
@@ -449,7 +1038,7 @@ app.post("/rotateFile", function (req, res) {
 	    			console.log('exist rotate,', newName);
 	    			return res.send( JSON.stringify(newFile) );
 	    		} else {
-					var child = exec('rm -rf '+DOWNLOAD_DIR+'; mkdir -p ' + DOWNLOAD_DIR, function(err, stdout, stderr) {
+					var child = exec('rm -f '+DOWNLOAD_DIR+'; mkdir -p ' + DOWNLOAD_DIR, function(err, stdout, stderr) {
 					    if (err) throw err;
 					    else download_file_wget(file_url);
 					});
@@ -467,7 +1056,7 @@ app.post("/rotateFile", function (req, res) {
 	    function upToQiniu(){
 
 		    // compose the wget command
-		    var wget = 'wget -P ' + DOWNLOAD_DIR + ' "' + file_url+'"';
+		    var wget = 'wget -P ' + DOWNLOAD_DIR + ' -N "' + file_url+'"';
 		    // excute wget using child_process' exec function
 
 		    var child = exec(wget, function(err, stdout, stderr) {
@@ -488,11 +1077,11 @@ app.post("/rotateFile", function (req, res) {
 			        		ret.path = oldFile.path;
 			        	} else if ( ret.error.match(/file exists/) ) {
 			        		// file exists or other error
-							delete oldFile._id;
-							oldFile.date = new Date();
-							oldFile.key = newName;
-							oldFile.fname = newName;
-							oldFile.title += '('+dirName+')';
+    							delete oldFile._id;
+    							oldFile.date = new Date();
+    							oldFile.key = newName;
+    							oldFile.fname = newName;
+    							oldFile.title += '('+dirName+')';
 				        	oldFile.hash = ret.hash? ret.hash : +new Date()+Math.random();
 				        	ret = oldFile;
 				        	console.log('ret:', ret)
@@ -501,6 +1090,7 @@ app.post("/rotateFile", function (req, res) {
 
 	        			upfileFunc(ret, function(ret2){
 	        				res.send( JSON.stringify(ret2)  );
+	        				wsBroadcast(ret);
 	        			});
 
 		        		return;
@@ -521,30 +1111,238 @@ app.post("/getUserInfo", function (req, res) {
 
   var data = req.body;
   var userid = data.userid;
+  getUserInfo(userid, res);
+});
 
-  col.findOne( { company:CompanyName, 'stuffList.userid': userid, 'stuffList.status': 1 } , {limit:1, fields:{'stuffList.$':1} }, function(err, item){
+function getUserInfo (userid, res) {
+	col.findOne( { company:CompanyName, role:"companyTree", 'stuffList.userid': userid, 'stuffList.status': 1 } , {limit:1, fields:{'stuffList.$':1} }, function(err, item){
     if(err ||  !item.stuffList || !item.stuffList.length) {
       return res.send('');
     }
       res.send( item.stuffList[0] );
-  });
+  	});
+}
+
+
+
+app.post("/exitMember", function (req, res) {
+    var data = req.body;
+    var shareID = safeEval(data.shareID) ;
+    var shareName = data.shareName ;
+    var person = data.person ;
+    var personName = data.personName ;
+
+
+    col.findOneAndUpdate({role:'share', shareID:shareID }, { $pull: { 'toPerson': { userid: person }  }  }, {returnOriginal:false},
+        function(err, result) {
+
+          if(err) return res.send('');
+          else res.send(result.value.toPerson);
+
+          var colShare = result.value;
+
+
+            var overAllPath = util.format('%s#path=%s&shareID=%d', TREE_URL, encodeURIComponent(shareName), shareID ) ;
+            var wxmsg = {
+             "touser": colShare.toPerson.concat(colShare.fromPerson).map(function(v){return v.userid}).join('|'),
+             "touserName": colShare.toPerson.concat(colShare.fromPerson).map(function(v){return v.name}).join('|'),
+             "msgtype": "text",
+             "text": {
+               "content":
+               util.format('退订成员：%s <a href="%s">点此查看</a>',
+                  shareName,
+                  personName,
+                  overAllPath  // if we need segmented path:   pathName.join('-'),
+                )
+             },
+             "safe":"0",
+              date : new Date(),
+              role : 'shareMsg',
+              shareID:shareID
+            };
+
+            sendWXMessage(wxmsg);
+
+
+
+    });
+
+
+});
+
+app.post("/addMember", function (req, res) {
+
+    var data = req.body;
+    var shareID = safeEval(data.shareID) ;
+    var shareName = data.shareName ;
+    var stuffs = data.stuffs ;
+    var personName = data.personName ;
+
+    col.findOneAndUpdate({role:'share', shareID:shareID }, { $addToSet: { 'toPerson': { $each: stuffs }  }  }, {returnOriginal:false},
+        function(err, result) {
+
+          if(err) return res.send('');
+          else res.send(result.value.toPerson);
+
+          var colShare = result.value;
+
+          var existMember = _.intersection(colShare.toPerson, stuffs);
+          var newMember = _.difference(stuffs, existMember);
+
+          if(newMember.length) {
+
+            var overAllPath = util.format('%s#path=%s&shareID=%d', TREE_URL, encodeURIComponent(shareName), shareID ) ;
+            var wxmsg = {
+             "touser": colShare.toPerson.concat(colShare.fromPerson).map(function(v){return v.userid}).join('|'),
+             "touserName": colShare.toPerson.concat(colShare.fromPerson).map(function(v){return v.name}).join('|'),
+             "msgtype": "text",
+             "text": {
+               "content":
+               util.format('%s加入了新成员：%s，操作者：%s <a href="%s">点此查看</a>',
+                  shareName,
+                  newMember.map(function(v){return v.name}).join(',') ,
+                  personName,
+                  overAllPath  // if we need segmented path:   pathName.join('-'),
+                )
+             },
+             "safe":"0",
+              date : new Date(),
+              role : 'shareMsg',
+              shareID:shareID
+            };
+
+            sendWXMessage(wxmsg);
+
+          }
+
+
+    });
+});
+
+
+app.post("/markFinish", function (req, res) {
+
+    var data = req.body;
+    var personName = data.personName;
+    var shareID = safeEval(data.shareID) ;
+    var path = safeEval(data.path) ;
+    var isFinish = safeEval(data.isFinish) ;
+
+    col.findOneAndUpdate({role:'share', shareID:shareID }, { $set: { 'isFinish':!!isFinish }  },
+        function(err, result){
+
+          var colShare = result.value;
+
+          res.send(result);
+          wsBroadcast( {role:'share', isFinish:isFinish, data:colShare } );
+
+          var overAllPath = util.format('%s#path=%s&shareID=%d', TREE_URL, encodeURIComponent(path), shareID ) ;
+
+          var wxmsg = {
+           "touser": colShare.toPerson.concat(colShare.fromPerson).map(function(v){return v.userid}).join('|'),
+           "touserName": colShare.toPerson.concat(colShare.fromPerson).map(function(v){return v.name}).join('|'),
+           "msgtype": "text",
+           "text": {
+             "content":
+             util.format('%s已由%s标记为：%s<a href="%s">点此查看</a>',
+                path.replace(/^\/|\/$/g,''),
+                personName,
+                isFinish?'已完成' : '未完成',
+                overAllPath  // if we need segmented path:   pathName.join('-'),
+              )
+           },
+           "safe":"0",
+            date : new Date(),
+            role : 'shareMsg',
+            shareID:shareID
+          };
+
+          sendWXMessage(wxmsg);
+
+    });
 
 });
 
 
 
+app.post("/signInWeiXin", function (req, res) {
+	var data = req.body;
+	var url = data.url;
+	var shareID = safeEval(data.shareID);
+	var fileKey = data.fileKey;
+	var personName = data.person;
+
+	console.log( data );
+
+    col.findOne({role:'share', shareID:shareID, 'files.key':fileKey },
+                        { fields:{ msg:1, fromPerson:1, toPerson:1, flowName:1, isSign:1  } },
+                        function(err, result){
+                        	console.log(err, result);
+      		if(err || !result) return res.send('');
+
+            var colShare = result;
+            var flowName = colShare.flowName;
+            var msg = colShare.msg;
+            var isSign = colShare.isSign;
+            var content =
+            colShare.isSign?
+            util.format('流程%d %s (%s-%s)需要您签署，<a href="%s">点此签署</a>',
+                    shareID,
+                    msg,
+                    colShare.flowName,
+                    colShare.fromPerson[0].name,
+                    url  // if we need segmented path:   pathName.join('-'),
+                  ) :
+            util.format('共享%d %s (%s)需要您签署，<a href="%s">点此签署</a>',
+                    shareID,
+                    msg,
+                    colShare.fromPerson[0].name,
+                    url  // if we need segmented path:   pathName.join('-'),
+                  )
+
+
+             var wxmsg = {
+               "touser": personName,
+               "touserName": personName,
+               "msgtype": "text",
+               "text": {
+                 "content":content
+               },
+               "safe":"0",
+                date : new Date(),
+                role : 'shareMsg',
+                shareID:shareID,
+                WXOnly: true
+              };
+
+              console.log(wxmsg);
+
+              sendWXMessage(wxmsg);
+
+              res.send(wxmsg);
+
+    } );
+
+});
 
 app.post("/applyTemplate", function (req, res) {
 
 	var data = req.body;
-	var info = data.info;
+	var path = data.path;
   	var userid = data.userid;
+  var info = data.info;
+
+  	try{
+	  	info = JSON.parse(info);
+	} catch(e){ console.log('error parse drawData',path,userid); return res.send('') }
+
   	var key = info.key;
   	var newKey = moment().format('YYYYMMDDHHmmss') + '-'+ key.split('-').pop();
 
+
   	var client = new qiniu.rs.Client();
 	client.copy(QiniuBucket, key, QiniuBucket, newKey, function(err, ret) {
-	  if (err) return res.send('error');
+	  if (err) return res.send('');
 
 
     col.findOne( { person: userid, status:{$ne:-1} } , {limit:1, sort:{order:-1}  }, function(err, item) {
@@ -556,13 +1354,14 @@ app.post("/applyTemplate", function (req, res) {
 			person:userid,
 			client:'',
 			title: info.title+'_'+moment().format('YYYYMMDD'),
-			path: '/',
+			path: path,
 			date: new Date(),
 			key: newKey,
 			fname:newKey,
 			fsize:info.fsize,
 			type:info.type,
 			drawData:info.drawData,
+			signIDS:info.signIDS,
 			hash: +new Date()+Math.random()+'',
 			order:maxOrder
 		};
@@ -581,6 +1380,8 @@ app.post("/applyTemplate", function (req, res) {
 });
 
 
+
+
 app.post("/getTemplateFiles", function (req, res) {
 
   col.find( { role:'upfile', isTemplate:true } , {limit:2000} ).sort({title:1,date:-1}).toArray(function(err, docs){
@@ -597,7 +1398,7 @@ app.post("/getTemplateFiles", function (req, res) {
 app.post("/setFileTemplate", function (req, res) {
   var data = req.body;
   var hashA = data.hashA;
-  var isSet = eval(data.isSet);
+  var isSet = safeEval(data.isSet);
   col.update({role:'upfile', hash:{$in:hashA} }, { $set:{ isTemplate:isSet } }, {multi:1, w:1}, function(err, result){
   	return res.send(err);
   } );
@@ -606,6 +1407,7 @@ app.post("/setFileTemplate", function (req, res) {
 app.post("/getfile", function (req, res) {
   var data = req.body;
   var person = data.person;
+
 
   var timeout = false;
   var connInter = setTimeout(function(){
@@ -634,20 +1436,98 @@ function breakIntoPath(path){
   return ret.slice(1);
 }
 
+app.get("/downloadFile2/:name", function (req, res) {
+
+	var file = FILE_HOST+req.query.key;
+	var realname = req.params.name;
+	var shareID = req.query.shareID||'';
+	var userid = req.query.userid||'';
+	var person = req.query.person||'';
+	var rename = req.query.rename||realname;
+	if(!realname) return res.end();
+
+	var filename = path.basename(file);
+  	var mimetype = mime.lookup(file);
+
+  	console.log(filename, rename, req.query.key);
+
+  	genPDF(req.query.key, shareID, realname, function  (err) {
+
+  		if(err) {
+  			res.send('');
+  			wsSendClient(person, {role:'errMsg', message:err } );
+  			return;
+  		}
+
+  		console.log('gen pdf ok, now download', IMAGE_UPFOLDER+realname, IMAGE_UPFOLDER+rename);
+
+      if(realname == rename){
+
+        res.download(IMAGE_UPFOLDER+rename);
+
+      } else {
+
+        exec('rm -f "'+ IMAGE_UPFOLDER+rename +'"; mv '+IMAGE_UPFOLDER+realname+' "'+IMAGE_UPFOLDER+rename+'"', function(){
+          res.download(IMAGE_UPFOLDER+rename);
+        });
+
+      }
+
+  		return;
+
+  		res.setHeader('Content-disposition', 'attachment; filename=' + rename);
+		//res.setHeader('Content-type', mimetype);
+
+		var filestream = fs.createReadStream( IMAGE_UPFOLDER+realname );
+		filestream.pipe(res);
+  	});
+});
+
+
+app.get("/downloadFile/:name", function (req, res) {
+
+	var key = req.query.key;
+	var file = FILE_HOST+key;
+	var rename = req.query.rename;
+	console.log(rename);
+
+	exec( 'wget -P '+ DOWNLOAD_DIR + ' -N '+ file, function(){
+		exec('rm -f "'+DOWNLOAD_DIR+rename+'"; mv '+DOWNLOAD_DIR+key+' "'+DOWNLOAD_DIR+rename+'"', function(){
+			res.download( DOWNLOAD_DIR+rename );
+		});
+	} );
+
+	return;
+
+	// below is not work for rename download file!!!!!
+	var filename = path.basename(file);
+  	var mimetype = mime.lookup(file);
+
+	res.setHeader('Content-disposition', 'attachment; filename=' + filename);
+	res.setHeader('Content-type', 'application/pdf');
+
+	var filestream = fs.createReadStream(file);
+	filestream.pipe(res);
+});
+
 app.post("/updatefile", function (req, res) {
   var data = req.body.data;
   var type = req.body.type;
   var hashArr = data.map(function  (v) {
     return v.hash;
   });
+
+  var isErr = false;
   data.forEach(function  (v,i) {
     var newV = _.extend(v, {date:new Date() } );
     newV.order = parseFloat(newV.order);
     newV.role = 'upfile';
     console.log('updatefile:', v.hash,  newV.order);
+    delete newV._id;
     col.update({hash: v.hash}, newV, {upsert:true, w:1}, function  (err, result) {
       if(err) {
-        return res.send('error');
+      	console.log(err);
+        return isErr=true;
       }
       var pathPart = breakIntoPath(v.path);
       if(err==null && pathPart.length && hashArr.length ) {
@@ -656,18 +1536,41 @@ app.post("/updatefile", function (req, res) {
     } );
   });
 
-  res.send("update file ok");
+  // can also check res.finished is true
+  res.send(isErr ? "error update file" : "update file ok");
 });
 
 app.post("/removeFile", function (req, res) {
   var hash = req.body.hash;
-  col.update({hash: hash}, {$set:{status:-1}}, {multi:true});
+  var key = req.body.key;
+  var shareID = safeEval(req.body.shareID);
+
+  if(shareID && key ){
+	  col.update({role:'share', 'files.key': key, shareID:shareID }, { $pull:{ 'files': {key:key } } }, {multi:false});
+  }else{
+	  col.update({ role:'upfile', hash: hash}, {$set:{status:-1}}, {multi:true});
+  }
+
   res.send("delete file ok");
 });
 
+
+var escapeRe = function(str) {
+    var re = (str+'').replace(/[.?*+^$[\]\\/(){}|-]/g, "\\$&");
+    return re;
+
+    // replace unicode Then
+    var ret = '';
+    for(var i=0;i<re.length;i++) {
+    	ret += /[\x00-\x7F]/.test(re[i])?re[i]: '\\u'+re[i].charCodeAt(0).toString(16);
+    }
+    return ret;
+};
+
 app.post("/removeFolder", function (req, res) {
   var data = req.body;
-  if(data.deleteAll) col.update({path: new RegExp('^'+ data.path) }, {$set:{status:-1}}, {multi:true});
+
+  if(data.deleteAll) col.update({path: new RegExp('^'+ escapeRe(data.path) ) }, {$set:{status:-1}}, {multi:true});
   res.send("delete folder ok");
 });
 
@@ -677,14 +1580,14 @@ app.post("/saveCanvas", function (req, res) {
   var personName = req.body.personName;
   var shareID = parseInt( req.body.shareID );
 
-  var filename = url.parse(file).pathname.split('/').pop();
+  var filename = file.replace(FILE_HOST, '');
   if(!shareID){
     col.update({role:'upfile', key:filename }, { $set: { drawData:data }  }, function(err, result){
       res.send(err);
     } );
   } else{
-    col.findOneAndUpdate({role:'share', shareID:shareID, 'files.key':filename }, { $set: { 'files.$.drawData':data }  }, 
-                        { projection:{'files':1, msg:1, fromPerson:1, toPerson:1, flowName:1, isSign:1  } }, 
+    col.findOneAndUpdate({role:'share', shareID:shareID, 'files.key':filename }, { $set: { 'files.$.drawData':data }  },
+                        { projection:{'files':1, msg:1, fromPerson:1, toPerson:1, flowName:1, isSign:1  } },
                         function(err, result){
       res.send(err);
 
@@ -695,28 +1598,28 @@ app.post("/saveCanvas", function (req, res) {
             var msg = colShare.msg;
             var isSign = colShare.isSign;
             var overAllPath = util.format('%s#file=%s&shareID=%d&isSign=%d', VIEWER_URL, FILE_HOST+ encodeURIComponent(fileKey), shareID, isSign?1:0 ) ;
-            var content = 
+            var content =
             colShare.isSign?
-            util.format('<a href="%s">流程%d %s (%s-%s)标注已由%s更新，点此查看</a>',
-                    overAllPath,  // if we need segmented path:   pathName.join('-'),
+            util.format('流程%d %s (%s-%s)标注已由%s更新，<a href="%s">点此查看</a>',
                     shareID,
                     msg,
                     colShare.flowName,
                     colShare.fromPerson[0].name,
-                    personName
+                    personName,
+                    overAllPath  // if we need segmented path:   pathName.join('-'),
                   ) :
-            util.format('<a href="%s">共享%d %s (%s)标注已由%s更新，点此查看</a>',
-                    overAllPath,  // if we need segmented path:   pathName.join('-'),
+            util.format('共享%d %s (%s)标注已由%s更新 <a href="%s">点此查看</a>',
                     shareID,
                     msg,
                     colShare.fromPerson[0].name,
-                    personName
+                    personName,
+                    overAllPath  // if we need segmented path:   pathName.join('-'),
                   )
 
 
              var wxmsg = {
-               "touser": colShare.toPerson.map(function(v){return v.userid}).join('|'),
-               "touserName": colShare.toPerson.map(function(v){return v.name}).join('|'),
+               "touser": colShare.toPerson.concat(colShare.fromPerson).map(function(v){return v.userid}).join('|'),
+               "touserName": colShare.toPerson.concat(colShare.fromPerson).map(function(v){return v.name}).join('|'),
                "msgtype": "text",
                "text": {
                  "content":content
@@ -741,7 +1644,7 @@ app.post("/saveInputData", function (req, res) {
   var file = req.body.file;
   var shareID = parseInt( req.body.shareID );
   try{
-    var filename = url.parse(file).pathname.split('/').pop();
+    var filename = file.replace(FILE_HOST, '');
   }catch(e){
     return res.send("");
   }
@@ -768,7 +1671,7 @@ app.post("/getInputData", function (req, res) {
   var file = req.body.file;
   var shareID = parseInt( req.body.shareID );
   try{
-    var filename = url.parse(file).pathname.split('/').pop();
+    var filename = file.replace(FILE_HOST, '');
   }catch(e){
     return res.send("");
   }
@@ -800,30 +1703,70 @@ app.post("/getSavedSign", function (req, res) {
   var file = req.body.file;
   var shareID = parseInt( req.body.shareID );
   try{
-    var filename = url.parse(file).pathname.split('/').pop();
+    var filename = file.replace(FILE_HOST, '');
   }catch(e){
     return res.send("");
   }
-  if(!shareID){
+  if( 0 && !shareID){
     return res.send("");
-  } else{
-    col.find({role:'sign', shareID:shareID, file:file, signData:{$ne:null} }, {sort:{signData:1}}).toArray(function(err, docs){
-      if(err){ return res.send(""); }
-      var ids = docs.map(function  (v) {
+  } else {
+    // col.find({role:'sign', shareID:shareID, file:file, signData:{$ne:null} }, {sort:{signData:1}}).toArray(function(err, docs){
+    // col.find({role:'sign', shareID:shareID, file:file }, { }).toArray(function(err, docs){
+
+    function getSignData(err, docs){
+      if(err||!docs) { return res.send(""); }
+      var ids = docs.filter(function(v){ return v.signData } ).map(function  (v) {
         return new ObjectID( v.signData );
       });
 
       col.find({_id:{$in:ids}}, {sort:{_id:1}}).toArray(function (err, items) {
+      	if(!items) return res.send('');
         docs.forEach(function  (v,i) {
           var t = items.filter(function(x){
-            return x._id.toHexString() == v.signData.toHexString()
+          	if(!v.signData) return false;
+            return x&&x._id&& v && v.signData && (x._id.toHexString() == v.signData.toString() )
           });
-          v.sign = t[0];
+          var sign = t.shift();
+          v.sign = sign;
         });
         res.send(docs);
       });
+    }
 
-    } );
+    // For role:'sign', if it's no shareID, then it's template, else it's RealSignData
+
+    if(shareID){
+
+        col.findOne( {role:'share', shareID:shareID, 'files.key':filename },  {fields: {'files.$':1} },  function(err, docs){
+        	//return console.log(err, docs);
+        	if(err ||!docs) return res.send('');
+	      if(docs.files) docs = docs.files.shift();
+        	if(!docs) return res.send('');
+
+            getSignData(err, docs.signIDS);
+          } );
+
+    } else {
+
+      col.findOne({ role:'upfile', key:filename } , {} , function(err, result) {
+
+        if(err || !result ) return res.send('');
+
+        var signIDS = result.signIDS;
+        if(!signIDS ) return res.send('');
+
+        getSignData(err, signIDS );
+
+      });
+
+
+    }
+
+
+
+
+
+
   }
 
 });
@@ -833,7 +1776,7 @@ app.post("/getCanvas", function (req, res) {
   var file = req.body.file;
   var shareID = parseInt( req.body.shareID );
   try{
-    var filename = url.parse(file).pathname.split('/').pop();
+    var filename = file.replace(FILE_HOST, '');
   }catch(e){
     return res.send("[]");
   }
@@ -860,7 +1803,7 @@ app.post("/getCanvas", function (req, res) {
 app.post("/getFlowList", function (req, res) {
 
   col.find( { role:'flow' } , {sort:{name:1}, limit:500}).toArray( function(err, docs){
-      if(err) {
+      if(err || !docs) {
         return res.send('');
       }
       res.send( docs );
@@ -871,9 +1814,10 @@ app.post("/getFlowList", function (req, res) {
 
 
 app.post("/getShareData", function (req, res) {
-  var shareID = eval(req.body.shareID);
+  var shareID = safeEval(req.body.shareID);
+  if(!shareID) return res.send('');
   col.findOne( { 'shareID': shareID, role:'share' } , {limit:500} , function(err, item){
-      if(err) {
+      if(err || !item) {
         return res.send('');
       }
       res.send( item );
@@ -887,10 +1831,10 @@ app.post("/getShareFrom", function (req, res) {
   var connInter = setTimeout(function(){
     timeout = true;
     return res.send('');
-  }, 5000);
+  }, 15000);
   col.find( { 'fromPerson.userid': person, role:'share' } , {limit:500, timeout:true} ).sort({shareID:-1}).toArray(function(err, docs){
       clearTimeout(connInter); if(timeout)return;
-      if(err) {
+      if(err || !docs) {
         return res.send('error');
       }
       var count = docs.length;
@@ -904,10 +1848,10 @@ app.post("/getShareTo", function (req, res) {
   var connInter = setTimeout(function(){
     timeout = true;
     return res.send('');
-  }, 5000);
+  }, 15000);
   col.find( { 'toPerson.userid': person, role:'share' } , {limit:500, timeout:true} ).sort({shareID:-1}).toArray(function(err, docs){
       clearTimeout(connInter); if(timeout)return;
-      if(err) {
+      if(err || !docs) {
         return res.send('error');
       }
       var count = docs.length;
@@ -922,7 +1866,7 @@ app.post("/getShareMsg", function (req, res) {
   var hash = req.body.hash;
   var keyword = req.body.keyword;
 
-  var condition = {  role:'shareMsg', msgtype:'text' };
+  var condition = {  role:'shareMsg' };
   if(shareID) condition.shareID = parseInt(shareID,10);
   if(fromPerson) condition.fromPerson = fromPerson;
 
@@ -938,8 +1882,8 @@ app.post("/getShareMsg", function (req, res) {
       if(hash) hashA = hashA.concat(hash);
       //if(hashA.length>1) condition.hash = {$in:hashA};
 
-      col.find( condition , {'text.content':1,touser:1, touserName:1} , {limit:500} ).sort({shareID:1, date:1}).toArray(function(err, docs){
-          if(err) {
+      col.find( condition , {} , {limit:500} ).sort({shareID:1, date:1}).toArray(function(err, docs){
+          if(err || !docs) {
             return res.send('error');
           }
           var count = docs.length;
@@ -949,7 +1893,7 @@ app.post("/getShareMsg", function (req, res) {
 
   if(fromPerson){
     col.find( { 'fromPerson.userid': fromPerson, role:'share' }, {shareID:1, _id:0} , {limit:500} ).sort({shareID:1}).toArray(function(err, docs){
-        if(err) {
+        if(err || !docs) {
           return res.send('error');
         }
         var count = docs.length;
@@ -963,7 +1907,7 @@ app.post("/getShareMsg", function (req, res) {
 
   if(toPerson){
     col.find( { 'toPerson.userid': toPerson, role:'share' }, {shareID:1, _id:0} , {limit:500} ).sort({shareID:1}).toArray(function(err, docs){
-        if(err) {
+        if(err || !docs) {
           return res.send('error');
         }
         var count = docs.length;
@@ -985,6 +1929,32 @@ app.post("/getShareMsg", function (req, res) {
 
 });
 
+// Save sign info into upfile, signIDS array, with no ShareID
+app.post("/drawSign", function (req, res) {
+
+  var data =  req.body.data;
+  var signPerson = data.signPerson;
+  var file = data.file.replace(FILE_HOST, '') ;
+  var page = data.page;
+  var pos = data.pos;
+  var isMobile = data.isMobile;
+
+  data.isMobile = safeEval(data.isMobile);
+  data.page = safeEval(data.page);
+  data.scale = safeEval(data.scale);
+  data.role = 'sign';
+  data.date = new Date();
+  data._id = +new Date()+Math.random().toString().slice(2,5);
+  delete data.file;
+  delete data.signPerson;
+
+  col.updateOne( { role:'upfile', key:file }, { $addToSet: { signIDS: data } },  {w:1}, function(err,result){
+    if(err || !result) return res.send('');
+    res.send(result);
+  });
+
+});
+
 app.post("/beginSign", function (req, res) {
   var data =  req.body.data;
   var signPerson = data.signPerson;
@@ -994,10 +1964,10 @@ app.post("/beginSign", function (req, res) {
   var pos = data.pos;
   var isMobile = data.isMobile;
 
-  data.isMobile = eval(data.isMobile);
-  data.shareID = eval(data.shareID);
-  data.page = eval(data.page);
-  data.scale = eval(data.scale);
+  data.isMobile = safeEval(data.isMobile);
+  data.shareID = safeEval(data.shareID);
+  data.page = safeEval(data.page);
+  data.scale = safeEval(data.scale);
   data.role = 'sign';
   data.date = new Date();
 
@@ -1010,11 +1980,48 @@ app.post("/beginSign", function (req, res) {
 
 app.post("/deleteSign", function (req, res) {
   var id =  req.body.id;
+  var person =  req.body.person;
+  var file =  req.body.file;
+
+  var key = file.replace(FILE_HOST, '');
+
   if(!id.length){
     return res.send('');
   }
-  col.deleteOne({_id:new ObjectID(id) });
+
+  // http://stackoverflow.com/questions/19435123/using-pull-in-mongodb-to-remove-a-deeply-embedded-object
+  col.updateOne({ role:'upfile', key:key, person:person }, { $pull: { 'signIDS': {_id: id } } }  );
   res.send('OK');
+});
+
+app.post("/deleteSignOnly", function (req, res) {
+  var id =  req.body.id;
+  var person =  req.body.person;
+  var file =  req.body.file;
+  var shareID =  safeEval( req.body.shareID);
+  var signIDX =  safeEval( req.body.idx);
+  if(!file || !id.length){
+    return res.send('');
+  }
+
+  var fileKey = file.replace(FILE_HOST, '');
+
+  	if(shareID){
+  		var unsetObj = {};
+  		unsetObj[ 'files.$.signIDS.'+ signIDX +'.signData' ] = '';
+  		unsetObj[ 'files.$.signIDS.'+ signIDX +'.signPerson' ] = '';
+
+		col.findOneAndUpdate( {role:'share', shareID:shareID, 'files.key':fileKey, 'files.signIDS._id': id },
+			{ $unset:unsetObj }, { projection:{ key:1, 'signIDS':1} }, function(err, result) {
+          res.send( result );
+        });
+  	} else {
+  		col.findOneAndUpdate( {role:'upfile', 'key':fileKey, 'signIDS._id': id },
+			{ $unset:{'signIDS.$.signData': '', 'signIDS.$.signPerson': '' } }, { projection:{ key:1, 'signIDS':1} }, function(err, result) {
+          res.send( result.value );
+        });
+  	}
+
 });
 
 
@@ -1025,7 +2032,7 @@ function getSubStr (str, len) {
 
 
 app.post("/finishSign", function (req, res) {
-  var shareID =  eval(req.body.shareID);
+  var shareID =  safeEval(req.body.shareID);
   var person =  req.body.person;
 
   col.findOne({shareID:shareID, role:'share'}, function(err, colShare){
@@ -1040,6 +2047,10 @@ app.post("/finishSign", function (req, res) {
     var overAllPath = util.format('%s#path=%s&shareID=%d', TREE_URL, encodeURIComponent(fileKey), shareID ) ;
 
     if(curFlowPos >= colShare.selectRange.length){
+
+    	col.update({role:'share', shareID:shareID }, { $set: { 'isFinish':true }  });
+		wsBroadcast( {role:'share', isFinish:true, data:colShare } );
+
         res.send( util.format( '流程%d %s (%s-%s)已结束，系统将通知相关人员知悉',
                     colShare.shareID,
                     msg,
@@ -1048,18 +2059,18 @@ app.post("/finishSign", function (req, res) {
 
 
               var wxmsg = {
-               "touser": colShare.toPerson.map(function(v){return v.userid}).join('|'),
-               "touserName": colShare.toPerson.map(function(v){return v.name}).join('|'),
+               "touser": colShare.toPerson.concat(colShare.fromPerson).map(function(v){return v.userid}).join('|'),
+               "touserName": colShare.toPerson.concat(colShare.fromPerson).map(function(v){return v.name}).join('|'),
                "msgtype": "text",
                "text": {
                  "content":
-                 util.format('<a href="%s">流程%d %s (%s-%s)</a>已由%s签署,此流程已结束',
-                    overAllPath,  // if we need segmented path:   pathName.join('-'),
+                 util.format('流程%d %s (%s-%s)</a>已由%s签署,此流程已结束 <a href="%s">点此预览</a>',
                     colShare.shareID,
                     msg,
                     colShare.flowName,
                     colShare.fromPerson[0].name,
-                    colShare.toPerson.pop().name
+                    colShare.toPerson.pop().name,
+                    overAllPath  // if we need segmented path:   pathName.join('-'),
                   )
                },
                "safe":"0",
@@ -1074,22 +2085,22 @@ app.post("/finishSign", function (req, res) {
       }else{
         var nextPerson = colShare.selectRange[curFlowPos];
         var toPerson = colShare.toPerson;
-        
+
         //info to all person about the status
         var wxmsg = {
-         "touser": colShare.toPerson.map(function(v){return v.userid}).join('|'),
-         "touserName": colShare.toPerson.map(function(v){return v.name}).join('|'),
+         "touser": colShare.toPerson.concat(colShare.fromPerson).map(function(v){return v.userid}).join('|'),
+         "touserName": colShare.toPerson.concat(colShare.fromPerson).map(function(v){return v.name}).join('|'),
          "msgtype": "text",
          "text": {
            "content":
-           util.format('<a href="%s">流程%d %s (%s-%s)</a>已由 %s 签署,此流程已转交给下一经办人：%s',
-              overAllPath,  // if we need segmented path:   pathName.join('-'),
+           util.format('流程%d %s (%s-%s)已由 %s 签署,此流程已转交给下一经办人：%s <a href="%s">点此查看</a>',
               colShare.shareID,
               msg,
               colShare.flowName,
               colShare.fromPerson[0].name,
               toPerson[toPerson.length-1].name,
-              nextPerson.name
+              nextPerson.name,
+              overAllPath  // if we need segmented path:   pathName.join('-'),
             )
          },
          "safe":"0",
@@ -1098,20 +2109,20 @@ app.post("/finishSign", function (req, res) {
           shareID:shareID
         };
         sendWXMessage(wxmsg);
-        
+
         //info to next Person via WX
         var wxmsg = {
          "touser": nextPerson.userid,
          "msgtype": "text",
          "text": {
            "content":
-           util.format('您有一个新流程需要签署：<a href="%s">流程%d %s (%s-%s)</a>, %s此前已完成签署。',
-              overAllPath,  // if we need segmented path:   pathName.join('-'),
+           util.format('您有一个新流程需要签署：流程%d %s (%s-%s), %s此前已完成签署。<a href="%s">点此查看</a>',
               colShare.shareID,
               msg,
               colShare.flowName,
               colShare.fromPerson[0].name,
-              toPerson.map(function(v){return v.name}).join(',')
+              toPerson.map(function(v){return v.name}).join(','),
+              overAllPath  // if we need segmented path:   pathName.join('-'),
             )
          },
          "safe":"0",
@@ -1144,22 +2155,51 @@ app.post("/finishSign", function (req, res) {
 app.post("/saveSign", function (req, res) {
   var data =  req.body.data;
   var signID =  req.body.signID;
+  var signIDX =  safeEval(req.body.signIDX);
+  var fileKey =  req.body.fileKey;
+  var shareID =  safeEval(req.body.shareID);
   var hisID =  req.body.hisID;
-  var width =  eval(req.body.width);
-  var height =  eval(req.body.height);
-  var person;
+  var width =  safeEval(req.body.width);
+  var height =  safeEval(req.body.height);
+  var person =  req.body.signPerson;
 
-
-    col.findOne({role:'sign', _id:new ObjectID(signID)}, function(err, item){
-      if(err || !item){
-        return res.send("");
-      }
-      person = item.signPerson;
 
       function insertHis(id){
-        col.update({ _id:new ObjectID(signID) }, {$set:{signData: new ObjectID(id) } }, {w:1}, function(err, result){
-          res.send( item );
-        });
+      	if(shareID){
+
+      		var key1 = 'files.$.signIDS.'+ signIDX +'.signData';
+      		var key2 = 'files.$.signIDS.'+ signIDX +'.signPerson';
+      		var setObj = {};
+      		setObj[key1] =  new ObjectID(id);
+      		setObj[key2] =  person;
+
+
+      		// http://stackoverflow.com/questions/18986505/mongodb-array-element-projection-with-findoneandupdate-doesnt-work
+			col.findOneAndUpdate( {role:'share', shareID:shareID, 'files.key':fileKey },
+				{ $set: setObj }, { projection:{ key:1, 'files': {$elemMatch: {key: fileKey} } } } , function(err, result) {
+
+					if(err) return res.send('');
+					try{var ret=result.value.files.shift().signIDS[ signIDX ]; }
+					catch(e){
+						return res.send('');
+					}
+	          	res.send( ret );
+	        });
+      	} else {
+      		col.findOneAndUpdate( {role:'upfile', 'key':fileKey, 'signIDS._id': signID },
+				{ $set:{'signIDS.$.signData': new ObjectID(id), 'signIDS.$.signPerson': person } }, { projection:{ key:1, 'signIDS':1} }, function(err, result) {
+
+			if(err) return res.send('');
+
+				try{var ret=result.value.signIDS[signIDX]; }
+				catch(e){
+					return res.send('');
+				}
+
+	          res.send( ret );
+	        });
+      	}
+
       }
 
       if(hisID){
@@ -1175,7 +2215,6 @@ app.post("/saveSign", function (req, res) {
         });
       }
 
-    });
 
 
 });
@@ -1183,13 +2222,9 @@ app.post("/saveSign", function (req, res) {
 
 app.post("/getSignHistory", function (req, res) {
   var signID =  req.body.signID;
-  var person;
+  var person =  req.body.person;
 
-  col.findOne({role:'sign', _id:new ObjectID(signID)}, function(err, item){
-    if(err || !item){
-      return res.send("");
-    }
-    person = item.signPerson;
+
     col.find({role:'signBase', person:person}, {limit:5, sort:{date:-1} }).toArray(function(err, docs){
       if(err || !docs.length){
         return res.send("");
@@ -1197,7 +2232,7 @@ app.post("/getSignHistory", function (req, res) {
       //col.deleteMany({role:'signBase', person:person, date:{$lt: docs[docs.length-1].date } });
       res.send( docs );
     });
-  });
+
 });
 
 
@@ -1214,17 +2249,17 @@ app.post("/sendShareMsg", function (req, res) {
   var fileHash = path.pop();
 
   col.findOne( { role:'share', shareID:shareID }, {}, function(err, data) {
-      if(err) {
-        return res.send('error');
+      if(err||!data) {
+        return res.send('');	//error
       }
 
       if(!data){
-          return res.send('此共享已删除');
+          return res.send('');	//此共享已删除
         }
 
       var users = data.fromPerson.concat(data.toPerson).filter(function(v){return v.userid==person});
       if(!users.length){
-        return res.send('没有此组权限');
+        return res.send('');	//没有此组权限
       }
 
       //get segmented path, Target Path segment and A link
@@ -1245,11 +2280,11 @@ app.post("/sendShareMsg", function (req, res) {
       	link = a+fileKey;
       	a = a +fileName;
       }
-     var overAllPath = util.format('<a href="%s#path=%s&shareID=%d">%s</a>', TREE_URL, encodeURIComponent(link), shareID, a ) ;
+     var overAllPath = util.format('<a href="%s#path=%s&shareID=%d&openMessage=1">%s</a>', TREE_URL, encodeURIComponent(link), shareID, a ) ;
 
       var msg = {
-       "touser": data.toPerson.map(function(v){return v.userid}).join('|'),
-       "touserName": data.toPerson.map(function(v){return v.name}).join('|'),
+       "touser": data.toPerson.concat(data.fromPerson).map(function(v){return v.userid}).join('|'),
+       "touserName": data.toPerson.concat(data.fromPerson).map(function(v){return v.name}).join('|'),
        "msgtype": "text",
        "text": {
          "content":
@@ -1265,8 +2300,12 @@ app.post("/sendShareMsg", function (req, res) {
         shareID:shareID
       };
       if(hash) msg.hash = hash;
+      sendWXMessage(msg);
 
-      res.send( sendWXMessage(msg) );
+      res.send( msg );
+
+      //wsBroadcast(msg);
+
   });
 
 
@@ -1274,67 +2313,173 @@ app.post("/sendShareMsg", function (req, res) {
 });
 
 
+app.post("/getAllShareID", function (req, res) {
+
+  var data = req.body;
+  var person = data.person;
+
+  col.find( {role:'share', isSign:{$in:[null,'',false]}, isFinish:{$in:[null,'',false]}, $or:[ {'toPerson.userid':person}, {'fromPerson.userid':person } ]  }
+      , { limit: 1000, sort:{ shareID:-1 }, fields: {shareID:1, msg:1, fromPerson:1, toPerson:1 } }).toArray(function(err, result) {
+      if(err) return res.send('');
+      res.send(result);
+  } );
+
+});
+
+
 app.post("/shareFile", function (req, res) {
   var data = req.body.data;
+  try{
   data = JSON.parse(data);
+  //data.files = JSON.parse(data.files);
+  }catch(e){ return res.send(''); }
   data.date = new Date();
 
-  col.findOneAndUpdate({role:'config'}, {$inc:{ shareID:1 } }, function  (err, result) {
-    console.log(err, result);
+  // return console.log( data );
 
-    var shareID = result.value.shareID+1;
-    data.shareID = shareID;
-    data.role = 'share';
-    col.insert(data, {w:1}, function(err, r){
-      //res.send( {err:err, insertedCount: r.insertedCount } );
-      if(!err){
-        console.log(data.toPerson.map(function(v){return v.userid}).join('|') );
 
-        if(!data.isSign){
-          var treeUrl = VIEWER_URL + '#file=' + FILE_HOST+ data.files[0].key +'&shareID='+ shareID;
-          var content = util.format('共享ID：%d %s%s分享了 %d 个文档：%s，收件人：%s%s\n%s',
-              shareID,
-              data.isSign ? "【请求签名】" : "",
-              data.fromPerson.map(function(v){return '<a href="'+ treeUrl + '&fromPerson='+ v.userid + '">【'+v.depart + '-' + v.name+'】</a>'}).join('|'),
-              data.files.length,
-              data.files.map(function(v){return '<a href="'+ treeUrl +'">'+v.title+'</a>'}).join('，'),
-              data.selectRange.map(function(v){
-                return v.depart? '<a href="'+treeUrl + '&toPerson='+ v.userid +'">'+v.depart+'-'+v.name+'</a>' : '<a href="'+treeUrl + '&toDepart='+ v.name +'">【'+v.name+'】</a>' }).join('；'),
-              data.msg ? '，附言：\n'+data.msg : '',
-              '<a href="'+ treeUrl +'">点此查看</a>'
-            );
-        } else {
-          var treeUrl = VIEWER_URL + '#file=' + FILE_HOST+ data.files[0].key +'&isSign=1&shareID='+ shareID;
-          var content = util.format('流程ID：%d %s发起了流程：%s，文档：%s，经办人：%s%s\n%s',
-              shareID,
-              data.fromPerson.map(function(v){return '<a href="'+treeUrl+ '&fromPerson='+ v.userid + '">【'+v.depart + '-' + v.name+'】</a>'}).join('|'),
-              data.flowName,
-              data.files.map(function(v){return '<a href="'+ treeUrl +'">'+v.title+'</a>'}).join('，'),
-              data.selectRange.map(function(v){
-                return v.depart? '<a href="'+treeUrl + '&toPerson='+ v.userid +'">'+v.depart+'-'+v.name+'</a>' : '<a href="'+treeUrl + '&toDepart='+ v.name +'">【'+v.name+'】</a>' }).join('；'),
-              data.msg ? '，附言：\n'+data.msg : '',
-              '<a href="'+ treeUrl +'">点此查看</a>'
-            );
-        }
-        var msg = {
-         "touser": data.toPerson.map(function(v){return v.userid}).join('|'),
-         "touserName": data.toPerson.map(function(v){return v.name}).join('|'),
-         "msgtype": "text",
-         "text": {
-           "content": content
-         },
-         "safe":"0",
-          date : new Date(),
-          role : 'shareMsg',
-          shareID:shareID
-        };
-        sendWXMessage(msg);
-        res.send( data );
+
+  col.find( {role:'upfile', key:{ $in: data.fileIDS } }, { sort:{ key:1 } } ).toArray(function  (err, files) {
+
+  	files.forEach(function(v, i){
+  		v.path = data.filePathS[ v.key.replace(/\./g, '\uff0e') ];
+  	});
+  	data.files = files;
+
+      if(data.existShareID){
+
+        data.existShareID = safeEval( data.existShareID );
+        col.findOneAndUpdate( {role:'share', shareID: data.existShareID }, { $addToSet: { files: {$each:data.files} } }, function(err, result){
+          if(err) return res.send('');
+
+          var colShare = result.value;
+          res.send(colShare);
+
+          var shareID = colShare.shareID;
+          var shareName = util.format('共享%d(%s)[%s]', shareID, colShare.msg, colShare.toPerson.map(function(v){return v.name}).join(',') );
+
+            var overAllPath = util.format('%s#path=%s&shareID=%d', TREE_URL, encodeURIComponent( shareName+data.files[0].key ), shareID ) ;
+            var wxmsg = {
+             "touser": colShare.toPerson.concat(colShare.fromPerson).map(function(v){return v.userid}).join('|'),
+             "touserName": colShare.toPerson.concat(colShare.fromPerson).map(function(v){return v.name}).join('|'),
+             "msgtype": "text",
+             "text": {
+               "content":
+               util.format('%s添加了新文件：%s; 操作者：%s%s <a href="%s">点此查看</a>',
+                  shareName,
+                  data.files.map(function(v){
+                    return util.format('<a href="%s#file=%s&shareID=%d&isSign=%d">%s</a>',
+                      VIEWER_URL,
+                      FILE_HOST+ encodeURIComponent(v.key),
+                      shareID,
+                      colShare.isSign?1:0,
+                      v.title
+                       )
+                  }).join(','),
+                  colShare.fromPerson.shift().name,
+                  data.msg? ', 附言：'+data.msg : '',
+                  overAllPath  // if we need segmented path:   pathName.join('-'),
+                )
+             },
+             "safe":"0",
+              date : new Date(),
+              role : 'shareMsg',
+              shareID:shareID
+            };
+
+            sendWXMessage(wxmsg);
+
+
+        } );
+
+      } else {
+
+
+
+            col.findOneAndUpdate({role:'config'}, {$inc:{ shareID:1 } }, function  (err, result) {
+
+              var shareID = result.value.shareID+1;
+              data.shareID = shareID;
+              data.role = 'share';
+
+              col.insert(data, {w:1}, function(err, r){
+                //res.send( {err:err, insertedCount: r.insertedCount } );
+                if(!err){
+                  console.log(data.toPerson.concat(data.fromPerson).map(function(v){return v.userid}).join('|') );
+
+                  if(!data.isSign){
+
+                  	// it's not empty topic ,it's file share
+                  	if( data.files.length ){
+
+	                    var treeUrl = TREE_URL + '#path=' + data.files[0].key +'&shareID='+ shareID;
+	                    var content = util.format('%s创建了共享ID：%d(%s)，相关文档：%s，收件人：%s\n%s',
+	                        data.fromPerson.map(function(v){return '【'+v.depart + '-' + v.name+'】'}).join('|'),
+	                        shareID,
+	                        data.msg,
+	                        // data.files.length,
+	                        data.files.map(function(v){return ''+v.title+''}).join('，'),
+	                        data.selectRange.map(function(v){
+	                          return v.depart? ''+v.depart+'-'+v.name+'' : '【'+v.name+'】' }).join('；'),
+	                        '<a href="'+ treeUrl +'">点此查看</a>'
+	                      );
+
+	                } else {
+	                	// it's empty topic
+
+	                	var treeUrl = TREE_URL + '#path=&shareID='+ shareID;
+	                    var content = util.format('%s创建了新话题，共享ID：%d(%s)，收件人：%s\n%s',
+	                        data.fromPerson.map(function(v){return '【'+v.depart + '-' + v.name+'】'}).join('|'),
+	                        shareID,
+	                        data.msg,
+	                        data.selectRange.map(function(v){
+	                          return v.depart? ''+v.depart+'-'+v.name+'' : '【'+v.name+'】' }).join('；'),
+	                        '<a href="'+ treeUrl +'">点此查看</a>'
+	                      );
+	                }
+
+                  } else {
+                    var treeUrl = TREE_URL + '#path=' + data.files[0].key +'&isSign=1&shareID='+ shareID;
+                    var content = util.format('流程ID：%d %s发起了流程：%s，文档：%s，经办人：%s%s\n%s',
+                        shareID,
+                        data.fromPerson.map(function(v){return '【'+v.depart + '-' + v.name+'】'}).join('|'),
+                        data.flowName,
+                        data.files.map(function(v){return ''+v.title+''}).join('，'),
+                        data.selectRange.map(function(v){
+                          return v.depart? ''+v.depart+'-'+v.name+'' : '【'+v.name+'】' }).join('；'),
+                        data.msg ? '，附言：\n'+data.msg : '',
+                        '<a href="'+ treeUrl +'">点此查看</a>'
+                      );
+                  }
+                  var msg = {
+                   "touser": data.toPerson.concat(data.fromPerson).map(function(v){return v.userid}).join('|'),
+                   "touserName": data.toPerson.concat(data.fromPerson).map(function(v){return v.name}).join('|'),
+                   "msgtype": "text",
+                   "text": {
+                     "content": content
+                   },
+                   "safe":"0",
+                    date : new Date(),
+                    role : 'shareMsg',
+                    shareID:shareID
+                  };
+                  sendWXMessage(msg);
+                  res.send( data );
+
+                  data.openShare = false;
+                  data.openMessage = false;
+                  wsBroadcast(data);
+
+                }
+              });
+
+              } );
+
 
       }
-    });
 
-  } );
+
+	});
 
 
 });
@@ -1345,6 +2490,15 @@ function sendWXMessage (msg) {
   if(!msg.tryCount){
     col.insert(msg);
     msg.tryCount = 1;
+
+    if(!msg.WXOnly){
+	    // send client message vai ws
+	    var touser = _.uniq( msg.touser.split('|') );
+	    touser.forEach(function sendToUserWS (v) {
+	      wsSendClient(v, msg);
+	    });
+    }
+
   }
 
   var msgTo = {};
@@ -1377,58 +2531,36 @@ console.log("Listening");
 var authUrl = 'mongodb://1111hui.com:27017/admin';
 var db = null;
 var col = null;
-MongoClient.connect(authUrl, function(err, _db) {
-  assert.equal(null, err);
-  _db.authenticate('root', '820125', function(err, res){
-  	assert.equal(null, err);
-  	console.log("Connected to mongodb server");
-	db = _db.db("test");
-  col = db.collection('qiniu_bucket01');
-	// db.collection('test').find().toArray(function(err, items){ console.log(items); });
-	//runCmd("phantomjs main.js");
-  });
-});
+var MONGO_AUTH = false;
 
+if(MONGO_AUTH) {
+	MongoClient.connect(authUrl, function(err, _db) {
+	  assert.equal(null, err);
+	  _db.authenticate('root', '820125', function(err, res){
+	  	assert.equal(null, err);
+	  	console.log("Connected to mongodb server");
+		db = _db.db("test");
+	  col = db.collection('qiniu_bucket01');
+		// db.collection('test').find().toArray(function(err, items){ console.log(items); });
+		//runCmd("phantomjs main.js");
+	  });
+	});
+} else {
+	MongoClient.connect('mongodb://localhost:27017/admin', function(err, _db) {
+	  	assert.equal(null, err);
+
+	  	console.log("Connected to mongodb server");
+		db = _db.db("test");
+	  	col = db.collection('qiniu_bucket01');
+
+	});
+}
 
 var insertDoc = function(data, callback) {
   assert.notEqual(null, db, "Mongodb not connected. ");
   var col = db.collection('test31');
   console.log(data);
 }
-
-/********* WebSocket Part ************/
-var WebSocketServer = require('ws').Server;
-var wss = new WebSocketServer({ port: 888 });
-
-wss.on('connection', function connection(ws) {
-  ws.on('close', function incoming(code, message) {
-    console.log("WS close: ", code, message);
-    console.log("now close all process");
-    if(db) db.close();
-    process.exit(1);
-  });
-  ws.on('message', function incoming(data) {
-    //console.log('received: %s', data);
-    var msg = JSON.parse(data);
-    var msgid = msg.msgid;
-    delete msg.msgid;
-
-    //if(msg.type!='search_result') console.log(msgid, msg);
-
-    var cb = msgid? function  (retJson) {
-      ws.send(JSON.stringify( {msgid:msgid, result:retJson} ) );
-    } : null;
-
-    insertDoc( msg, cb );
-  });
-
-  ws.send('connected to ws');
-});
-function broadcast(data) {
-  wss.clients.forEach(function each(client) {
-    client.send( JSON.stringify(data) );
-  });
-};
 
 
 
@@ -1443,7 +2575,39 @@ function _logErr () {
     if(arguments[i]) process.stderr.write(arguments[i]);
 }
 
-function genPDF ( infile, imagefile, page, outfile ) {
+
+function genPDF ( filename, shareID,  realname, cb ) {
+
+	var tempFile = IMAGE_UPFOLDER + (+new Date()+Math.random()) +'.pdf';
+
+	var wget = 'rm -r '+ IMAGE_UPFOLDER+realname+ '; wget -P ' + IMAGE_UPFOLDER + ' -O '+ tempFile +' -N "' + FILE_HOST+filename +'" ';
+	console.log(wget);
+	var child = exec(wget, function(err, stdout, stderr) {
+
+		console.log( err, stdout, stderr );
+		if(err || (stdout+stderr).indexOf('200 OK')<0 ) return cb?cb('无法获取原始文件'):'';
+
+		var tempPDF = IMAGE_UPFOLDER + (+new Date()+Math.random()) +'.pdf';
+		var cmd = 'phantomjs --config=client/config client/render.js "file='+ FILE_HOST+filename +'&shareID='+ shareID +'" '+ tempPDF;
+		console.log(cmd);
+
+		var child = exec(cmd, function(err, stdout, stderr) {
+
+		if(err || stdout.toString().indexOf('render page:')<0 ) return cb?cb('生成绘图数据错误'):'';
+		cmd = './mergepdf.py -i '+ tempFile +' -m '+tempPDF+' -o '+ IMAGE_UPFOLDER+realname +' ';
+		console.log(cmd);
+		exec(cmd, function (error, stdout, stderr) {
+			console.log(error,stdout, stderr);
+			if(error){
+				cb('合并PDF文件错误');
+			}
+			if(cb) cb(null);
+		});
+		});
+	});
+}
+
+function genPDF2 ( infile, imagefile, page, outfile ) {
 
   exec('./mergepdf.py -i '+ infile +'.pdf -m '+imagefile+'.pdf -p '+page+' -o '+ outfile +'.pdf ', function (error, stdout, stderr) {
     console.log(error,stdout, stderr);
@@ -1569,7 +2733,7 @@ wechat(config, wechat
 //   MsgType: 'event',
 //   AgentID: '1',
 //   Event: 'view',
-//   EventKey: 'http://1111hui.com/pdf/client/tree.html' }
+//   EventKey: 'http://hostname/tree.html' }
 
 //****when enter Agent, will receive message:
 // { ToUserName: 'wx59d46493c123d365',
@@ -1673,6 +2837,8 @@ wechat(config, wechat
 var CompanyName = 'lianrun';
 var API = require('wechat-enterprise-api');
 var api = new API("wx59d46493c123d365", "5dyRsI3Wa5gS2PIOTIhJ6jISHwkN68cryFJdW_c9jWDiOn2D7XkDRYUgHUy1w3Hd", 1);
+api.setOpts({timeout: 60000});
+
 // get accessToken for first time to cache it.
 api.getLatestToken(function () {});
 
@@ -1707,14 +2873,14 @@ function updateCompanyTree () {
         });
         if(i==departs.length){
 
-            col.findOneAndDelete({ company:CompanyName }, function  (err, result) {
+            col.findOneAndDelete({ company:CompanyName, role:"companyTree" }, function  (err, result) {
                 col.update(
-                { company:CompanyName }, { company:CompanyName, date: new Date(), companyTree:companyTree, stuffList:stuffList  } ,
+                { company:CompanyName, role:"companyTree" }, { company:CompanyName, role:"companyTree", date: new Date(), companyTree:companyTree, stuffList:stuffList  } ,
                 {upsert:true, w: 1},
                 function(err, result) {
 
                   console.log('update companyTree: ', result.result.nModified);
-                  col.update( { company:CompanyName, 'companyTree.id':1 }, { '$addToSet': {  'companyTree.$.children': {"userid":"yangjiming","name":"董月霞","department":[1],"mobile":"18072266386","gender":"1","email":"hxsdyjm@qq.com","weixinid":"futurist6","avatar":"http://shp.qpic.cn/bizmp/guTsUowz0NPtOuBoHUiaw3lPyys0DWwTwdUsibvlmwyzdrmYdxwRU4ag/","status":1} } } );
+                  // col.update( { company:CompanyName, role:"companyTree", 'companyTree.id':1 }, { '$addToSet': {  'companyTree.$.children': {"userid":"yangjiming","name":"董月霞","department":[1],"mobile":"18072266386","gender":"1","email":"hxsdyjm@qq.com","weixinid":"futurist6","avatar":"http://shp.qpic.cn/bizmp/guTsUowz0NPtOuBoHUiaw3lPyys0DWwTwdUsibvlmwyzdrmYdxwRU4ag/","status":1} } } );
 
               });
             });
@@ -1735,7 +2901,7 @@ app.get("/updateCompanyTree", function (req, res) {
 app.post("/getCompanyTree", function (req, res) {
   var data = req.body;
   var company = data.company;
-  col.find( { company: company } , {limit:2000} ).toArray(function(err, docs){
+  col.find( { company: company, role:"companyTree" } , {limit:2000, sort:{ pId:-1, parentid:-1 } } ).toArray(function(err, docs){
       if(err|| !docs || !docs.length) return res.send('');
       var count = docs.length;
       if(count)
@@ -1756,5 +2922,24 @@ app.get("/createDepartment", function (req, res) {
 
 
 
+app.post("/getPrintList", function (req, res) {
+  var data = req.body;
+  var company = data.company;
+  col.findOne( { company: company, role:'printer' } , {limit:1}, function(err, doc){
+      if(err|| !doc) return res.send('');
+      res.send( doc );
+  });
+});
 
 
+
+
+
+
+
+
+
+
+
+
+app.use( express.static(path.join(__dirname, 'client'), { index:false, }) );

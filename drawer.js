@@ -229,7 +229,7 @@ window.addEventListener('scalechange', function scalechange(evt) {
 
 document.addEventListener('textlayerrendered', function (e) {  //textlayerrendered, pagerendered
   var pageIndex = e.detail.pageNumber - 1;
-  
+
   setTimeout(function(){
     RERenderDrawerLayer(pageIndex);
   }, 0);
@@ -1045,8 +1045,7 @@ var svgns = "http://www.w3.org/2000/svg";
         return;
       }
 
-
-      if( $('.textarea').size() && !isText && !isHandler ) {
+      if( $('.textarea').size() && !isHandler && !$(targetEl).hasClass('editing') ) {
         onTextBlur();
       }
 
@@ -1067,26 +1066,26 @@ var svgns = "http://www.w3.org/2000/svg";
       //** DOUBLE CLICK event on canvas or element
       //******************************************
 
-      if(e.timeStamp - prevTime<500 && prevEl && $(prevEl).data('id') == $(targetEl).data('id')  ){
+      if( e.timeStamp - prevTime<500 && prevEl && $(prevEl).data('id') == $(targetEl).data('id')  ){
         prevTime = 0;
         if( false && $(targetEl).is('svg.canvas') ) {
           selecting=true;
           $('svg.canvas',context).addClass('selectState');
-        } else if(isShape) {
+        } else if( false &&isShape) {
           $(targetEl).data('hl', 1);
           beginDrag();
         } else if(isText && !e.shiftKey) {
           textEditMode(targetEl);
+          prevEl = targetEl;
+          return;
         }
-        prevEl = targetEl;
-        return;
       }
 
       prevEl = targetEl;
       prevTime = e.timeStamp;
 
       // long click to trigger dragging mode && selecting mode
-      if(!selecting && !dragging && !drawing )
+      if(0&&!selecting && !dragging && !drawing )
       downTimer = window.setTimeout(function() {
         //we are longclick on shape
         if( isShape || isText ){
@@ -1101,10 +1100,13 @@ var svgns = "http://www.w3.org/2000/svg";
             $('svg.canvas',context).addClass('selectState');
           },300);
         }
-      }, 0);
+      }, 5000);
 
-      if( $(targetEl).data('hl') ){
+      // if( $(targetEl).data('hl') || (isText) ){
+      if( isShape || isText ){
 
+        $('[data-hl]').data('hl', null);
+        addSelectionList( targetEl );
         beginDrag();
 
       } else {
@@ -1360,15 +1362,15 @@ var svgns = "http://www.w3.org/2000/svg";
 
         }
 
-        if(curTool=='text'){
-          if( !drawing && downX && downY && x && y && !dragging && !$('[data-hl]').size() && dist >DRAW_TOLERANCE ){
+        if(curTool=='text' ){
+          if( !drawing && downX && downY && x && y && !dragging &&  $('.textrect').size()==0 && !$('[data-hl]').size() && dist >DRAW_TOLERANCE ){
             drawing = true;
             createTextRect([downX, downY], [x,y]);
           }
           if(!drawing)return;
 
           var text = curContext.querySelector('[data-id="'+ curShapeID +'"]');
-          createTextRect([downX, downY], [x,y], text);
+          if(text) createTextRect([downX, downY], [x,y], text);
         }
 
 
@@ -1811,6 +1813,8 @@ var svgns = "http://www.w3.org/2000/svg";
 
     function createTextRect (startPoint, endPoint, path, options) {
 
+      if( $('.textrect').size()>1 ) return;
+
       if(!options) options = ToolSet['rect'];
 
       if(!path){
@@ -1894,6 +1898,9 @@ var svgns = "http://www.w3.org/2000/svg";
 	      if(oldTop) viewer.scrollTop( ~~oldTop );
     	}
 
+      while( $('.editing').size()>1 ) $('.editing').first().remove();
+      while( $('.textarea').size()>1 ) $('.textarea').first().remove();
+
       var isTemplate = $('.editing').data('template');
 
       var offset = $('.textarea').offset();
@@ -1904,13 +1911,15 @@ var svgns = "http://www.w3.org/2000/svg";
       var $text = $('.editing').find('.text');
       var oldVal = $('.textarea').val();
 
-      if(0&& !isTemplate) {
+      var val = $('.textarea').val();
+      var prevVal = $text.val();
+      $text.html( prevVal );
+
+      if(!isTemplate) {
 
         // ApplyLineBreaks( '.textarea' );
-        var val = $('.textarea').val();
-        var prevVal = $text.val();
 
-        if(val==""){
+        if( $text.val() =="" ){
             try{
               $('.editing').remove();
              $('.textarea').remove();
@@ -1920,33 +1929,40 @@ var svgns = "http://www.w3.org/2000/svg";
            return;
         }
 
-        $text.val( val );
-        $($text).get(0).style.removeProperty('width');
-        $($text).get(0).style.removeProperty('height');
-
-        $('.editing').css( {width:offset.width, height:offset.height} );
-
-        var th = $text.prop('scrollHeight'),  tw = $text.prop('scrollWidth');
-        offset.width = tw/curScale;
-        offset.height = th/curScale;
-
-        var trans = ( $('.editing').data('oldTrans') );
-        if(!trans) trans = [0,0];
-        // offset.left += trans[0];
-        // offset.top += trans[1];
-        $text.val( oldVal );
 
         $('.editing').css( {width:offset.width, height:offset.height} );
         $('.editing').find('.bbox').css( {width:offset.width, height:offset.height} );
-        offset = $text.offset();
-        offset.width/=curScale;
-        offset.height/=curScale;
-        $('.editing').css( {height:offset.height} );
-        $('.editing').find('.bbox').css( {height:offset.height} );
+        //$text.val( oldVal ).html(oldVal);
+
+
+        // $($text).get(0).style.removeProperty('width');
+        // $($text).get(0).style.removeProperty('height');
+
+        // $('.editing').css( {width:offset.width, height:offset.height} );
+
+        // var th = $text.prop('scrollHeight'),  tw = $text.prop('scrollWidth');
+        // offset.width = tw/curScale;
+        // offset.height = th/curScale;
+
+        // var trans = ( $('.editing').data('oldTrans') );
+        // if(!trans) trans = [0,0];
+        // // offset.left += trans[0];
+        // // offset.top += trans[1];
+        // $text.val( oldVal );
+
+        // $('.editing').css( {width:offset.width, height:offset.height} );
+        // $('.editing').find('.bbox').css( {width:offset.width, height:offset.height} );
+        // offset = $text.offset();
+        // offset.width/=curScale;
+        // offset.height/=curScale;
+        // $('.editing').css( {height:offset.height} );
+        // $('.editing').find('.bbox').css( {height:offset.height} );
+
+
       } else {
         $('.editing').css( {width:offset.width, height:offset.height} );
         $('.editing').find('.bbox').css( {width:offset.width, height:offset.height} );
-        $text.val( oldVal ).html(oldVal);
+        //$text.val( oldVal ).html(oldVal);
       }
 
 
@@ -2010,6 +2026,10 @@ var svgns = "http://www.w3.org/2000/svg";
        .val( $(targetEl)
         .find('.text').val() )
        .focus();
+
+     $('.textarea').on('keydown blur', function(){
+       $('.editing').find('.text').val( $(this).val() )
+     });
 
       //if in android, we move textarea to top to show keyboard correctly.
       if(isAndroid){
@@ -2836,7 +2856,7 @@ function restoreCanvas (isRender) {
 
 
 function copyDrawerLayerData(pageIndex){
-  
+
   var drawCon = $('#drawViewer');
   if(typeof pageIndex=='number') drawCon = drawCon.find('.page').eq(pageIndex);
   var svgCon = $('.svgCon', drawCon).toArray();
@@ -3014,7 +3034,8 @@ function showCanvas () {
 		$('#drawViewer').show();
 		$('#drawTool').show();
 		$('#mainMenu').hide();
-		$('.textLayer').hide();
+    $('.textLayer').hide();
+		// $('.canvasWrapper').hide();
 
 }
 
@@ -3126,7 +3147,7 @@ function restoreSignature (pageIndex) {
       });
 
     } else {
-      
+
       if(isSigned || isFinished ){
         img.hide();
       } else {
@@ -3137,11 +3158,15 @@ function restoreSignature (pageIndex) {
     img.data('id', v._id);
     img.data('idx', i);
     if(v.signPerson) img.data('signPerson', v.signPerson);
+    if(!shareID && !isTemplate ) img.hide();
 
     img.click(function(){
       if( window.isSigned || window.isFinished ){
           //alert('您已签署过此文档，此签名位置将留给其它经办人');
          return;
+      }
+      if(!shareID&& !isTemplate ){
+        return alert('请在文件柜选择流程后会通知签署');
       }
       var signPerson = $(this).data('signPerson');
       if( signPerson && signPerson!= rootPerson.userid ) return;
@@ -3289,7 +3314,7 @@ function beginSign(){
 
   var signID = $('.signImg.active').data('id');
 	var idx = $('.signImg.active').data('idx');
-  var fileKey = curFile.split('/').pop();
+  var fileKey = curFile.replace(FILE_HOST, '');
 
 	var url = 'http://1111hui.com/pdf/webpdf/signpad.html#fileKey='+ fileKey +'&shareID='+ (shareID||'') +'&idx='+ idx +'&signID='+signID+'&hash='+(+new Date());
 
@@ -3346,7 +3371,8 @@ function setStage (stat) {
 		      $('#drawViewer').hide();
 		      $('#drawTool').hide();
 		      $('#mainMenu').show();
-		      $('.textLayer').show();
+          $('.textLayer').show();
+		      // $('.canvasWrapper').show();
 			break;
     case 'sign':
       resetState();
@@ -3354,17 +3380,17 @@ function setStage (stat) {
 
       break;
     case 'share':
-      var file = window.curFile.split('/').pop();
+      var file = window.curFile.replace(FILE_HOST, '');
       var toUrl = TREE_URL+'#path='+(file)+ '&openShare=1'+ (shareID ? '&shareID='+shareID :'');
       openLinkNW(toUrl);
       break;
     case 'message':
-      var file = window.curFile.split('/').pop();
+      var file = window.curFile.replace(FILE_HOST, '');
       var toUrl = TREE_URL+'#path='+(file)+ '&openMessage=1'+ (shareID ? '&shareID='+shareID :'');
       openLinkNW(toUrl);
       break;
     case 'print':
-      var file = window.curFile.split('/').pop();
+      var file = window.curFile.replace(FILE_HOST, '');
       var toUrl = TREE_URL+'#path='+(file)+ '&openMessage=1'+ (shareID ? '&shareID='+shareID :'');
       openLinkNW(toUrl);
       break;
@@ -3386,7 +3412,7 @@ function updateViewArea(){
 
 function backCabinet () {
     $('.active').removeClass('active');
-  var filename = curFile.split('/').pop();
+  var filename = curFile.replace(FILE_HOST, '');
   if(filename.match(/\.pdf$/)) {
     var shareStr = shareID? '&shareID='+ shareID : '';
     var link  = TREE_URL+ "#path="+filename +shareStr;

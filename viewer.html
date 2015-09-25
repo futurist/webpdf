@@ -568,10 +568,13 @@ ul,li{
 
 body.shareMode .userInputText textarea{
   font:18px/1 '黑体';
-  border:none;
-  background: none;
+  background: rgba(255,255,0,0.2);
       resize: none;
       overflow: hidden;
+}
+body.shareMode .userInputText textarea[readonly]{
+   border:none;
+   background: none;
 }
 
 .userInputText select{
@@ -970,7 +973,7 @@ body.shareMode .userInputText textarea{
     content: "\e008";
 }
 
-.signImg[data-person]:before{
+body.template .signImg[data-person]:before{
     font-size: 12px;
     position: absolute;
     bottom: 4px;
@@ -985,8 +988,6 @@ body.shareMode .userInputText textarea{
     -moz-osx-font-smoothing: grayscale;
     content: "\e008";
 }
-
-
 
 </style>
 

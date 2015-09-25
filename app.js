@@ -1335,7 +1335,114 @@ app.post("/signInWeiXin", function (req, res) {
 
 });
 
+
+
 app.post("/applyTemplate", function (req, res) {
+
+  var data = req.body;
+  var path = data.path;
+    var userid = data.userid;
+  var info = data.info;
+
+    try{
+      info = JSON.parse(info);
+  } catch(e){ console.log('error parse drawData',path,userid); return res.send('') }
+
+    var key = info.key;
+    var newKey = moment().format('YYYYMMDDHHmmss') + '-'+ key.split('-').pop();
+
+
+    var client = new qiniu.rs.Client();
+  client.copy(QiniuBucket, key, QiniuBucket, newKey, function(err, ret) {
+    if (err) return res.send('');
+
+
+    col.findOne( { person: userid, status:{$ne:-1} } , {limit:1, sort:{order:-1}  }, function(err, item) {
+
+      var maxOrder = item? item.order+1 : 1;
+
+    var fileInfo={
+      role:'upfile',
+      person:userid,
+      client:'',
+      title: info.title+'_'+moment().format('YYYYMMDD'),
+      path: path,
+      date: new Date(),
+      key: newKey,
+      fname:newKey,
+      fsize:info.fsize,
+      type:info.type,
+      drawData:info.drawData,
+      signIDS:info.signIDS,
+      hash: +new Date()+Math.random().toString().slice(2,5)+'',
+      order:maxOrder
+    };
+
+    col.insertOne(fileInfo, {w:1}, function(err,result){
+      var id = result.insertedId;
+      fileInfo._id = id;
+      res.send(fileInfo);
+    });
+
+    });
+
+
+  });
+
+});
+
+
+function pickUser(user){ return _.pick( user, 'userid', 'name', 'depart', 'id', 'pId', 'parentid', 'placeholder' ) }
+
+function getUserFromPlaceholder (fromUserId, placeholder) {
+
+  var thePerson = null;
+  var fromPerson = _.find( COMPANY_TREE, function(v){ return v.userid== fromUserId } );
+
+  if( placeholder=='_self'){
+
+    thePerson = fromPerson;
+
+  } else if(placeholder=='_parent') {
+
+    var sameLevel = COMPANY_TREE.filter(function(v){ return v.pId == fromPerson.pId && !!v.userid });
+    thePerson = _.max( sameLevel, function(v){ return v.level } );
+
+  } else if(placeholder=='_grand') {
+
+      var start = fromPerson;
+      var depart = _.find( COMPANY_TREE, function(v){ return v.id==start.pId } );
+
+      var pDepart = _.find( COMPANY_TREE, function(v){ return v.id==depart.pId } );
+      var sameLevel = COMPANY_TREE.filter(function(v){ return v.pId == pDepart.id && !!v.userid });
+
+      while(sameLevel.length==0 && depart.pId>0) {
+        var pDepart = _.find( COMPANY_TREE, function(v){ return v.id==depart.pId } );
+        var sameLevel = COMPANY_TREE.filter(function(v){ return v.pId == pDepart.id && !!v.userid });
+        if(sameLevel.length==0) depart = pDepart;
+      }
+
+      thePerson = !sameLevel? null: _.max( sameLevel, function(v){ return v.level } );
+
+  } else if( placeholder=='_boss' ) {
+
+    thePerson = _.max( COMPANY_TREE, function(v){ return v.level } );
+
+  } else {
+
+    thePerson = _.find( COMPANY_TREE, function(v){ return v.userid== placeholder } );
+
+  }
+  if(!thePerson) return thePerson;
+
+  thePerson.placeholder = placeholder;
+  return thePerson;
+
+}
+
+
+
+app.post("/applyTemplate2", function (req, res) {
 
 	var data = req.body;
 	var path = data.path;
@@ -1355,32 +1462,60 @@ app.post("/applyTemplate", function (req, res) {
 	  if (err) return res.send('');
 
 
-    col.findOne( { person: userid, status:{$ne:-1} } , {limit:1, sort:{order:-1}  }, function(err, item) {
+    col.findOne( { "role":"flow", key:info.key } , {limit:1, sort:{order:-1}  }, function(err, flow) {
 
-    	var maxOrder = item? item.order+1 : 1;
+  		var fileInfo={
+  			role:'share',
+  			person:userid,
+  			client:'',
+  			title: info.title+'_'+moment().format('YYYYMMDD'),
+  			path: '/',
+  			date: new Date(),
+  			key: newKey,
+  			fname:newKey,
+  			fsize:info.fsize,
+  			type:info.type,
+  			drawData:info.drawData,
+  			signIDS:info.signIDS,
+  			hash: +new Date()+Math.random().toString().slice(2,5)+'',
+  			order:0
+  		};
 
-		var fileInfo={
-			role:'upfile',
-			person:userid,
-			client:'',
-			title: info.title+'_'+moment().format('YYYYMMDD'),
-			path: path,
-			date: new Date(),
-			key: newKey,
-			fname:newKey,
-			fsize:info.fsize,
-			type:info.type,
-			drawData:info.drawData,
-			signIDS:info.signIDS,
-			hash: +new Date()+Math.random().toString().slice(2,5)+'',
-			order:maxOrder
-		};
+  		var data = {};
+      data.role = 'share';
+      data.flowName = flow.name;
+      data.msg = '';
+      data.isSign = true;
+      data.date = new Date();
+      data.files = [fileInfo];
+      data.fileIDS = [fileInfo.key];
+      data.filePathS = {};
+      data.filePathS[fileInfo.key.replace(/\./g, '\uff0e' )] = '/';
 
-		col.insertOne(fileInfo, {w:1}, function(err,result){
-			var id = result.insertedId;
-			fileInfo._id = id;
-			res.send(fileInfo);
-		});
+
+      data.selectRange = [];
+
+
+      var fromPerson = COMPANY_TREE.filter(function(v){ return v.userid== userid  }).shift();
+
+      flow.flowPerson.forEach(function(v, i){
+
+        // Choose the person from flowList
+        var curFlowPos = i;
+
+        var curFlow = flow.flowPerson[curFlowPos];
+
+        var thePerson = getUserFromPlaceholder(fromPerson.userid, curFlow.userid);
+
+        // Push the person into toPerson List
+        data.selectRange.push(pickUser(thePerson));
+
+      });
+
+      data.fromPerson = [ pickUser(fromPerson) ];
+      data.toPerson  = [ pickUser( data.selectRange[0] ) ];
+
+      insertShareData( data, res, true );
 
     });
 
@@ -2172,6 +2307,17 @@ app.post("/saveSignFlow", function (req, res) {
 
     var flowName = result.value.title;
     var stuffs = signIDS.forEach(function(v, i){
+
+      if(v.person=='_self') {
+        v.level = -100;
+        return;
+      }
+
+      if(v.person=='_parent') {
+        v.level = -50;
+        return;
+      }
+
       STUFF_LIST.some(function(s){
         if(s.userid==v.person){
           signIDS[i] = _.extend( v, s );
@@ -2183,7 +2329,7 @@ app.post("/saveSignFlow", function (req, res) {
     signIDS.sort(function(a,b){
       return a.level>b.level;
     });
-    
+
     var flowPerson = signIDS.map(function(v){
       var ret = v.userid
                 ? { name:v.name, userid:v.userid, depart:v.depart, level:v.level  }
@@ -2442,6 +2588,19 @@ app.post("/shareFile", function (req, res) {
 
       } else {
 
+        insertShareData(data, res);
+
+
+      }
+
+
+	});
+
+
+});
+
+
+function insertShareData (data, res, showTab){
 
 
             col.findOneAndUpdate({role:'config'}, {$inc:{ shareID:1 } }, function  (err, result) {
@@ -2457,34 +2616,34 @@ app.post("/shareFile", function (req, res) {
 
                   if(!data.isSign){
 
-                  	// it's not empty topic ,it's file share
-                  	if( data.files.length ){
+                    // it's not empty topic ,it's file share
+                    if( data.files.length ){
 
-	                    var treeUrl = TREE_URL + '#path=' + data.files[0].key +'&shareID='+ shareID;
-	                    var content = util.format('%s创建了共享ID：%d(%s)，相关文档：%s，收件人：%s\n%s',
-	                        data.fromPerson.map(function(v){return '【'+v.depart + '-' + v.name+'】'}).join('|'),
-	                        shareID,
-	                        data.msg,
-	                        // data.files.length,
-	                        data.files.map(function(v){return ''+v.title+''}).join('，'),
-	                        data.selectRange.map(function(v){
-	                          return v.depart? ''+v.depart+'-'+v.name+'' : '【'+v.name+'】' }).join('；'),
-	                        '<a href="'+ treeUrl +'">点此查看</a>'
-	                      );
+                      var treeUrl = TREE_URL + '#path=' + data.files[0].key +'&shareID='+ shareID;
+                      var content = util.format('%s创建了共享ID：%d(%s)，相关文档：%s，收件人：%s\n%s',
+                          data.fromPerson.map(function(v){return '【'+v.depart + '-' + v.name+'】'}).join('|'),
+                          shareID,
+                          data.msg,
+                          // data.files.length,
+                          data.files.map(function(v){return ''+v.title+''}).join('，'),
+                          data.selectRange.map(function(v){
+                            return v.depart? ''+v.depart+'-'+v.name+'' : '【'+v.name+'】' }).join('；'),
+                          '<a href="'+ treeUrl +'">点此查看</a>'
+                        );
 
-	                } else {
-	                	// it's empty topic
+                  } else {
+                    // it's empty topic
 
-	                	var treeUrl = TREE_URL + '#path=&shareID='+ shareID;
-	                    var content = util.format('%s创建了新话题，共享ID：%d(%s)，收件人：%s\n%s',
-	                        data.fromPerson.map(function(v){return '【'+v.depart + '-' + v.name+'】'}).join('|'),
-	                        shareID,
-	                        data.msg,
-	                        data.selectRange.map(function(v){
-	                          return v.depart? ''+v.depart+'-'+v.name+'' : '【'+v.name+'】' }).join('；'),
-	                        '<a href="'+ treeUrl +'">点此查看</a>'
-	                      );
-	                }
+                    var treeUrl = TREE_URL + '#path=&shareID='+ shareID;
+                      var content = util.format('%s创建了新话题，共享ID：%d(%s)，收件人：%s\n%s',
+                          data.fromPerson.map(function(v){return '【'+v.depart + '-' + v.name+'】'}).join('|'),
+                          shareID,
+                          data.msg,
+                          data.selectRange.map(function(v){
+                            return v.depart? ''+v.depart+'-'+v.name+'' : '【'+v.name+'】' }).join('；'),
+                          '<a href="'+ treeUrl +'">点此查看</a>'
+                        );
+                  }
 
                   } else {
                     var treeUrl = TREE_URL + '#path=' + data.files[0].key +'&isSign=1&shareID='+ shareID;
@@ -2516,6 +2675,7 @@ app.post("/shareFile", function (req, res) {
 
                   data.openShare = false;
                   data.openMessage = false;
+                  data.showTab = showTab;
                   wsBroadcast(data);
 
                 }
@@ -2524,13 +2684,7 @@ app.post("/shareFile", function (req, res) {
               } );
 
 
-      }
-
-
-	});
-
-
-});
+}
 
 
 function sendWXMessage (msg) {
@@ -2600,6 +2754,8 @@ if(MONGO_AUTH) {
 	  	console.log("Connected to mongodb server");
 		db = _db.db("test");
 	  	col = db.collection('qiniu_bucket01');
+
+      updateCompanyTree();
 
 	});
 }
@@ -2930,19 +3086,19 @@ function updateCompanyTree () {
                 function(err, result) {
 
                   if(err) return console.log('updateCompanyTree', err);
-                  
+
                   COMPANY_TREE = companyTree;
                   STUFF_LIST = stuffList;
 
-                  // update STUFF_LIST with extended info from db
+                  // update COMPANY_TREE with extended info from db
                   col.findOne({role:'stuff'}, {sort: {level:-1} }, function(err, doc){
-                    
+
                       var stuff2 = doc.stuffList;
                       stuff2.forEach(function(v){
 
-                        STUFF_LIST.some(function(s, i) {
+                        COMPANY_TREE.some(function(s, i) {
                           if(s.userid==v.userid) {
-                            STUFF_LIST[i] = _.extend(s, v);
+                            COMPANY_TREE[i] = _.extend(s, v);
                             return true;
                           }
                         });
@@ -2988,14 +3144,14 @@ app.post("/getCompanyTree", function (req, res) {
         COMPANY_TREE = docs[0].companyTree;
         STUFF_LIST = docs[0].stuffList;
 
-        // update STUFF_LIST with extended info from db
+        // update COMPANY_TREE with extended info from db
         col.findOne({role:'stuff'}, {sort: {level:-1} }, function(err, doc){
           var stuff2 = doc.stuffList;
           stuff2.forEach(function(v){
 
-            STUFF_LIST.some(function(s, i) {
+            COMPANY_TREE.some(function(s, i) {
               if(s.userid==v.userid) {
-                STUFF_LIST[i] = _.extend(s, v);
+                COMPANY_TREE[i] = _.extend(s, v);
                 return true;
               }
             });

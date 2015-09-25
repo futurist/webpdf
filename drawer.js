@@ -24,12 +24,12 @@ function toggleDevTools (){
   }
 }
 
+var host = "http://1111hui.com:88";
 
 FILE_HOST = 'http://7xkeim.com1.z0.glb.clouddn.com/';
 TREE_URL = "http://1111hui.com:88/tree.html";
 VIEWER_URL = "http://1111hui.com/pdf/webpdf/viewer.html";
 
-var host = "http://1111hui.com:88";
 var wxOAuthUrl = 'https://open.weixin.qq.com/connect/oauth2/authorize?appid=wx59d46493c123d365&redirect_uri=http%3A%2F%2F1111hui.com%2F/pdf/getUserID.php&response_type=code&scope=snsapi_base&state='+ encodeURIComponent( window.location.href.replace('#','{@@@}') ) +'#wechat_redirect';
 var DEBUG= 0;
 if(isWeiXin)
@@ -2904,7 +2904,6 @@ function chooseColor () {
 
 
 
-var host = "http://1111hui.com:88";
 var savedCanvasData = [];
 var savedSignData = [];
 var savedInputData = {};
@@ -2964,12 +2963,14 @@ function copyInputLayerData(pageIndex){
     textCon.forEach(function(v,i) {
       var offset = $(v).offset();
       var id = $(v).data('id');
+      var person = $(v).data('person');
 
       var text = $('[data-input-id="'+id+'"]');
 
       if( !text.length ){
         text = $('<div class="userInputText"><textarea name="userinput'+i+'"></textarea></div>');
         text.data('input-id', id );
+        text.data('person', person );
         text.appendTo( inputCon );
 
         function saveInputData() {
@@ -2980,7 +2981,7 @@ function copyInputLayerData(pageIndex){
           var inter1;
           function saveInterval(){
             $.post(host+'/saveInputData', { shareID:window.shareID, file:curFile, value:val, textID: id }, function(data){
-              console.log(data);
+
               if(data!='OK'){
                 clearTimeout(inter1);
                 inter1 = setTimeout(function(){saveInterval()}, 1000);
@@ -3001,8 +3002,13 @@ function copyInputLayerData(pageIndex){
       t = savedInputData[id] || t;
       setInputTextValue(id, t);
 
-      if(shareID){
-      	$('body').addClass('shareMode');
+
+      if(
+        ( window.isSigned || window.isFinished ) ||
+        (shareID && person && (rootPerson.userid!=person && rootPerson.userid!=userPlacerholder[person] )  )
+      ){
+
+        $('body').addClass('shareMode');
         text.find('textarea').show().prop('readonly', true);
       	//text.find('textarea').show().prop('disabled', true);
       	text.find('select').hide();
@@ -3230,7 +3236,7 @@ function restoreSignature (pageIndex) {
     img.data('person', v.person);
     img.data('idx', i);
     if(v.signPerson) img.data('signPerson', v.signPerson);
-    // if(!shareID && !isTemplate ) img.hide();
+    if(shareID && v.person && (v.person!=rootPerson.userid && userPlacerholder[v.person]!=rootPerson.userid ) ) return img.remove();
 
     img.click(function(e){
       var evt = /touch/.test(e.type) ? e.touches[0] : e;
@@ -3242,6 +3248,13 @@ function restoreSignature (pageIndex) {
       if(!shareID&& !isTemplate ){
         return alert('请在文件柜选择流程后会通知签署');
       }
+      if(shareID){
+        var emptyList = $('.userInputText textarea').not('[readonly]').filter(function  (v) {
+          return $(this).parent().data('person') && $(this).val()=='';
+        });
+        if(emptyList.length) return alert('填写完整信息后才可签署');
+      }
+
       var signPerson = $(this).data('signPerson');
       if( signPerson && signPerson!= rootPerson.userid ) return;
 
@@ -3547,9 +3560,9 @@ function updateSignIDS (){
 }
 
 function finishTemplate (){
-	
+
 	var signLength = $('.signImg[data-person]').length;
-	
+
 	if(signLength != $('.signImg').length ){
 		return alert('请指定所有签署人');
 	}
@@ -3557,6 +3570,31 @@ function finishTemplate (){
 	$.post(host+'/saveSignFlow', {key: curFile.replace(FILE_HOST, ''), signIDS:savedSignData}, function(ret){
 		alert('流程保存成功');
 	});
+}
+
+
+function sortCompanyNode (data) {
+  data = data.sort(function(a,b){
+
+    if(a.pId != b.pId)
+      return a.pId-b.pId;
+    var apid = a.parentid===undefined? -1 : a.parentid;
+    var bpid = b.parentid===undefined? -1 : b.parentid;
+    return apid-bpid;
+
+  });
+
+
+  var depart = data.filter(function(v){ return v.pId>=0 && v.parentid>=0 });
+  var opData = [];
+  depart.forEach(function(v){
+    opData.push(v);
+    opData = opData.concat(
+      data.filter(function(x){ return x.pId==v.id && x.parentid===undefined })
+      .sort(function(a,b){return a.userid>b.userid } )
+     );
+  });
+  return opData;
 }
 
 $(function  () {
@@ -3570,42 +3608,28 @@ $(function  () {
   window.isSigned = false;
   window.isFinished = false;
   window.shareData = null;
+  window.companyNode = null;
+  window.userPlacerholder = {};
 
   makeColorPicker();
   makeTemplatePicker();
   setStage('viewer');
 
   if(isTemplate){
+    $('body').addClass('template');
   	$('.maintool .btnPrint').hide();
   	$('.maintool .btnFinish').css({display:'table-cell'});
   }
-  
 
-  $.post('http://1111hui.com:88/getCompanyTree', {company:'lianrun'}, function(data){
+
+  $.post(host+'/getCompanyTree', {company:'lianrun'}, function(data){
     if(!data) return;
     data=JSON.parse(data);
 
-    data = data.sort(function(a,b){
-
-      if(a.pId != b.pId)
-        return a.pId-b.pId;
-      var apid = a.parentid===undefined? -1 : a.parentid;
-      var bpid = b.parentid===undefined? -1 : b.parentid;
-      return apid-bpid;
-
-    });
-
-
-    var depart = data.filter(function(v){ return v.pId>=0 && v.parentid>=0 });
-    var opData = [];
-    depart.forEach(function(v){
-      opData.push(v);
-      opData = opData.concat(
-        data.filter(function(x){ return x.pId==v.id && x.parentid===undefined })
-        .sort(function(a,b){return a.userid>b.userid } )
-       );
-    });
+    var opData = sortCompanyNode(data);
     //console.log(opData);
+    companyNode = opData;
+
 
     var html = '', prevID = 0;
     opData.forEach(function(v){
@@ -3638,7 +3662,7 @@ $(function  () {
     var id = $('.selStuff').data('id');
     if(!id) return;
     var targetEl = $('[data-id="'+ id +'"]');
-    
+
     if(e.val) $(targetEl).data('person', e.val );
     else $(targetEl).removeAttr('data-person' );
 
@@ -3722,7 +3746,11 @@ $(function  () {
     }
 
     window.isFinished = data.isFinish;
-
+    if(data.isSign){
+      data.selectRange.forEach(function  (v) {
+        userPlacerholder[v.placeholder] = v.userid;
+      });
+    }
   } );
 
   if(window.shareID){

@@ -1015,8 +1015,8 @@ var svgns = "http://www.w3.org/2000/svg";
           else
             offset.top += 32;
 
-          $('.select2').data('id', $(targetEl).data('id') );
-          
+          $('.selStuff').data('id', $(targetEl).data('id') );
+
           var trans = getTranslateXY(targetEl);
           offset.left -= trans[0]*curScale;
           offset.top -= trans[1]*curScale;
@@ -1028,7 +1028,7 @@ var svgns = "http://www.w3.org/2000/svg";
           $('.select2DIV').show().css( offset );
 
           var person = $(targetEl).data('person');
-          $('.select2').select2('val', person);
+          $('.selStuff').select2('val', person);
         }
 
 
@@ -1162,7 +1162,7 @@ var svgns = "http://www.w3.org/2000/svg";
 
         if(isTemplate && isText){
           showSelect2(targetEl, evt.clientY);
-          // $('.select2').select2('val', ['AL']);
+          // $('.selStuff').select2('val', ['AL']);
         } else {
           $('.select2DIV').hide();
         }
@@ -1180,7 +1180,7 @@ var svgns = "http://www.w3.org/2000/svg";
       }
 
     }
-    
+
 
     function moveFunc(e)
     {
@@ -1349,7 +1349,7 @@ var svgns = "http://www.w3.org/2000/svg";
               var ty = dy+ ~~oldTrans[1];
 
               setTranslateXY(v, tx, ty);
-              
+
               if(isText) {
                 setTranslateXY( $('.select2DIV'), tx*curScale, ty*curScale);
               }
@@ -2003,7 +2003,7 @@ var svgns = "http://www.w3.org/2000/svg";
 
         $('.editing').css( {width:offset.width, height:offset.height} );
         $('.editing').find('.bbox').css( {width:offset.width, height:offset.height} );
-        //$text.val( oldVal ).html(oldVal);
+        $text.val( oldVal ).html(oldVal);
 
 
         // $($text).get(0).style.removeProperty('width');
@@ -2033,7 +2033,7 @@ var svgns = "http://www.w3.org/2000/svg";
       } else {
         $('.editing').css( {width:offset.width, height:offset.height} );
         $('.editing').find('.bbox').css( {width:offset.width, height:offset.height} );
-        //$text.val( oldVal ).html(oldVal);
+        $text.val( oldVal ).html(oldVal);
       }
 
 
@@ -2099,7 +2099,7 @@ var svgns = "http://www.w3.org/2000/svg";
        .focus();
 
      $('.textarea').on('keydown blur', function(){
-       $('.editing').find('.text').val( $(this).val() )
+       $('.editing').find('.text').val( $(this).val() ).html( $(this).val() )
      });
 
       //if in android, we move textarea to top to show keyboard correctly.
@@ -3227,6 +3227,7 @@ function restoreSignature (pageIndex) {
     }
 
     img.data('id', v._id);
+    img.data('person', v.person);
     img.data('idx', i);
     if(v.signPerson) img.data('signPerson', v.signPerson);
     // if(!shareID && !isTemplate ) img.hide();
@@ -3268,6 +3269,7 @@ function restoreSignature (pageIndex) {
           if(isTemplate){
               showSelect2(img, evt.clientY);
         	   $('.btnCommon, .btnDelete').css('display', 'table-cell');
+        	   $('.maintool .btnFinish').css('display', 'table-cell');
           } else {
             if( $(this).find('img').size() ){
               $('.btnCommon, .btnSigned').css('display', 'table-cell');
@@ -3304,8 +3306,14 @@ function restoreSignature (pageIndex) {
 function deleteSign(){
   var img = $('.signImg.active');
   if(isTemplate) {
-  	  $.post(host+'/deleteSign', { person:rootPerson.userid, file:curFile, id:img.data('id')} );
+  	  var id = img.data('id');
+  	  $.post(host+'/deleteSign', { person:rootPerson.userid, file:curFile, id:id} );
   	  img.remove();
+
+  	  // Delete from savedSignData
+  	  savedSignData = $.grep(savedSignData, function(v){ return v._id!=id })
+  	  $('.select2DIV').hide();
+
   	  setStage('viewer');
 	} else {
 		$.post(host+'/deleteSignOnly', {id:img.data('id'), idx:img.data('idx'), person:rootPerson.userid, file:curFile, shareID:shareID  } );
@@ -3371,17 +3379,23 @@ function drawSign () {
 	var urlhash = 'page='+page+'&zoom='+ scaleValue +','+ ~~hashleft+','+ ~~hashtop;
 	var data = { signPerson:'yangjiming', file:window.curFile, page:page, scale:window.curScale, pos: pos, urlhash: urlhash, isMobile:isMobile };
 
-	$.post(host+'/drawSign', {data: data} , function(data){
-		console.log('sign id', data);
-		$('.signPad, .signPadHandler').hide();
+	updateSignIDS();
+	$.post(host+'/saveSignFlow', {key: curFile.replace(FILE_HOST, ''), signIDS:savedSignData}, function(ret){
 
-		$.post( host + '/getSavedSign', { file:curFile }, function(data){
-		  if(!data || !data.map) return;
-		  savedSignData = data;
-		  $('.page').eq(curPage-1).find('.signImg').remove();
-		  restoreSignature( curPage-1 );
-		} );
+		$.post(host+'/drawSign', {data: data} , function(data){
+			console.log('sign id', data);
+			$('.signPad, .signPadHandler').hide();
+
+			$.post( host + '/getSavedSign', { file:curFile }, function(data){
+			  if(!data || !data.map) return;
+			  savedSignData = data;
+			  $('.page').eq(curPage-1).find('.signImg').remove();
+			  restoreSignature( curPage-1 );
+			} );
+		});
+
 	});
+
 
 }
 
@@ -3517,12 +3531,55 @@ function padString (str, count){
   return ret;
 }
 
+function updateSignIDS (){
+
+	var signIDS = savedSignData;
+	$('.signImg').map(function(){
+		var id = $(this).data('id');
+		var person = $(this).data('person');
+		signIDS.forEach(function(v){
+			if(v._id == id){
+				v.person = person;
+			}
+		});
+	});
+	savedSignData = signIDS;
+}
+
+function finishTemplate (){
+	
+	var signLength = $('.signImg[data-person]').length;
+	
+	if(signLength != $('.signImg').length ){
+		return alert('请指定所有签署人');
+	}
+	updateSignIDS();
+	$.post(host+'/saveSignFlow', {key: curFile.replace(FILE_HOST, ''), signIDS:savedSignData}, function(ret){
+		alert('流程保存成功');
+	});
+}
 
 $(function  () {
+
+  var urlQuery = searchToObject(window.location.hash);
+  window.curFile = urlQuery.file;
+  window.shareID = urlQuery.shareID;
+  window.isSign = urlQuery.isSign;
+  window.isTemplate = urlQuery.isTemplate;
+  window.signID = urlQuery.signID;
+  window.isSigned = false;
+  window.isFinished = false;
+  window.shareData = null;
+
   makeColorPicker();
   makeTemplatePicker();
   setStage('viewer');
 
+  if(isTemplate){
+  	$('.maintool .btnPrint').hide();
+  	$('.maintool .btnFinish').css({display:'table-cell'});
+  }
+  
 
   $.post('http://1111hui.com:88/getCompanyTree', {company:'lianrun'}, function(data){
     if(!data) return;
@@ -3543,7 +3600,7 @@ $(function  () {
     var opData = [];
     depart.forEach(function(v){
       opData.push(v);
-      opData = opData.concat( 
+      opData = opData.concat(
         data.filter(function(x){ return x.pId==v.id && x.parentid===undefined })
         .sort(function(a,b){return a.userid>b.userid } )
        );
@@ -3565,27 +3622,34 @@ $(function  () {
 
     html+='</optgroup>';
 
-    $('select.select2').append( html );
+    $('select.selStuff').append( html );
 
   });
 
 
-  $('select.select2').select2({
+  $('.selStuff').select2({
     language: "zh-CN",
     placeholder:'选择填表人..'
   });
 
 
-  $('.select2').on("change", function (e) { 
+  $('.selStuff').on("change", function (e) {
     if( $(this).find('option').length <2) return;
-    var id = $('.select2').data('id');
+    var id = $('.selStuff').data('id');
     if(!id) return;
     var targetEl = $('[data-id="'+ id +'"]');
-    $(targetEl).data('person', e.val );
+    
+    if(e.val) $(targetEl).data('person', e.val );
+    else $(targetEl).removeAttr('data-person' );
+
   });
 
   $('#mainContainer').on(downE, function(e){
-    $('.select2').select2('close').blur();
+    $('.selStuff').select2('close').blur();
+  });
+
+  $('#viewerContainer').on('resize scroll', function(e){
+    $('.select2DIV').hide();
   });
 
   $('.button').on(downE, function  (e) {
@@ -3625,16 +3689,6 @@ $(function  () {
         var _this = this;
       }
     });
-
-  var urlQuery = searchToObject(window.location.hash);
-  window.curFile = urlQuery.file;
-  window.shareID = urlQuery.shareID;
-  window.isSign = urlQuery.isSign;
-  window.isTemplate = urlQuery.isTemplate;
-  window.signID = urlQuery.signID;
-  window.isSigned = false;
-  window.isFinished = false;
-  window.shareData = null;
 
   if(!window.isSign) $('.btnSign').hide();
   if(window.isTemplate) $('.btnSign').css('display', 'table-cell');
@@ -3817,34 +3871,6 @@ function chooseTemplate(){
     }
 })(window.Zepto||window.jQuery);
 
-;(function($) {
-    $.fn.outerWidth = function() {
-        var offset= getRealOffset(this);
-        return offset.width;
-    }
-    $.fn.outerHeight = function() {
-        var offset= getRealOffset(this);
-        return offset.height;
-    }
-    $.data = function(obj, key, val){
-      if(val){
-        $(obj).data2(key, val );
-      } else {
-        return $(obj).data2(key);
-      }
-      return $(obj);
-    }
-    $.removeData = function(obj, key){
-
-      $(obj).data2(key, null );
-      return $(obj);
-    }
-    $.fn.removeData = function(key){
-      $(this).data2(key, null );
-      return $(this);
-    }
-
-})(window.Zepto||window.jQuery);
 
 
 

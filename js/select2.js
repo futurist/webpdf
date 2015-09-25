@@ -18,6 +18,43 @@ Apache License or the GPL License is distributed on an "AS IS" BASIS, WITHOUT WA
 CONDITIONS OF ANY KIND, either express or implied. See the Apache License and the GPL License for
 the specific language governing permissions and limitations under the Apache License and the GPL License.
 */
+
+if(window.Zepto){
+
+    window.jQuery = window.Zepto;
+
+    ;(function($) {
+        $.fn.outerWidth = function() {
+            var offset= getRealOffset(this);
+            return offset.width;
+        }
+        $.fn.outerHeight = function() {
+            var offset= getRealOffset(this);
+            return offset.height;
+        }
+        $.data = function(obj, key, val){
+          if(val){
+            $(obj).data2(key, val );
+          } else {
+            return $(obj).data2(key);
+          }
+          return $(obj);
+        }
+        $.removeData = function(obj, key){
+
+          $(obj).data2(key, null );
+          return $(obj);
+        }
+        $.fn.removeData = function(key){
+          $(this).data2(key, null );
+          return $(this);
+        }
+
+    })(window.Zepto||window.jQuery);
+
+}
+
+
 (function ($) {
     if(typeof $.fn.each2 == "undefined") {
         $.extend($.fn, {
@@ -3426,13 +3463,13 @@ the specific language governing permissions and limitations under the Apache Lic
                 if($.type(val)=='array' ){
 
                     $(this.select).find("option").removeAttr('selected').filter( function(v) {
-                        return val.indexOf( $(this).val() )>-1; 
+                        return val.indexOf( $(this).val() )>-1;
                     }).attr('selected', 'selected');
 
                 }else{
                     this.select.val(val);
                 }
-                
+
             } else {
                 var unique = [], valMap = {};
                 // filter out duplicates

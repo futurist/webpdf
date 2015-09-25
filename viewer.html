@@ -56,6 +56,9 @@ See https://github.com/adobe-type-tools/cmap-resources
     <script src="js/zepto.js"></script>
 <script src="js/dialog.build.js"></script>
 
+<!-- load fonts -->
+<script type="text/javascript" src="js/glyphicon.js"></script>
+
     <script src="victor.js"></script>
     <script src="path.js"></script>
     <script src="drawer.js?t=546trwer456345342gd45"></script>
@@ -441,6 +444,51 @@ See https://github.com/adobe-type-tools/cmap-resources
 
 
 
+
+<style type="text/css">
+  .offsetrect{
+    position: absolute;
+    opacity: 0;
+    height: 33.333%;
+    width: 33.333%;
+}
+#topleftoffset{
+    top: 0;
+    left: 0;
+}
+#topcenteroffset{
+    top: 0;
+    left: 33.333%;
+}
+#toprightoffset{
+    top: 0;
+    left: 66.666%;
+}
+#centerleftoffset{
+    top: 33.333%;
+    left: 0;
+}
+#centercenteroffset{
+    top: 33.333%;
+    left: 33.333%;
+}
+#centerrightoffset{
+    top: 33.333%;
+    left: 66.666%;
+}
+#bottomleftoffset{
+    top: 66.666%;
+    left: 0;
+}
+#bottomcenteroffset{
+    top: 66.666%;
+    left: 33.333%;
+}
+#bottomrightoffset{
+    top: 66.666%;
+    left: 66.666%;
+}
+</style>
 
 
 
@@ -889,55 +937,65 @@ body.shareMode .userInputText textarea{
 {
   min-width: 120px;
 }
-</style>
 
-<style type="text/css">
-  .offsetrect{
+.maintool .btnFinish{
+  display: none;
+}
+
+.glyphicon {
+    font-size: 18px;
+    position: relative;
+    top: 1px;
+    display: inline-block;
+    font-family: 'Glyphicons Halflings';
+    font-style: normal;
+    font-weight: 400;
+    line-height: 1;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+.textWrap[data-person] .bbox:before{
+    font-size: 12px;
+    position: relative;
+    top: -16px;
+    color: rgba(0,0,0,0.3);
+    display: inline-block;
+    font-family: 'Glyphicons Halflings';
+    font-style: normal;
+    font-weight: 400;
+    line-height: 1;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    content: "\e008";
+}
+
+.signImg[data-person]:before{
+    font-size: 12px;
     position: absolute;
-    opacity: 0;
-    height: 33.333%;
-    width: 33.333%;
+    bottom: 4px;
+    left: -12px;
+    color: rgba(0,0,0,0.3);
+    display: inline-block;
+    font-family: 'Glyphicons Halflings';
+    font-style: normal;
+    font-weight: 400;
+    line-height: 1;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    content: "\e008";
 }
-#topleftoffset{
-    top: 0;
-    left: 0;
-}
-#topcenteroffset{
-    top: 0;
-    left: 33.333%;
-}
-#toprightoffset{
-    top: 0;
-    left: 66.666%;
-}
-#centerleftoffset{
-    top: 33.333%;
-    left: 0;
-}
-#centercenteroffset{
-    top: 33.333%;
-    left: 33.333%;
-}
-#centerrightoffset{
-    top: 33.333%;
-    left: 66.666%;
-}
-#bottomleftoffset{
-    top: 66.666%;
-    left: 0;
-}
-#bottomcenteroffset{
-    top: 66.666%;
-    left: 33.333%;
-}
-#bottomrightoffset{
-    top: 66.666%;
-    left: 66.666%;
-}
+
+
+
 </style>
 
 <div class="select2DIV" style="display:none; position:absolute; z-index:99999999999; top:0; left:0;">
-  <select class="select2">
+  <select class="selStuff">
+    <option value="">选择签署人</option>
+    <option value="_self">员工本人</option>
+    <option value="_parent">部门主管</option>
+    <option value="_boss">公司总管</option>
   </select>
 </div>
 
@@ -948,6 +1006,7 @@ body.shareMode .userInputText textarea{
     <a href="javascript:;" class="btnSigned button btnDelete" data-onclick="deleteSign()">删除签名</a>
     <a href="javascript:;" class="btnSigned button btnSignComplete" data-onclick="finishSign()">完成签名</a>
     <a href="javascript:;" class="btnNotSigned button btnSign" data-onclick="beginSign()">签名</a>
+    <a href="javascript:;" class="button btnFinish" data-onclick="finishTemplate()">完成</a>
   </div>
 
 </div>
@@ -964,7 +1023,8 @@ body.shareMode .userInputText textarea{
     <a href="javascript:;" class="button" data-onclick="switchOption('#mainMenu', 'rotate')">旋转</a>
     <a href="javascript:;" class="button" data-onclick="setStage('share')">分享</a>
     <a href="javascript:;" class="button btnMessage" data-onclick="setStage('message')" style="display:none;">消息</a>
-    <a href="javascript:;" class="button" data-onclick="setStage('print')">打印</a>
+    <a href="javascript:;" class="button btnPrint" data-onclick="setStage('print')">打印</a>
+    <a href="javascript:;" class="button btnFinish" data-onclick="finishTemplate()">完成</a>
 
   </div>
 

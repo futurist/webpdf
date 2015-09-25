@@ -97,6 +97,14 @@ function qiniu_getUpToken() {
 }
 
 
+function safeEvalQiniu (ret) {
+  for(var i in ret){
+    ret[i] = safeEval(ret[i]);
+  }
+  return ret;
+}
+
+
 function qiniu_uploadFile(file, callback ) {
 
 	var ext = path.extname(file);
@@ -112,7 +120,7 @@ function qiniu_uploadFile(file, callback ) {
 	  // ret.person = "yangjiming";
 	  // ret.savePath = savePath;
 	  //ret.path = "/abc/";
-	  if(callback) callback( ret );
+	  if(callback) callback( safeEvalQiniu(ret) );
 
 	});
 
@@ -673,7 +681,7 @@ app.post("/generatePDFAtPrinter", function (req, res) {
   var CONVERT_TIMEOUT = 2*60*1000 ;
   var data = req.body;
   data.task = 'generatePDF';
-  data.msgid = +new Date()+Math.random();
+  data.msgid = +new Date()+Math.random().toString().slice(2,5);
   wsSendPrinter(data, null, res);
   // will wait for job done WS Message from printer client app. check ws message: type=printerMsg
 
@@ -706,7 +714,7 @@ app.post("/printPDF", function (req, res) {
 	// req data: {server, printer, fileKey, shareID, person }
   var data = req.body;
   data.task = 'printPDF';
-  data.msgid = +new Date()+Math.random();
+  data.msgid = +new Date()+Math.random().toString().slice(2,5);
   wsSendPrinter(data, data.server, res);
 
 });
@@ -1018,7 +1026,7 @@ app.post("/rotateFile", function (req, res) {
 	}
 
     // extract the file name
-    var file_name = file.replace(FILE_HOST, '');
+    var file_name = file_url.replace(FILE_HOST, '');
     //var newName = file_name.replace(/(\(.*\))?\.pdf$/, '('+ 90 +').pdf' );
     var oldRotate = file_name.match(/(\(.*\))?\.pdf$/)[1];
     oldRotate = oldRotate ? parseInt(oldRotate.replace('(','')) : 0;
@@ -1069,7 +1077,6 @@ app.post("/rotateFile", function (req, res) {
 		        	//res.send('ok');
 		        	qiniu_uploadFile(DOWNLOAD_DIR+newName, function(ret){
 
-
 		        		if(!ret.error){
 			        		ret.person = oldFile.person;
 			        		ret.client = oldFile.client;
@@ -1082,11 +1089,14 @@ app.post("/rotateFile", function (req, res) {
     							oldFile.key = newName;
     							oldFile.fname = newName;
     							oldFile.title += '('+dirName+')';
-				        	oldFile.hash = ret.hash? ret.hash : +new Date()+Math.random();
+				        	oldFile.hash = ret.hash? ret.hash : +new Date()+Math.random().toString().slice(2,5);
 				        	ret = oldFile;
 				        	console.log('ret:', ret)
 			        	}
 
+                delete ret.drawData;
+                delete ret.inputData;
+                delete ret.signIDS;
 
 	        			upfileFunc(ret, function(ret2){
 	        				res.send( JSON.stringify(ret2)  );
@@ -1362,7 +1372,7 @@ app.post("/applyTemplate", function (req, res) {
 			type:info.type,
 			drawData:info.drawData,
 			signIDS:info.signIDS,
-			hash: +new Date()+Math.random()+'',
+			hash: +new Date()+Math.random().toString().slice(2,5)+'',
 			order:maxOrder
 		};
 
@@ -2152,6 +2162,44 @@ app.post("/finishSign", function (req, res) {
 
 
 
+app.post("/saveSignFlow", function (req, res) {
+  var signIDS =  req.body.signIDS;
+  var key =  req.body.key;
+  col.findOneAndUpdate( {role:'upfile', key:key}, {$set: { signIDS: signIDS } }, {projection:{title:1, key:1}},  function(err, result){
+    // console.log(err, result);
+    if(err||!result) return res.send('');
+    res.send('ok');
+
+    var flowName = result.value.title;
+    var stuffs = signIDS.forEach(function(v, i){
+      STUFF_LIST.some(function(s){
+        if(s.userid==v.person){
+          signIDS[i] = _.extend( v, s );
+          return true;
+        }
+      });
+    });
+
+    signIDS.sort(function(a,b){
+      return a.level>b.level;
+    });
+    
+    var flowPerson = signIDS.map(function(v){
+      var ret = v.userid
+                ? { name:v.name, userid:v.userid, depart:v.depart, level:v.level  }
+                : { name:v.name, userid:v.person, depart:v.depart, level:v.level  }
+
+      return ret;
+    });
+
+    col.updateOne({role:'flow', key:key}, {$set:{ role:'flow', key:key, name:flowName, date:new Date(), flowPerson:flowPerson  }}, {upsert:true}, function(err, result){
+
+    } );
+
+  } );
+
+});
+
 app.post("/saveSign", function (req, res) {
   var data =  req.body.data;
   var signID =  req.body.signID;
@@ -2578,7 +2626,7 @@ function _logErr () {
 
 function genPDF ( filename, shareID,  realname, cb ) {
 
-	var tempFile = IMAGE_UPFOLDER + (+new Date()+Math.random()) +'.pdf';
+	var tempFile = IMAGE_UPFOLDER + (+new Date()+Math.random().toString().slice(2,5)) +'.pdf';
 
 	var wget = 'rm -r '+ IMAGE_UPFOLDER+realname+ '; wget -P ' + IMAGE_UPFOLDER + ' -O '+ tempFile +' -N "' + FILE_HOST+filename +'" ';
 	console.log(wget);
@@ -2587,7 +2635,7 @@ function genPDF ( filename, shareID,  realname, cb ) {
 		console.log( err, stdout, stderr );
 		if(err || (stdout+stderr).indexOf('200 OK')<0 ) return cb?cb('无法获取原始文件'):'';
 
-		var tempPDF = IMAGE_UPFOLDER + (+new Date()+Math.random()) +'.pdf';
+		var tempPDF = IMAGE_UPFOLDER + (+new Date()+Math.random().toString().slice(2,5)) +'.pdf';
 		var cmd = 'phantomjs --config=client/config client/render.js "file='+ FILE_HOST+filename +'&shareID='+ shareID +'" '+ tempPDF;
 		console.log(cmd);
 
@@ -2842,6 +2890,8 @@ api.setOpts({timeout: 60000});
 // get accessToken for first time to cache it.
 api.getLatestToken(function () {});
 
+var COMPANY_TREE = null
+var STUFF_LIST = null;
 
 
 function updateCompanyTree () {
@@ -2879,6 +2929,28 @@ function updateCompanyTree () {
                 {upsert:true, w: 1},
                 function(err, result) {
 
+                  if(err) return console.log('updateCompanyTree', err);
+                  
+                  COMPANY_TREE = companyTree;
+                  STUFF_LIST = stuffList;
+
+                  // update STUFF_LIST with extended info from db
+                  col.findOne({role:'stuff'}, {sort: {level:-1} }, function(err, doc){
+                    
+                      var stuff2 = doc.stuffList;
+                      stuff2.forEach(function(v){
+
+                        STUFF_LIST.some(function(s, i) {
+                          if(s.userid==v.userid) {
+                            STUFF_LIST[i] = _.extend(s, v);
+                            return true;
+                          }
+                        });
+
+                      });
+
+                  });
+
                   console.log('update companyTree: ', result.result.nModified);
                   // col.update( { company:CompanyName, role:"companyTree", 'companyTree.id':1 }, { '$addToSet': {  'companyTree.$.children': {"userid":"yangjiming","name":"董月霞","department":[1],"mobile":"18072266386","gender":"1","email":"hxsdyjm@qq.com","weixinid":"futurist6","avatar":"http://shp.qpic.cn/bizmp/guTsUowz0NPtOuBoHUiaw3lPyys0DWwTwdUsibvlmwyzdrmYdxwRU4ag/","status":1} } } );
 
@@ -2901,12 +2973,42 @@ app.get("/updateCompanyTree", function (req, res) {
 app.post("/getCompanyTree", function (req, res) {
   var data = req.body;
   var company = data.company;
-  col.find( { company: company, role:"companyTree" } , {limit:2000, sort:{ pId:-1, parentid:-1 } } ).toArray(function(err, docs){
-      if(err|| !docs || !docs.length) return res.send('');
-      var count = docs.length;
-      if(count)
-      res.send( JSON.stringify( docs[0].companyTree ) );
-  });
+  if(COMPANY_TREE){
+
+    res.send( JSON.stringify( COMPANY_TREE ) );
+
+  } else {
+
+    col.find( { company: company, role:"companyTree" } , {limit:2000, sort:{ pId:-1, parentid:-1 } } ).toArray(function(err, docs){
+        if(err|| !docs || !docs.length) return res.send('');
+        var count = docs.length;
+        if(count)
+        res.send( JSON.stringify( docs[0].companyTree ) );
+
+        COMPANY_TREE = docs[0].companyTree;
+        STUFF_LIST = docs[0].stuffList;
+
+        // update STUFF_LIST with extended info from db
+        col.findOne({role:'stuff'}, {sort: {level:-1} }, function(err, doc){
+          var stuff2 = doc.stuffList;
+          stuff2.forEach(function(v){
+
+            STUFF_LIST.some(function(s, i) {
+              if(s.userid==v.userid) {
+                STUFF_LIST[i] = _.extend(s, v);
+                return true;
+              }
+            });
+
+          });
+
+
+        });
+
+    });
+
+  }
+
 });
 
 app.get("/createDepartment", function (req, res) {

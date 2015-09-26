@@ -24,6 +24,30 @@ function toggleDevTools (){
   }
 }
 
+
+function searchToObject(search) {
+  return search.substring(1).split("&").reduce(function(result, value) {
+    var parts = value.split('=');
+    if (parts[0]) result[decodeURIComponent(parts[0])] = decodeURIComponent(parts[1]);
+    return result;
+  }, {})
+}
+
+
+var urlQuery = searchToObject(window.location.hash);
+window.curFile = urlQuery.file;
+window.shareID = urlQuery.shareID;
+window.isSign = urlQuery.isSign;
+window.isTemplate = urlQuery.isTemplate;
+window.signID = urlQuery.signID;
+window.isSigned = false;
+window.isFinished = false;
+window.shareData = null;
+window.companyNode = null;
+window.userPlacerholder = {};
+
+
+
 var host = "http://1111hui.com:88";
 
 FILE_HOST = 'http://7xkeim.com1.z0.glb.clouddn.com/';
@@ -31,33 +55,54 @@ TREE_URL = "http://1111hui.com:88/tree.html";
 VIEWER_URL = "http://1111hui.com/pdf/webpdf/viewer.html";
 
 var wxOAuthUrl = 'https://open.weixin.qq.com/connect/oauth2/authorize?appid=wx59d46493c123d365&redirect_uri=http%3A%2F%2F1111hui.com%2F/pdf/getUserID.php&response_type=code&scope=snsapi_base&state='+ encodeURIComponent( window.location.href.replace('#','{@@@}') ) +'#wechat_redirect';
-var DEBUG= 0;
-if(isWeiXin)
-if(!DEBUG)
-{
+
+
+var isAndroid = /(android)/i.test(navigator.userAgent);
+var isWeiXin = navigator.userAgent.match(/MicroMessenger\/([\d.]+)/i);
+var isiOS = /iPhone/i.test(navigator.userAgent) || /iPod/i.test(navigator.userAgent) || /iPad/i.test(navigator.userAgent);
+var isMobile = isAndroid||isWeiXin||isiOS;
+
+var wxUserInfo;
+var DEBUG= eval(urlQuery.debug||0);
+
+var rootPerson = {userid: 'yangjiming', name:"杨吉明", depart:"行政" };
+
+if(window.navigator.userAgent == "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_4) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/42.0.2311.152 Safari/537.36"
+  || window.navigator.userAgent == "Mozilla/5.0 (Windows NT 5.1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/45.0.2454.99 Safari/537.36"
+  ) DEBUG=1;
+
+
+if(isWeiXin){
+  if(!DEBUG)
+  {
+
+    wxUserInfo = Cookies.get( 'wxUserInfo' );
+    if( !wxUserInfo ) window.location.replace(wxOAuthUrl);
+    else wxUserInfo = JSON.parse(wxUserInfo);
+
+  } else {
+    wxUserInfo={};
+    wxUserInfo.UserId = 'yangjiming';
+  }
+
+} else if(!DEBUG) {
+
+  rootPerson.userid = Cookies.get( 'userid' );
+  if(!rootPerson.userid) alert('非法用户');
+
+}
 
 $(function(){
-var wxUserInfo = Cookies.get( 'wxUserInfo' );
-if( !wxUserInfo ){
-  window.location = wxOAuthUrl;
-} else {
-   wxUserInfo = JSON.parse(wxUserInfo);
-    $.post(host+'/getUserInfo', { userid: wxUserInfo.UserId }, function  (userinfo) {
+
+    $.post(host+'/getUserInfo', { userid: isWeiXin ? wxUserInfo.UserId : rootPerson.userid }, function  (userinfo) {
         if(!userinfo){
           alert('非法用户');
           return;
         }
-
         rootPerson = userinfo;
     });
-}
+
 });
-
-}else{
-  var wxUserInfo={};
-  wxUserInfo.UserId = 'yangjiming';
-}
-
 
 
 function initWX() {
@@ -182,6 +227,7 @@ var DrawView  = (function () {
       var div = this.div;
       div.style.width = Math.floor(this.pageView.viewport.width) + 'px';
       div.style.height = Math.floor(this.pageView.viewport.height) + 'px';
+      $('.signImg').remove();
     },
 
     update: function (scale, rotation) {
@@ -607,10 +653,6 @@ $(document).add($(window)).on('touchmove', function(e) {
   }
 );
 
-var isAndroid = /(android)/i.test(navigator.userAgent);
-var isWeiXin = navigator.userAgent.match(/MicroMessenger\/([\d.]+)/i);
-var isiOS = /iPhone/i.test(navigator.userAgent) || /iPod/i.test(navigator.userAgent) || /iPad/i.test(navigator.userAgent);
-var isMobile = isAndroid||isWeiXin||isiOS;
 
 // init function
 function init (context) {
@@ -3209,7 +3251,7 @@ function restoreSignature (pageIndex) {
     var scale = v.scale? window.curScale/v.scale : 1;
     //var img = $('<div class="signImg"><div class="img"></div></div>');
     var img = $('<div class="signImg"><img class="img"></div></div>');
-    img.appendTo( $('#viewer .page').eq(v.page-1) );
+    img.appendTo( $('#inputViewer .page').eq(v.page-1) );
     img.css({left:v.pos.left*scale+'px', top:v.pos.top*scale+'px', width:v.pos.width*scale+'px', height:v.pos.height*scale+'px' });
 
     // http://stackoverflow.com/questions/11753485/set-img-src-to-dynamic-svg-element
@@ -3228,7 +3270,7 @@ function restoreSignature (pageIndex) {
       if(isSigned || isFinished ){
         img.hide();
       } else {
-        img.html('<span>点此签名</span>').autoFontSize();
+        img.html('<a href="javascript:;"><span>点此签名</span></a>').autoFontSize();
       }
     }
 
@@ -3236,9 +3278,16 @@ function restoreSignature (pageIndex) {
     img.data('person', v.person);
     img.data('idx', i);
     if(v.signPerson) img.data('signPerson', v.signPerson);
-    if(shareID && v.person && (v.person!=rootPerson.userid && userPlacerholder[v.person]!=rootPerson.userid ) ) return img.remove();
+    if( shareID )
+    if( ( !img.find('.img').length &&
+      v.person && (v.person!=rootPerson.userid && userPlacerholder[v.person]!=rootPerson.userid )  )
+    ) {
+      return img.remove();
+    } 
 
-    img.click(function(e){
+    //var eventEl = $(img).find('a') ? $(img).find('a') : img;
+    img.on( isWeiXin? 'touchstart' : 'click' , function(e){
+
       var evt = /touch/.test(e.type) ? e.touches[0] : e;
 
       if( window.isSigned || window.isFinished ){
@@ -3256,7 +3305,9 @@ function restoreSignature (pageIndex) {
       }
 
       var signPerson = $(this).data('signPerson');
-      if( signPerson && signPerson!= rootPerson.userid ) return;
+      if( signPerson && signPerson!= rootPerson.userid ){
+        return;
+      } 
 
       if($(this).hasClass('active')){
 
@@ -3275,7 +3326,7 @@ function restoreSignature (pageIndex) {
         		$('.btnCommon, .btnSigned').css('display', 'table-cell');
         	} else {
         		$('.btnCommon, .btnNotSigned').css('display', 'table-cell');
-            beginSign();
+            beginSign(img);
             setStage('viewer');
         	}
         } else {
@@ -3299,7 +3350,7 @@ function restoreSignature (pageIndex) {
 
 
     });
-
+  
     if(window.signID == v._id ){
       img.click();
       var off=img.offset();
@@ -3316,8 +3367,8 @@ function restoreSignature (pageIndex) {
   });
 }
 
-function deleteSign(){
-  var img = $('.signImg.active');
+function deleteSign(el){
+  var img = $(el);
   if(isTemplate) {
   	  var id = img.data('id');
   	  $.post(host+'/deleteSign', { person:rootPerson.userid, file:curFile, id:id} );
@@ -3362,7 +3413,7 @@ function drawSign () {
 
 	if( !isTemplate || !$('.signPad').is(':visible') ) return;
 	var padOffset = getRealOffset($('.signPad'));
-	var el = $('#viewer .page').filter(function(){
+	var el = $('#inputViewer .page').filter(function(){
 		var offset = getRealOffset($(this));
 		return rectsIntersect(offset, padOffset);
 	});
@@ -3392,8 +3443,8 @@ function drawSign () {
 	var urlhash = 'page='+page+'&zoom='+ scaleValue +','+ ~~hashleft+','+ ~~hashtop;
 	var data = { signPerson:'yangjiming', file:window.curFile, page:page, scale:window.curScale, pos: pos, urlhash: urlhash, isMobile:isMobile };
 
-	updateSignIDS();
-	$.post(host+'/saveSignFlow', {key: curFile.replace(FILE_HOST, ''), signIDS:savedSignData}, function(ret){
+	//updateSignIDS();
+	// $.post(host+'/saveSignFlow', {key: curFile.replace(FILE_HOST, ''), signIDS:savedSignData}, function(ret){
 
 		$.post(host+'/drawSign', {data: data} , function(data){
 			console.log('sign id', data);
@@ -3407,15 +3458,15 @@ function drawSign () {
 			} );
 		});
 
-	});
+	// });
 
 
 }
 
-function beginSign(){
+function beginSign(el){
 
-  var signID = $('.signImg.active').data('id');
-	var idx = $('.signImg.active').data('idx');
+  var signID = $(el).data('id');
+	var idx = $(el).data('idx');
   var fileKey = curFile.replace(FILE_HOST, '');
 
 	var url = 'http://1111hui.com/pdf/webpdf/signpad.html#fileKey='+ fileKey +'&shareID='+ (shareID||'') +'&idx='+ idx +'&signID='+signID+'&hash='+(+new Date());
@@ -3493,7 +3544,7 @@ function setStage (stat) {
       break;
     case 'print':
       var file = window.curFile.replace(FILE_HOST, '');
-      var toUrl = TREE_URL+'#path='+(file)+ '&openMessage=1'+ (shareID ? '&shareID='+shareID :'');
+      var toUrl = TREE_URL+'#path='+(file)+ '&openMessage=2'+ (shareID ? '&shareID='+shareID :'');
       openLinkNW(toUrl);
       break;
 	}
@@ -3599,18 +3650,6 @@ function sortCompanyNode (data) {
 
 $(function  () {
 
-  var urlQuery = searchToObject(window.location.hash);
-  window.curFile = urlQuery.file;
-  window.shareID = urlQuery.shareID;
-  window.isSign = urlQuery.isSign;
-  window.isTemplate = urlQuery.isTemplate;
-  window.signID = urlQuery.signID;
-  window.isSigned = false;
-  window.isFinished = false;
-  window.shareData = null;
-  window.companyNode = null;
-  window.userPlacerholder = {};
-
   makeColorPicker();
   makeTemplatePicker();
   setStage('viewer');
@@ -3649,6 +3688,7 @@ $(function  () {
     $('select.selStuff').append( html );
 
   });
+
 
 
   $('.selStuff').select2({
@@ -3760,17 +3800,7 @@ $(function  () {
 });
 
 
-function searchToObject(search) {
-  return search.substring(1).split("&").reduce(function(result, value) {
-    var parts = value.split('=');
-    if (parts[0]) result[decodeURIComponent(parts[0])] = decodeURIComponent(parts[1]);
-    return result;
-  }, {})
-}
 
-
-
-var rootPerson = {userid: 'yangjiming', name:"杨吉明", depart:"行政" };
 
 var TemplateField = {
 	'姓名':{demo:"[姓名]", callback: function(){

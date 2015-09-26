@@ -2021,7 +2021,7 @@ app.post("/getShareMsg", function (req, res) {
 
       shareA = shareA.map( function(v){ return parseInt(v) } );
 
-      var condition = {  role:'shareMsg', shareID:{$in:shareA} };
+      var condition = {  role:'shareMsg', shareID:{$in:shareA}, WXOnly:{$in:[null,false,'']} };
 
       var hashA = [null];
       if(hash) hashA = hashA.concat(hash);
@@ -2092,8 +2092,10 @@ app.post("/drawSign", function (req, res) {
   data._id = +new Date()+Math.random().toString().slice(2,5);
   delete data.file;
   delete data.signPerson;
+  console.log(file, data);
 
-  col.updateOne( { role:'upfile', key:file }, { $addToSet: { signIDS: data } },  {w:1}, function(err,result){
+  col.update( { role:'upfile', key:file }, { $push: { signIDS: data } }, function(err,result){
+  	console.log(err);
     if(err || !result) return res.send('');
     res.send(result);
   });
@@ -2209,7 +2211,7 @@ app.post("/finishSign", function (req, res) {
                "msgtype": "text",
                "text": {
                  "content":
-                 util.format('流程%d %s (%s-%s)</a>已由%s签署,此流程已结束 <a href="%s">点此预览</a>',
+                 util.format('流程%d %s (%s-%s)已由%s签署,此流程已结束 <a href="%s">点此预览</a>',
                     colShare.shareID,
                     msg,
                     colShare.flowName,
@@ -2371,10 +2373,14 @@ app.post("/saveSign", function (req, res) {
       		// http://stackoverflow.com/questions/18986505/mongodb-array-element-projection-with-findoneandupdate-doesnt-work
 			col.findOneAndUpdate( {role:'share', shareID:shareID, 'files.key':fileKey },
 				{ $set: setObj }, { projection:{ key:1, 'files': {$elemMatch: {key: fileKey} } } } , function(err, result) {
-
-					if(err) return res.send('');
+					
+					if(err){
+						console.log(err);
+						return res.send('');
+					} 
 					try{var ret=result.value.files.shift().signIDS[ signIDX ]; }
 					catch(e){
+						console.log(e);
 						return res.send('');
 					}
 	          	res.send( ret );
@@ -3139,7 +3145,6 @@ app.post("/getCompanyTree", function (req, res) {
         if(err|| !docs || !docs.length) return res.send('');
         var count = docs.length;
         if(count)
-        res.send( JSON.stringify( docs[0].companyTree ) );
 
         COMPANY_TREE = docs[0].companyTree;
         STUFF_LIST = docs[0].stuffList;
@@ -3158,6 +3163,7 @@ app.post("/getCompanyTree", function (req, res) {
 
           });
 
+          res.send( JSON.stringify( COMPANY_TREE ) );
 
         });
 

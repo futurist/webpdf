@@ -13,6 +13,7 @@ if(!DEBUG)
 
 $(function(){
  wxUserInfo = Cookies.get( 'wxUserInfo' );
+
 if( !wxUserInfo ){
   window.location = wxOAuthUrl;
 } else {
@@ -108,19 +109,20 @@ function initSignPad(){
               //..check orientation data, this code assumes the case where its oriented 90 degrees off
               ctx.drawImage(signCanvas, 0, 0);
               var signData = canvas.toDataURL("image/png");
-              
+
             var data = window.signHisID? { signID:signID, fileKey:fileKey, shareID:shareID, hisID: window.signHisID, signIDX:signIDX} : {data: signData, width:canvas.width, height:canvas.height, signID:signID,  fileKey:fileKey, shareID:shareID, signIDX:signIDX };
 
             data.signPerson = wxUserInfo.UserId;
 
-            $.post( 'http://1111hui.com:88/saveSign', data , function(data){
+            $.post( 'http://1111hui.com:88/saveSign', data , function(ret){
                 
-                // return console.log(data);
+                alert(ret);
+                // return console.log(ret);
 
-                if(data){
-                    //data = data.signIDS.filter(function(v){ return v._id == signID  }  ).shift();
+                if(ret){
+                    //ret = ret.signIDS.filter(function(v){ return v._id == signID  }  ).shift();
                     alert( window.signHisID?'签名应用成功，确定后返回文档': '签名应用成功，并保存到历史签名。确定后返回文档');
-                    var url = 'http://1111hui.com/pdf/webpdf/viewer.html#file='+ FILE_HOST+fileKey +'&isSign=1&signID='+ signID +'&shareID='+(shareID||'')+'&pos='+data.urlhash.replace('#','');
+                    var url = 'http://1111hui.com/pdf/webpdf/viewer.html#file='+ FILE_HOST+fileKey +'&isSign=1&signID='+ signID +'&shareID='+(shareID||'')+'&pos='+ret.urlhash.replace('#','');
                     window.location = url;
                 }
             });            

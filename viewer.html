@@ -71,8 +71,9 @@ See https://github.com/adobe-type-tools/cmap-resources
 <script src="js/select2.js"></script>
 <script src="js/select2_locale_zh-CN.js"></script>
 
+<link href="css/font-awesome.min.css" rel="stylesheet" />
 <link href="js/selectivity-full.css" rel="stylesheet" />
-<script src="js/selectivity-full.min.js"></script>
+<script src="js/selectivity-full.js"></script>
 
   </head>
 
@@ -995,11 +996,18 @@ body.template .signImg[data-person]:before{
     content: "\e008";
 }
 
+div.selectivity-input{
+  width: auto;
+}
+
+div.selectivity-dropdown{
+  min-width:154px;
+}
+
 </style>
 
 <div class="select2DIV" style="display:none; position:absolute; z-index:99999999999; top:0; left:0;">
   <select class="selStuff">
-    <option value="">选择签署人</option>
     <option value="_self">员工本人</option>
     <option value="_parent">部门主管</option>
     <option value="_boss">公司总管</option>

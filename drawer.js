@@ -104,12 +104,16 @@ $(function(){
 
 });
 
-
+var wxInitTryCount=0;
 function initWX() {
 	$.post(host+'/getJSConfig', { url:window.location.href.split('#')[0] }, function(data){
 		if(!data || data[0]!='{') {
-			alert('获取微信接口错误');
-			wx.closeWindow();
+			if(wxInitTryCount++<3){
+        initWX();
+      }else{
+        alert('获取微信接口错误');
+        wx.closeWindow();
+      }
 			return;
 		}
 		data = JSON.parse(data);
@@ -227,7 +231,6 @@ var DrawView  = (function () {
       var div = this.div;
       div.style.width = Math.floor(this.pageView.viewport.width) + 'px';
       div.style.height = Math.floor(this.pageView.viewport.height) + 'px';
-      $('.signImg').remove();
     },
 
     update: function (scale, rotation) {
@@ -1070,7 +1073,8 @@ var svgns = "http://www.w3.org/2000/svg";
           $('.select2DIV').show().css( offset );
 
           var person = $(targetEl).data('person');
-          $('.selStuff').select2('val', person);
+          if(person) $('.selStuff').selectivity('val', person);
+          else $('.selStuff').selectivity('val', '');
         }
 
 
@@ -1204,7 +1208,7 @@ var svgns = "http://www.w3.org/2000/svg";
 
         if(isTemplate && isText){
           showSelect2(targetEl, evt.clientY);
-          // $('.selStuff').select2('val', ['AL']);
+          // $('.selStuff').selectivity('val', ['AL']);
         } else {
           $('.select2DIV').hide();
         }
@@ -3243,6 +3247,7 @@ function getSignData (page) {
 
 
 function restoreSignature (pageIndex) {
+  $('.signImg').remove();
 
   savedSignData.forEach(function  (v,i) {
     //if(!v.sign) return true;
@@ -3283,7 +3288,7 @@ function restoreSignature (pageIndex) {
       v.person && (v.person!=rootPerson.userid && userPlacerholder[v.person]!=rootPerson.userid )  )
     ) {
       return img.remove();
-    } 
+    }
 
     //var eventEl = $(img).find('a') ? $(img).find('a') : img;
     img.on( isWeiXin? 'touchstart' : 'click' , function(e){
@@ -3307,7 +3312,7 @@ function restoreSignature (pageIndex) {
       var signPerson = $(this).data('signPerson');
       if( signPerson && signPerson!= rootPerson.userid ){
         return;
-      } 
+      }
 
       if($(this).hasClass('active')){
 
@@ -3350,7 +3355,7 @@ function restoreSignature (pageIndex) {
 
 
     });
-  
+
     if(window.signID == v._id ){
       img.click();
       var off=img.offset();
@@ -3498,6 +3503,7 @@ function beginSign(el){
 function setStage (stat) {
 
   $('.active').removeClass('active');
+  $('.select2DIV').hide();
 
   function resetState () {
     $('.subtool').hide();
@@ -3648,6 +3654,10 @@ function sortCompanyNode (data) {
   return opData;
 }
 
+function hideSelStuff () {
+  if( $('.selectivity-dropdown').length ) $('.selStuff').selectivity('close');
+}
+
 $(function  () {
 
   makeColorPicker();
@@ -3687,29 +3697,43 @@ $(function  () {
 
     $('select.selStuff').append( html );
 
+    $('.selStuff').selectivity({
+      allowClear: true,
+      language: "zh-CN",
+      placeholder:'选择流程人..',
+      positionDropdown: function  ($dropEl, $selEl) {
+        $dropEl.css({top:'auto'});
+      }
+    });
+
+    $('.selStuff').on("change", function (e) {
+      var id = $('.selStuff').data('id');
+      if(!id) return;
+      var targetEl = $('[data-id="'+ id +'"]');
+      if(e.value) $(targetEl).data('person', e.value );
+      else $(targetEl).removeAttr('data-person' );
+
+    });
+
+    $('.selStuff').on("selectivity-open", function (e) {
+
+      var val = $('.selStuff').selectivity('val');
+      $('.selectivity-result-item').removeClass('highlight');
+      $('.selectivity-result-item[data-item-id="' + val + '"]').addClass('highlight');
+
+    });
+
+
+
   });
 
 
 
-  $('.selStuff').select2({
-    language: "zh-CN",
-    placeholder:'选择填表人..'
-  });
 
 
-  $('.selStuff').on("change", function (e) {
-    if( $(this).find('option').length <2) return;
-    var id = $('.selStuff').data('id');
-    if(!id) return;
-    var targetEl = $('[data-id="'+ id +'"]');
-
-    if(e.val) $(targetEl).data('person', e.val );
-    else $(targetEl).removeAttr('data-person' );
-
-  });
 
   $('#mainContainer').on(downE, function(e){
-    $('.selStuff').select2('close').blur();
+    hideSelStuff();
   });
 
   $('#viewerContainer').on('resize scroll', function(e){

@@ -205,6 +205,19 @@ wss.on('connection', function connection(ws) {
       var suffix = (msg.from? ':'+msg.from: '');
       console.log( 'client up', msg.clientName+suffix );
       WSCLIENT[msg.clientName+suffix] = _.extend( msg, {ws:ws, timeStamp:+new Date()} );
+
+      if(msg.clientRole == 'printer') {
+
+          col.update({role:'printer', 'printerList.userid': msg.clientName }, { $set:{ role:'printer', 'printerList.$.userid': msg.clientName, 'printerList.$.client': msg.hostName,  'printerList.$.ip': msg.ip } }, {upsert:1}, function(err, ret){
+            if(err) {
+              console.log('ERROR update printer ip:', msg.clientName, msg.hostName);
+              return res.send('');
+            }
+            console.log('updated printer ip:', msg.clientName, msg.hostName, msg.ip);
+          });
+
+      }
+
       return;
     }
 
@@ -519,6 +532,8 @@ app.post("/putFingerInfo", function (req, res) {
   var code = req.body.code;
   var msgid = req.body.msgid;
   var reqData = getWsData(msgid);
+  console.log(code, msgid, reqData);
+
   if(!code || !reqData) return res.send('');
 
   var finger = reqData.finger;
@@ -728,7 +743,7 @@ app.post("/uploadPCImage", function (req, res) {
   var filename = req.body.filename;
   var person = req.body.person;
   var shareID = req.body.shareID;
-  
+
   filename = encodeURIComponent(filename);
 
   console.log('filename', filename)
@@ -1022,6 +1037,22 @@ app.post("/upfile", function (req, res) {
 
 } );
 
+
+app.post("/updateHost", function (req, res) {
+  var person = req.body.person;
+  var hostname = req.body.hostname;
+  var ip = req.body.ip;
+  col.update({role:'stuff', 'stuffList.userid': person }, { $set:{ role:'stuff', 'stuffList.$.userid': person, 'stuffList.$.client': hostname,  'stuffList.$.ip': ip } }, {upsert:1}, function(err, ret){
+    if(err) {
+      console.log('ERROR update host:', person, hostname);
+      return res.send('');
+    } 
+    console.log('updated host:', person, hostname, ip);
+    res.send('OK');
+  });
+
+});
+
 app.post("/rotateFile", function (req, res) {
 	var data = req.body;
 	var oldFile, newFile;
@@ -1131,13 +1162,17 @@ app.post("/getUserInfo", function (req, res) {
   getUserInfo(userid, res);
 });
 
-function getUserInfo (userid, res) {
-	col.findOne( { company:CompanyName, role:"companyTree", 'stuffList.userid': userid, 'stuffList.status': 1 } , {limit:1, fields:{'stuffList.$':1} }, function(err, item){
+function getUserInfo2 (userid, res) {
+  col.findOne( { company:CompanyName, role:"companyTree", 'stuffList.userid': userid, 'stuffList.status': 1 } , {limit:1, fields:{'stuffList.$':1} }, function(err, item) {
     if(err ||  !item.stuffList || !item.stuffList.length) {
       return res.send('');
     }
       res.send( item.stuffList[0] );
-  	});
+    });
+}
+
+function getUserInfo (userid, res) {
+	res.send( _.find(COMPANY_TREE, {userid:userid, status:1}) );
 }
 
 
@@ -2185,6 +2220,15 @@ function getSubStr (str, len) {
 }
 
 
+app.post("/getSignStatus", function (req, res) {
+  var shareID = safeEval(req.body.shareID);
+  var person =  req.body.person;
+  col.findOne({role:'share', shareID:shareID, 'toPerson.userid': person }, {fields: {'toPerson': {$elemMatch:{ userid:person} } } }, function  (err, ret) {
+    if(err||!ret) return res.send('');
+    res.send( ret );
+  }  );
+});
+
 app.post("/finishSign", function (req, res) {
   var shareID =  safeEval(req.body.shareID);
   var person =  req.body.person;
@@ -2198,12 +2242,12 @@ app.post("/finishSign", function (req, res) {
     var flowName = colShare.flowName;
     var msg = colShare.msg;
     var title = getSubStr( '流程-'+shareID+flowName+ (msg), 50);
-    var overAllPath = util.format('%s#path=%s&shareID=%d', TREE_URL, encodeURIComponent(fileKey), shareID ) ;
+    var overAllPath = util.format('%s#file=%s&shareID=%d&isSign=1', VIEWER_URL, encodeURIComponent(fileKey), shareID ) ;
 
     if(curFlowPos >= colShare.selectRange.length){
 
     	col.update({role:'share', shareID:shareID }, { $set: { 'isFinish':true }  });
-		wsBroadcast( {role:'share', isFinish:true, data:colShare } );
+		wsBroadcast( {role:'share', isFinish:true, key:fileKey, data:colShare } );
 
         res.send( util.format( '流程%d %s (%s-%s)已结束，系统将通知相关人员知悉',
                     colShare.shareID,
@@ -2380,17 +2424,19 @@ app.post("/saveSign", function (req, res) {
       		// http://stackoverflow.com/questions/18986505/mongodb-array-element-projection-with-findoneandupdate-doesnt-work
 			col.findOneAndUpdate( {role:'share', shareID:shareID, 'files.key':fileKey },
 				{ $set: setObj }, { projection:{ key:1, 'files': {$elemMatch: {key: fileKey} } } } , function(err, result) {
-					
+
 					if(err){
 						console.log(err);
 						return res.send('');
-					} 
+					}
 					try{var ret=result.value.files.shift().signIDS[ signIDX ]; }
 					catch(e){
 						console.log(e);
 						return res.send('');
 					}
 	          	res.send( ret );
+
+
 	        });
       	} else {
       		col.findOneAndUpdate( {role:'upfile', 'key':fileKey, 'signIDS._id': signID },
@@ -2404,6 +2450,8 @@ app.post("/saveSign", function (req, res) {
 				}
 
 	          res.send( ret );
+
+
 	        });
       	}
 
@@ -2546,12 +2594,12 @@ app.post("/shareFile", function (req, res) {
 
 
 
-  col.find( {role:'upfile', key:{ $in: data.fileIDS } }, { sort:{ key:1 } } ).toArray(function  (err, files) {
-
-  	files.forEach(function(v, i){
-  		v.path = data.filePathS[ v.key.replace(/\./g, '\uff0e') ];
-  	});
-  	data.files = files;
+  function addShareFiles (files) {
+    
+    files.forEach(function(v, i){
+      v.path = data.filePathS[ v.key.replace(/\./g, '\uff0e') ];
+    });
+    data.files = files;
 
       if(data.existShareID){
 
@@ -2606,8 +2654,21 @@ app.post("/shareFile", function (req, res) {
 
       }
 
+  }
 
-	});
+  if(data.oldShareID){
+
+    col.findOne( {role:'share', shareID:data.oldShareID, 'files.key':{ $in: data.fileIDS } }, { sort:{ 'files.key':1 } }, function  (err, ret) {
+      var files = ret.files.filter(function(v){ return data.fileIDS.indexOf(v.key)>-1 });
+      //console.log(err, files)
+      addShareFiles(files);
+    });
+
+  }else{
+    col.find( {role:'upfile', key:{ $in: data.fileIDS } }, { sort:{ key:1 } } ).toArray(function  (err, files) {
+      addShareFiles(files);
+    });
+  }
 
 
 });
@@ -2641,7 +2702,7 @@ function insertShareData (data, res, showTab){
                           data.files.map(function(v){return ''+v.title+''}).join('，'),
                           data.selectRange.map(function(v){
                             return v.depart? ''+v.depart+'-'+v.name+'' : '【'+v.name+'】' }).join('；'),
-                          '<a href="'+ treeUrl +'">点此查看</a>'
+                          '<a href="'+ treeUrl +'">查看共享</a>'
                         );
 
                   } else {
@@ -2654,12 +2715,12 @@ function insertShareData (data, res, showTab){
                           data.msg,
                           data.selectRange.map(function(v){
                             return v.depart? ''+v.depart+'-'+v.name+'' : '【'+v.name+'】' }).join('；'),
-                          '<a href="'+ treeUrl +'">点此查看</a>'
+                          '<a href="'+ treeUrl +'">查看共享</a>'
                         );
                   }
 
                   } else {
-                    var treeUrl = TREE_URL + '#path=' + data.files[0].key +'&isSign=1&shareID='+ shareID;
+                    var treeUrl = VIEWER_URL + '#file=' + data.files[0].key +'&isSign=1&shareID='+ shareID;
                     var content = util.format('流程ID：%d %s发起了流程：%s，文档：%s，经办人：%s%s\n%s',
                         shareID,
                         data.fromPerson.map(function(v){return '【'+v.depart + '-' + v.name+'】'}).join('|'),

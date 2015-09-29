@@ -10,6 +10,10 @@
 * change: all window.location.search to window.location.hash
 */
 
+
+
+DEFAULT_SCALE_DELTA = 1.5;
+
 var isNWJS = typeof global !='undefined';
 var curNWWin=null;
 if(isNWJS){
@@ -40,13 +44,16 @@ window.shareID = urlQuery.shareID;
 window.isSign = urlQuery.isSign;
 window.isTemplate = urlQuery.isTemplate;
 window.signID = urlQuery.signID;
+window.signPos = urlQuery.pos;
 window.isSigned = false;
 window.isFinished = false;
 window.shareData = null;
 window.companyNode = null;
 window.userPlacerholder = {};
 
-
+if(window.signPos){
+  window.location.href = window.location.href.split('&').slice(0,-1).join('&');
+}
 
 var host = "http://1111hui.com:88";
 
@@ -3049,7 +3056,7 @@ function copyInputLayerData(pageIndex){
       setInputTextValue(id, t);
 
 
-      if(
+      if( !window.isSign ||
         ( window.isSigned || window.isFinished ) ||
         (shareID && person && (rootPerson.userid!=person && rootPerson.userid!=userPlacerholder[person] )  )
       ){
@@ -3272,7 +3279,7 @@ function restoreSignature (pageIndex) {
 
     } else {
 
-      if(isSigned || isFinished ){
+      if( !isSign || isSigned || isFinished ){
         img.hide();
       } else {
         img.html('<a href="javascript:;"><span>点此签名</span></a>').autoFontSize();
@@ -3295,7 +3302,7 @@ function restoreSignature (pageIndex) {
 
       var evt = /touch/.test(e.type) ? e.touches[0] : e;
 
-      if( window.isSigned || window.isFinished ){
+      if( !window.isSign || window.isSigned || window.isFinished ){
           //alert('您已签署过此文档，此签名位置将留给其它经办人');
          return;
       }
@@ -3362,6 +3369,13 @@ function restoreSignature (pageIndex) {
       var view = $('#viewerContainer');
       view.scrollTop(off.top+view.scrollTop() -$(window).height()/2+off.height/2);
       view.scrollLeft(off.left+view.scrollLeft() -$(window).width()/2+off.width/2);
+      setTimeout(function  () {
+        if( window.signID && window.signPos && window.confirm('签名已应用，确认完成签名？') ){
+          window.signPos = '';
+          finishSign();
+        }
+      }, 3000);
+
     }
 
     // var r = v.sign.width/v.sign.height;
@@ -3393,13 +3407,16 @@ function deleteSign(el){
 	}
 }
 
-function finishSign(){
+function finishSign () {
   $.post(host+'/finishSign', {shareID:window.shareID, person:rootPerson.userid }, function(data){
     if(data)alert(data);
   } );
   window.isSigned = true;
   $('.btnSign').hide();
   setStage('viewer');
+  $('.userInputText textarea').show().prop('readonly', true);
+  $('.userInputText select').hide();
+  $('.userInputText').show();
 }
 
 function showSign(){
@@ -3483,6 +3500,17 @@ function beginSign(el){
 
       if(!data) return alert('发送微信错误');
       alert('签署微信已发送到手机，请查看微信并点击签署');
+
+      var inter1 = setInterval(function  () {
+        $.post(host+'/getSignStatus', {person: rootPerson.userid, shareID:shareID }, function  (ret) {
+          if(ret && ret.toPerson && ret.toPerson.length && ret.toPerson.shift().isSigned){
+            clearInterval(inter1);
+            window.location.reload();
+          }
+
+        });
+
+      }, 1000);
 
     } );
   }
@@ -3733,6 +3761,7 @@ $(function  () {
 
 
   $('#mainContainer').on(downE, function(e){
+    if( $(e.target).closest('.selectivity-single-select').length ) return;
     hideSelStuff();
   });
 
@@ -3766,7 +3795,7 @@ $(function  () {
         var changeDist = 0;
         if(startDist && _this.touches && _this.changedTouches ){
           changeDist = (  _this.moveDist - startDist );
-          var scale= 1 + changeDist/ $(window).width();
+          var scale= 1 + changeDist/ $(window).width()*2;
           window.curScale = PDFViewerApplication.pdfViewer.currentScale;
           //debug(window.curScale, scale)
           if(changeDist && scale) PDFViewerApplication.setScale( window.curScale*scale , false);

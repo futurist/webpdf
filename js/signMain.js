@@ -19,7 +19,19 @@ if( !wxUserInfo ){
 } else {
    wxUserInfo = JSON.parse(wxUserInfo);
    
-    if(signID && wxUserInfo.UserId) initSignPad();
+    if(signID && wxUserInfo.UserId) {
+        $.post(host+'/getSignStatus', {person: wxUserInfo.UserId, shareID:shareID }, function  (ret) {
+            if(ret && ret.toPerson && ret.toPerson.length && !ret.toPerson.shift().isSigned){
+                $('.drawerMenu').show();
+                initSignPad();
+            } else {
+                alert('您已签署过此文档，按确定查看');
+                var url = 'http://1111hui.com/pdf/webpdf/viewer.html#file='+ FILE_HOST+fileKey +'&isSign=1&signID='+ signID +'&shareID='+(shareID||'');
+                window.location = url;
+            }
+        });
+        
+    }
     else alert('请求非法');
 } 
 });
@@ -28,6 +40,8 @@ if( !wxUserInfo ){
   wxUserInfo.UserId = 'yangjiming';
 }
 
+
+var host = 'http://1111hui.com:88';
 
 FILE_HOST = 'http://7xkeim.com1.z0.glb.clouddn.com/';
 
@@ -99,7 +113,7 @@ function initSignPad(){
             alert("请签名后再保存.");
         } else {
 
-
+            saveButton.setAttribute('disabled', 'disabled');
             var canvas = document.createElement("canvas");
               canvas.height = signCanvas.width;
               canvas.width = signCanvas.height;
@@ -114,14 +128,15 @@ function initSignPad(){
 
             data.signPerson = wxUserInfo.UserId;
 
-            $.post( 'http://1111hui.com:88/saveSign', data , function(ret){
+            $.post( host+ '/saveSign', data , function(ret){
                 
-                alert(ret);
                 // return console.log(ret);
-
+                if(!ret){
+                    return alert('签名保存失败，请检查网络稍后再试');
+                }
                 if(ret){
                     //ret = ret.signIDS.filter(function(v){ return v._id == signID  }  ).shift();
-                    alert( window.signHisID?'签名应用成功，确定后返回文档': '签名应用成功，并保存到历史签名。确定后返回文档');
+                    //alert( window.signHisID?'签名应用成功，确定后返回文档': '签名应用成功，并保存到历史签名。确定后返回文档');
                     var url = 'http://1111hui.com/pdf/webpdf/viewer.html#file='+ FILE_HOST+fileKey +'&isSign=1&signID='+ signID +'&shareID='+(shareID||'')+'&pos='+ret.urlhash.replace('#','');
                     window.location = url;
                 }
@@ -172,7 +187,7 @@ function initSignPad(){
         if(window.historyData){
             displayHistory(window.historyData);
         } else {
-            $.post( 'http://1111hui.com:88/getSignHistory', {signID:signID, person: wxUserInfo.UserId }, function(data){
+            $.post( host+ '/getSignHistory', {signID:signID, person: wxUserInfo.UserId }, function(data){
                 window.historyData = data;
                 displayHistory(data);
             });

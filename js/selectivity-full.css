@@ -152,7 +152,7 @@ input[type='text'].selectivity-multiple-input {
   user-select: none;
   white-space: nowrap; }
   .selectivity-multiple-selected-item.highlighted {
-    background-color: #ccc; }
+    background-color: #942424; }
 
 .selectivity-multiple-selected-item-remove {
   color: #fff;

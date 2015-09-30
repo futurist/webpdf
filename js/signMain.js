@@ -21,7 +21,7 @@ if( !wxUserInfo ){
    
     if(signID && wxUserInfo.UserId) {
         $.post(host+'/getSignStatus', {person: wxUserInfo.UserId, shareID:shareID }, function  (ret) {
-            if(ret && ret.toPerson && ret.toPerson.length && !ret.toPerson.shift().isSigned){
+            if(ret==0) {
                 $('.drawerMenu').show();
                 initSignPad();
             } else {

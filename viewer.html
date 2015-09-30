@@ -64,7 +64,7 @@ See https://github.com/adobe-type-tools/cmap-resources
 
     <script src="victor.js"></script>
     <script src="path.js"></script>
-    <script src="drawer.js?t=34534"></script>
+    <script src="drawer.js?t=34653456"></script>
 <script type="text/javascript" src="draggable.js"></script>
 
 <link href="js/select2.css" rel="stylesheet" />
@@ -980,20 +980,28 @@ body.shareMode .userInputText textarea[readonly]{
     content: "\e008";
 }
 
-body.template .signImg[data-person]:before{
+body.template .page .signImg span{
+    border-bottom: 2px solid #616161;
+    color: #616161;
+}
+
+body.template .page .signImg[data-person] span{
+    border-bottom: 2px solid #F00;
+    color: #F00;
+}
+
+body.template .signImg[data-main-person]:before{
     font-size: 12px;
     position: absolute;
     bottom: 4px;
     left: -12px;
     color: rgba(0,0,0,0.3);
     display: inline-block;
-    font-family: 'Glyphicons Halflings';
-    font-style: normal;
-    font-weight: 400;
-    line-height: 1;
+    font: normal normal normal 14px/1 FontAwesome;
+    text-rendering: auto;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    content: "\e008";
+    content: "\f007";
 }
 
 div.selectivity-input{

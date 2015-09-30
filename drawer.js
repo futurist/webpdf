@@ -45,6 +45,7 @@ window.isSign = urlQuery.isSign;
 window.isTemplate = urlQuery.isTemplate;
 window.signID = urlQuery.signID;
 window.signPos = urlQuery.pos;
+window.curSignData = {};
 window.isSigned = false;
 window.isFinished = false;
 window.shareData = null;
@@ -138,6 +139,14 @@ function initWX() {
 }
 if(isWeiXin) initWX();
 
+function safeEval (str) {
+  try{
+    var ret = JSON.parse(str);
+  }catch(e){
+    ret = str
+  }
+  return /object/i.test(typeof ret) ? (ret===null?null:str) : ret;
+}
 
 var DrawView  = (function () {
 
@@ -715,6 +724,7 @@ var svgns = "http://www.w3.org/2000/svg";
     var moveE = isMobile? 'touchmove' :'mousemove';
     var upE = isMobile? 'touchend' :'mouseup';
     var leaveE = isMobile? 'touchcancel' :'mouseleave';
+    var clickE = isMobile? 'touchstart' :'click';
 
     // the preset toolset
     var ToolSet = {
@@ -1079,9 +1089,20 @@ var svgns = "http://www.w3.org/2000/svg";
           setTranslateXY( $('.select2DIV'), oldTrans[0]*curScale||0.01, oldTrans[1]*curScale||0.01 );
           $('.select2DIV').show().css( offset );
 
-          var person = $(targetEl).data('person');
-          if(person) $('.selStuff').selectivity('val', person);
+          var person = ($(targetEl).data('person')||'').split('|');
+          var mainPerson = $(targetEl).data('main-person');
+
+          if(person.length) $('.selStuff').selectivity('val', [].concat(person) );
           else $('.selStuff').selectivity('val', '');
+
+          if(mainPerson){
+          	$('.selStuff').selectivity('_highlightItem', mainPerson)
+          }else{
+          	$('.selStuff').selectivity('_highlightItem', null)
+          }
+
+          $('.selStuff input').blur();
+
         }
 
 
@@ -1720,11 +1741,28 @@ var svgns = "http://www.w3.org/2000/svg";
             (evt.metaKey ? 8 : 0);
 
       if (cmd === 0) { // no control key pressed at all.
+
+      	if(isTemplate && !isInput) {
+			var img = $('.signImg.active');
+			if(!img.length) return;
+			var order =evt.keyCode-48;
+			if(order<0||order>15) return;
+			img.find('span').html(order);
+			img.data('order', order);
+			var id= ~~ img.data('idx');
+			savedSignData[id].order = order;
+			savedSignData = savedSignData.sort(function(a,b){return a.order-b.order});
+	    }
+
         //console.log(evt, evt.keyCode);
         switch (evt.keyCode) {
           case 8:  //backspace key : Delete the shape
           case 46:  //delete key : Delete the shape
             if(isInput) break;
+            if(curStage=='sign'){
+            	deleteSign();
+            }
+            if(curStage!='remark') break;
             var el = $('[data-hl]');
             if( el.length ){
               el.remove();
@@ -3056,7 +3094,7 @@ function copyInputLayerData(pageIndex){
       setInputTextValue(id, t);
 
 
-      if( !window.isSign ||
+      if( (shareID&&!window.isSign) ||
         ( window.isSigned || window.isFinished ) ||
         (shareID && person && (rootPerson.userid!=person && rootPerson.userid!=userPlacerholder[person] )  )
       ){
@@ -3252,7 +3290,6 @@ function getSignData (page) {
 }
 
 
-
 function restoreSignature (pageIndex) {
   $('.signImg').remove();
 
@@ -3270,39 +3307,49 @@ function restoreSignature (pageIndex) {
     // var svg = $('#signImgSVG').attr('viewBox', '0 0 '+v.pos.width*scale+' '+v.pos.height*scale ).get(0);
     // var xml = "data:image/svg+xml;charset=utf-8,"+(new XMLSerializer).serializeToString(svg);
 
+    if(isTemplate){
 
-    if(v.sign){
-      img.find('.img').attr({ 'src': v.sign.signData });
-      $.post(host+'/getUserInfo', { userid: v.sign.person }, function  (userinfo) {
-        img.append('<div class="signPerson">'+ userinfo.name +'</div>');
-      });
+      img.html('<a href="javascript:;"><span>'+ (v.order||0) +'</span></a>').autoFontSize();
 
     } else {
 
-      if( !isSign || isSigned || isFinished ){
-        img.hide();
+      if(v.sign){
+        img.find('.img').attr({ 'src': v.sign.signData });
+        $.post(host+'/getUserInfo', { userid: v.sign.person }, function  (userinfo) {
+          img.append('<div class="signPerson">'+ userinfo.name +'</div>');
+        });
+
       } else {
-        img.html('<a href="javascript:;"><span>点此签名</span></a>').autoFontSize();
+
+        if( !isSign || isSigned || isFinished ){
+          img.hide();
+        } else {
+          img.html('<a href="javascript:;"><span>点此签名</span></a>').autoFontSize();
+        }
       }
+
     }
 
+    function _getUID(x){return x&&x.userid};
+
     img.data('id', v._id);
-    img.data('person', v.person);
+    if(v.person) img.data('person', v.person  );
+    if(v.order) img.data('order', v.order);
+    if(v.mainPerson) img.data('main-person', v.mainPerson );
     img.data('idx', i);
     if(v.signPerson) img.data('signPerson', v.signPerson);
     if( shareID )
     if( ( !img.find('.img').length &&
-      v.person && (v.person!=rootPerson.userid && userPlacerholder[v.person]!=rootPerson.userid )  )
+      v.realPerson && (v.realPerson.filter(_getUID).map(_getUID).indexOf(rootPerson.userid)==-1 )  )
     ) {
       return img.remove();
     }
 
-    //var eventEl = $(img).find('a') ? $(img).find('a') : img;
     img.on( isWeiXin? 'touchstart' : 'click' , function(e){
 
       var evt = /touch/.test(e.type) ? e.touches[0] : e;
 
-      if( !window.isSign || window.isSigned || window.isFinished ){
+      if( (shareID && !window.isSign) || window.isSigned || window.isFinished ){
           //alert('您已签署过此文档，此签名位置将留给其它经办人');
          return;
       }
@@ -3388,9 +3435,12 @@ function restoreSignature (pageIndex) {
 
 function deleteSign(el){
   var img = $(el);
+  if(!img.length) img = $('.signImg.active');
   if(isTemplate) {
   	  var id = img.data('id');
-  	  $.post(host+'/deleteSign', { person:rootPerson.userid, file:curFile, id:id} );
+
+  	  //$.post(host+'/deleteSign', { person:rootPerson.userid, file:curFile, id:id} );
+
   	  img.remove();
 
   	  // Delete from savedSignData
@@ -3463,14 +3513,23 @@ function drawSign () {
 	var hashtop = viewBox[3] + offset.top/window.curScale - 30;
 
 	var urlhash = 'page='+page+'&zoom='+ scaleValue +','+ ~~hashleft+','+ ~~hashtop;
-	var data = { signPerson:'yangjiming', file:window.curFile, page:page, scale:window.curScale, pos: pos, urlhash: urlhash, isMobile:isMobile };
+	var data = { signPerson:'yangjiming', file:window.curFile, page:page, scale:window.curScale, pos: pos, urlhash: urlhash, isMobile:isMobile, role:'sign', _id: +new Date()+Math.random().toString().slice(2,5) };
 
+	savedSignData.push(data);
+
+	savedSignData = savedSignData.sort(function(a,b){
+		return a.order-b.order;
+	});
+
+	$('.signPad, .signPadHandler').hide();
+	restoreSignature( curPage-1 );
+
+	return;
 	//updateSignIDS();
 	// $.post(host+'/saveSignFlow', {key: curFile.replace(FILE_HOST, ''), signIDS:savedSignData}, function(ret){
 
 		$.post(host+'/drawSign', {data: data} , function(data){
 			console.log('sign id', data);
-			$('.signPad, .signPadHandler').hide();
 
 			$.post( host + '/getSavedSign', { file:curFile }, function(data){
 			  if(!data || !data.map) return;
@@ -3493,7 +3552,7 @@ function beginSign(el){
 
 	var url = 'http://1111hui.com/pdf/webpdf/signpad.html#fileKey='+ fileKey +'&shareID='+ (shareID||'') +'&idx='+ idx +'&signID='+signID+'&hash='+(+new Date());
 
-  if(isWeiXin){
+  if (isWeiXin && curSignData.realMainPerson && curSignData.realMainPerson.userid) {
     window.location = url;
   } else {
     $.post(host+'/signInWeiXin', {url:url, shareID:shareID, fileKey:fileKey, person: rootPerson.userid }, function(data){
@@ -3502,8 +3561,8 @@ function beginSign(el){
       alert('签署微信已发送到手机，请查看微信并点击签署');
 
       var inter1 = setInterval(function  () {
-        $.post(host+'/getSignStatus', {person: rootPerson.userid, shareID:shareID }, function  (ret) {
-          if(ret && ret.toPerson && ret.toPerson.length && ret.toPerson.shift().isSigned){
+        $.post(host+'/getSignStatus', {person: curSignData.realMainPerson.userid , shareID:shareID }, function  (ret) {
+          if(ret==1){
             clearInterval(inter1);
             window.location.reload();
           }
@@ -3635,23 +3694,60 @@ function updateSignIDS (){
 	$('.signImg').map(function(){
 		var id = $(this).data('id');
 		var person = $(this).data('person');
+		var mainPerson = $(this).data('main-person');
+		var order = $(this).data('order');
 		signIDS.forEach(function(v){
-			if(v._id == id){
+			if(v._id == id) {
 				v.person = person;
+				v.mainPerson = mainPerson;
+				v.order = ~~order;
 			}
-		});
+		})
 	});
 	savedSignData = signIDS;
 }
 
 function finishTemplate (){
 
-	var signLength = $('.signImg[data-person]').length;
 
-	if(signLength != $('.signImg').length ){
-		return alert('请指定所有签署人');
+	var totalSign = $('.signImg').length;
+	if(!totalSign) return;
+
+	var orders = $('.signImg[data-order]').map(function(v){
+		return $(this).data('order');
+	})
+	.sort(function(a,b){ return a-b});
+
+	var isValidOrder=true;
+	for(var i=0; i<orders.length; i++){
+		if(orders[i]!=i+1){
+			isValidOrder=false;
+			break;
+		}
 	}
+
+	if(orders.length != totalSign ) {
+		return alert('请指定签署顺序（选中签名按数字键）');
+	}
+
+	if(!isValidOrder){
+		return alert('顺序要从1开始递增指定');
+	}
+
+
+
+	var signLength = $('.signImg[data-person]').length;
+	var mainLength = $('.signImg[data-person]').filter(function(){
+		return $(this).data('order') < orders[orders.length-1];
+	}).filter('[data-main-person]').length;
+
+	if(signLength < totalSign || mainLength<totalSign-1  ){
+		return alert('请指定所有签署人，并点亮头像(签名人)，最后一步流程不需签名人');
+	}
+
+
 	updateSignIDS();
+
 	$.post(host+'/saveSignFlow', {key: curFile.replace(FILE_HOST, ''), signIDS:savedSignData}, function(ret){
 		alert('流程保存成功');
 	});
@@ -3686,7 +3782,23 @@ function hideSelStuff () {
   if( $('.selectivity-dropdown').length ) $('.selStuff').selectivity('close');
 }
 
-$(function  () {
+
+var SelectivityLocale = {
+
+    ajaxError: function(term) { return '读取数据错误 <b>' + escape(term) + '</b>'; },
+    loading: '加载中...',
+    loadMore: '加载更多...',
+    needMoreCharacters: function(numCharacters) {
+        return '再输入' + numCharacters + '个字符';
+    },
+    noResults: '没有找到',
+    noResultsForTerm: function(term) { return '没找到 <b>' + escape(term) + '</b>'; }
+
+};
+
+
+
+$(function initPage () {
 
   makeColorPicker();
   makeTemplatePicker();
@@ -3728,18 +3840,38 @@ $(function  () {
     $('.selStuff').selectivity({
       allowClear: true,
       language: "zh-CN",
+      multiple:true,
       placeholder:'选择流程人..',
       positionDropdown: function  ($dropEl, $selEl) {
         $dropEl.css({top:'auto'});
       }
     });
 
+    $('.selStuff').on(clickE, '.selectivity-multiple-selected-item', function (e) {
+    	var id = $('.selStuff').data('id');
+    	if(!id) return;
+    	var targetEl = $('[data-id="'+ id +'"]');
+
+    	var itemID = $(this).data('item-id');
+    	$(targetEl).data('main-person', itemID );
+    	$('.selStuff').selectivity('close');
+    });
+
+
+
     $('.selStuff').on("change", function (e) {
       var id = $('.selStuff').data('id');
-      if(!id) return;
+      if(!id || !e.value) return;
       var targetEl = $('[data-id="'+ id +'"]');
-      if(e.value) $(targetEl).data('person', e.value );
+      e.value = e.value.filter(function(v){ return v!=''});
+      var val = e.value.join('|');
+
+      if(val) $(targetEl).data('person', val );
       else $(targetEl).removeAttr('data-person' );
+
+      if( e.value.indexOf(targetEl.data('main-person'))==-1 ){
+      	targetEl.removeAttr('data-main-person');
+      }
 
     });
 
@@ -3752,7 +3884,6 @@ $(function  () {
     });
 
 
-
   });
 
 
@@ -3763,6 +3894,7 @@ $(function  () {
   $('#mainContainer').on(downE, function(e){
     if( $(e.target).closest('.selectivity-single-select').length ) return;
     hideSelStuff();
+    $('.signImg.active').click();
   });
 
   $('#viewerContainer').on('resize scroll', function(e){
@@ -3816,6 +3948,11 @@ $(function  () {
 
   $.post( host + '/getSavedSign', { file:curFile, shareID:shareID }, function(data){
     if(data && data.map) savedSignData = data;
+
+    if(window.isSign){
+    	window.curSignData = savedSignData[savedSignData.length-1];
+    }
+
   } );
 
   $.post( host + '/getInputData', { file:curFile, shareID:shareID }, function(data){

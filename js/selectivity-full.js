@@ -3182,6 +3182,22 @@ Selectivity.Locale = {
 
 };
 
+
+Selectivity.Locale = {
+
+    ajaxError: function(term) { return '读取数据错误 <b>' + escape(term) + '</b>'; },
+    loading: '加载中...',
+    loadMore: '加载更多...',
+    needMoreCharacters: function(numCharacters) {
+        return '再输入' + numCharacters + '个字符';
+    },
+    noResults: '没有找到',
+    noResultsForTerm: function(term) { return '没找到 <b>' + escape(term) + '</b>'; }
+
+};
+
+
+
 },{"4":4,"8":8}],14:[function(_dereq_,module,exports){
 'use strict';
 

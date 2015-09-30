@@ -886,7 +886,10 @@ app.post("/getJSConfig", function (req, res) {
   var rkey = 'wx:js:ticket:'+ encodeURIComponent(url);
   var param = {
     debug:false,
-    jsApiList: ["onMenuShareTimeline","onMenuShareAppMessage","onMenuShareQQ","onMenuShareWeibo","onMenuShareQZone","startRecord","stopRecord","onVoiceRecordEnd","playVoice","pauseVoice","stopVoice","onVoicePlayEnd","uploadVoice","downloadVoice","chooseImage","previewImage","uploadImage","downloadImage","translateVoice","getNetworkType","openLocation","getLocation","hideOptionMenu","showOptionMenu","hideMenuItems","showMenuItems","hideAllNonBaseMenuItem","showAllNonBaseMenuItem","closeWindow","scanQRCode"],
+    jsApiList: ["onMenuShareTimeline","onMenuShareAppMessage","onMenuShareQQ","onMenuShareWeibo","onMenuShareQZone","startRecord","stopRecord","onVoiceRecordEnd","playVoice","pauseVoice","stopVoice","onVoicePlayEnd","uploadVoice","downloadVoice","chooseImage","previewImage","uploadImage","downloadImage","translateVoice","getNetworkType","hideOptionMenu","showOptionMenu","hideMenuItems","showMenuItems","hideAllNonBaseMenuItem","showAllNonBaseMenuItem","closeWindow","scanQRCode"],
+
+    // jsApiList: ["onMenuShareTimeline","onMenuShareAppMessage","onMenuShareQQ","onMenuShareWeibo","onMenuShareQZone","startRecord","stopRecord","onVoiceRecordEnd","playVoice","pauseVoice","stopVoice","onVoicePlayEnd","uploadVoice","downloadVoice","chooseImage","previewImage","uploadImage","downloadImage","translateVoice","getNetworkType","openLocation","getLocation","hideOptionMenu","showOptionMenu","hideMenuItems","showMenuItems","hideAllNonBaseMenuItem","showAllNonBaseMenuItem","closeWindow","scanQRCode"],
+
     url: url
   };
 
@@ -1046,7 +1049,7 @@ app.post("/updateHost", function (req, res) {
     if(err) {
       console.log('ERROR update host:', person, hostname);
       return res.send('');
-    } 
+    }
     console.log('updated host:', person, hostname, ip);
     res.send('OK');
   });
@@ -1332,7 +1335,7 @@ app.post("/signInWeiXin", function (req, res) {
     col.findOne({role:'share', shareID:shareID, 'files.key':fileKey },
                         { },
                         function(err, result){
-          
+
 
       		if(err || !result) return res.send('');
 
@@ -2311,7 +2314,10 @@ app.post("/finishSign", function (req, res) {
 
       }else{
 
+        var prevPerson = colShare.selectRange.slice(0,curFlowPos);
         var nextPerson = colShare.selectRange[curFlowPos];
+        var curPerson = _.last(prevPerson);
+
         var toPerson = colShare.toPerson;
 
         //info to all person about the status
@@ -2326,7 +2332,7 @@ app.post("/finishSign", function (req, res) {
               msg,
               colShare.flowName,
               colShare.fromPerson[0].name,
-              toPerson[toPerson.length-1].name,
+              curPerson.depart+'-'+curPerson.name,
               nextPerson.name,
               overAllPath  // if we need segmented path:   pathName.join('-'),
             )
@@ -2340,22 +2346,23 @@ app.post("/finishSign", function (req, res) {
         sendWXMessage(wxmsg);
 
 
-
         var nextGroup = colShare.flowSteps[curFlowPos].person.map(function(x){
           return placerholderToUser( colShare.fromPerson[0].userid, x );
         });
         //info to next Person via WX
         var wxmsg = {
          "touser": nextGroup.map(function(x){ return x.userid }).join('|'),
+         "touserName": nextGroup.map(function(x){ return x.name }).join('|'),
          "msgtype": "text",
          "text": {
            "content":
-           util.format('您有一个新流程需要处理：流程%d %s (%s-%s), %s此前已完成签署。<a href="%s">点此查看</a>',
+           util.format('流程%d %s (%s-%s)需处理, 本组成员：(%s), 前置签署：%s。<a href="%s">点此查看</a>',
               colShare.shareID,
               msg,
               colShare.flowName,
               colShare.fromPerson[0].name,
-              colShare.selectRange.slice(0,curFlowPos).map(function(v){return v.depart+'-'+v.name}).join(','),
+              nextGroup.map(function(x){ return x.name }).join(','),
+              prevPerson.map(function(x){return x.depart+'-'+x.name}).join(','),
               overAllPath  // if we need segmented path:   pathName.join('-'),
             )
          },
@@ -2365,14 +2372,16 @@ app.post("/finishSign", function (req, res) {
           privateShareID:shareID
         };
 
-        sendWXMessage(wxmsg);
+        _.delay(function  () {
+        	sendWXMessage(wxmsg);
+        }, 3000);
 
 
         var selPosObj = {};
         var selPos = 'selectRange.'+ (curFlowPos-1) + '.isSigned';
         selPosObj[selPos] = true;
 
-        col.update( {_id: colShare._id }, { $push: { toPerson: nextGroup }, $set:selPosObj }, {w:1}, function(){
+        col.update( {_id: colShare._id }, { $push: { toPerson: nextGroup }, $set:selPosObj, $inc:{curFlowPos:1} }, {w:1}, function(){
           res.send( util.format( '流程%d(%s-%s)已转交给下一经办人：\n%s',
                   colShare.shareID,
                   colShare.flowName,
@@ -2660,7 +2669,7 @@ app.post("/shareFile", function (req, res) {
 
 
   function addShareFiles (files) {
-    
+
     files.forEach(function(v, i){
       v.path = data.filePathS[ v.key.replace(/\./g, '\uff0e') ];
     });

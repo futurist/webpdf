@@ -1568,14 +1568,14 @@ app.post("/applyTemplate2", function (req, res) {
       data.flowSteps = doc.flowSteps;
 
       var toPerson = doc.flowSteps[0].person.map(function(s){
-        return placerholderToUser(userid, s);
+        return pickUser( placerholderToUser(userid, s) );
       } );
 
       data.fromPerson = [ pickUser(fromPerson) ];
       data.toPerson  = [toPerson];
 
       data.selectRange =  doc.flowSteps.filter(function(v){return v.mainPerson}).map(function  (v) {
-        return placerholderToUser(userid, v.mainPerson);
+        return pickUser(placerholderToUser(userid, v.mainPerson));
       });
 
       insertShareData( data, res, true );
@@ -2276,9 +2276,24 @@ app.post("/finishSign", function (req, res) {
     var title = getSubStr( '流程-'+shareID+flowName+ (msg), 50);
     var overAllPath = util.format('%s#file=%s&shareID=%d&isSign=1', VIEWER_URL, FILE_HOST+ encodeURIComponent(fileKey), shareID ) ;
 
+
+
+    var selPosObj = {};
+    var selPos = 'selectRange.'+ (curFlowPos-1) + '.isSigned';
+    selPosObj[selPos] = true;
+
+
+    var prevPerson = colShare.selectRange.slice(0,curFlowPos);
+    var nextPerson = colShare.selectRange[curFlowPos];
+    var curPerson = _.last(prevPerson);
+
+    var toPerson = colShare.toPerson;
+
+
     if(curFlowPos >= colShare.selectRange.length){
 
-    	col.update({role:'share', shareID:shareID }, { $set: { 'isFinish':true }  });
+    	selPosObj.isFinish = true;
+    	col.update({role:'share', shareID:shareID }, { $set: selPosObj, $inc:{curFlowPos:1}  });
 		wsBroadcast( {role:'share', isFinish:true, key:fileKey, data:colShare } );
 
         res.send( util.format( '流程%d %s (%s-%s)已结束，系统将通知相关人员知悉',
@@ -2299,7 +2314,7 @@ app.post("/finishSign", function (req, res) {
                     msg,
                     colShare.flowName,
                     colShare.fromPerson[0].name,
-                    colShare.toPerson.pop().name,
+                    curPerson.depart+'-'+curPerson.name,
                     overAllPath  // if we need segmented path:   pathName.join('-'),
                   )
                },
@@ -2313,12 +2328,6 @@ app.post("/finishSign", function (req, res) {
 
 
       }else{
-
-        var prevPerson = colShare.selectRange.slice(0,curFlowPos);
-        var nextPerson = colShare.selectRange[curFlowPos];
-        var curPerson = _.last(prevPerson);
-
-        var toPerson = colShare.toPerson;
 
         //info to all person about the status
         var wxmsg = {
@@ -2376,10 +2385,6 @@ app.post("/finishSign", function (req, res) {
         	sendWXMessage(wxmsg);
         }, 3000);
 
-
-        var selPosObj = {};
-        var selPos = 'selectRange.'+ (curFlowPos-1) + '.isSigned';
-        selPosObj[selPos] = true;
 
         col.update( {_id: colShare._id }, { $push: { toPerson: nextGroup }, $set:selPosObj, $inc:{curFlowPos:1} }, {w:1}, function(){
           res.send( util.format( '流程%d(%s-%s)已转交给下一经办人：\n%s',
@@ -3105,7 +3110,11 @@ wechat(config, wechat
 //   Event: 'click',
 //   EventKey: 'file_msg' }
 
-  console.log(message);
+	if(message.Event=='subscribe' || message.Event=='unsubscribe' ){
+		console.log(message);
+		updateCompanyTree();
+	}
+
   return res.reply(message);
 })
 .image(function (message, req, res, next) {
@@ -3119,7 +3128,7 @@ wechat(config, wechat
 //   MediaId: '1x5uMWjTL9tEjewN8IuJCJDPyQCQitHmwnhEzG6dw5q18q_AidkVivdVeNJ0C_eM7s_FWnVBFzYdvo10FOllFQQ',
 //   AgentID: '1' }
 
-  console.log(message);
+  //console.log(message);
   return res.reply(message);
 })
 .text(function (message, req, res, next) {
@@ -3133,6 +3142,18 @@ wechat(config, wechat
 //   AgentID: '1' }
 
   console.log(message);
+
+  var msg = {
+   "touser": 'yangjiming',
+   "msgtype": "text",
+   "text": {
+     "content": util.format('%s发送了留言：%s', message.FromUserName, message.Content  )
+   },
+   "safe":"0",
+    date : new Date()
+  };
+  api.send(msg.touser, msg, function  (err, result) {  });
+
   return res.reply(message);
 
   res.reply([

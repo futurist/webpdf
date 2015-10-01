@@ -3544,6 +3544,7 @@ function drawSign () {
 
 }
 
+
 function beginSign(el){
 
   var signID = $(el).data('id');
@@ -3552,7 +3553,8 @@ function beginSign(el){
 
 	var url = 'http://1111hui.com/pdf/webpdf/signpad.html#fileKey='+ fileKey +'&shareID='+ (shareID||'') +'&idx='+ idx +'&signID='+signID+'&hash='+(+new Date());
 
-  if (isWeiXin && curSignData.realMainPerson && curSignData.realMainPerson.userid) {
+  //return alert(curSignData.realMainPerson.userid);
+  if (isWeiXin && curSignData.realMainPerson && curSignData.realMainPerson.userid ==rootPerson.userid ) {
     window.location = url;
   } else {
     $.post(host+'/signInWeiXin', {url:url, shareID:shareID, fileKey:fileKey, person: rootPerson.userid }, function(data){

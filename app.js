@@ -68,6 +68,34 @@ function safeEval (str) {
 }
 
 
+// helpers
+var futurist = {};
+
+futurist.array_unique = function(array) {
+  var a = [], i, j, l, o = {};
+  for(i = 0, l = array.length; i < l; i++) {
+    if(o[JSON.stringify(array[i])] === undefined) {
+      a.push(array[i]);
+      o[JSON.stringify(array[i])] = true;
+    }
+  }
+  return a;
+};
+// remove item from array
+futurist.array_remove = function(array, from, to) {
+  var rest = array.slice((to || from) + 1 || array.length);
+  array.length = from < 0 ? array.length + from : from;
+  array.push.apply(array, rest);
+  return array;
+};
+// remove item from array
+futurist.array_remove_item = function(array, item) {
+  var tmp = array.indexOf(item)>-1;
+  return tmp !== -1 ? futurist.array_remove(array, tmp) : array;
+};
+
+
+
 function qiniu_getUpToken() {
 	var responseBody =
 	{
@@ -897,10 +925,10 @@ app.post("/getJSConfig", function (req, res) {
   function getJsConfig(){
   	api.getLatestToken(function () {
   		api.getJsConfig(param, function(err, result){
+        console.log('getJSConfig: ', err, result);
   		  if(err && tryCount++<3){
   		    getJsConfig();
   		  }else{
-  		    // console.log('wx:', result);
   		    redisClient.set( rkey, JSON.stringify(result), 'ex', 30);
   		    res.send( JSON.stringify(result) );
   		  }
@@ -1360,9 +1388,11 @@ app.post("/signInWeiXin", function (req, res) {
                         makeViewURL(fileKey, shareID, 1)
                       )
               var touser = realMainPerson.userid;
+              var touserName = realMainPerson.depart+'-'+realMainPerson.name;
 
             } else {
               var touser = person;
+              var touserName = '';
               var content =
               colShare.isSign ?
               util.format('流程%d %s (%s-%s)需要您签署，<a href="%s">点此签署</a>',
@@ -1398,7 +1428,7 @@ app.post("/signInWeiXin", function (req, res) {
 
               sendWXMessage(wxmsg);
 
-              res.send(wxmsg);
+              res.send(touserName);
 
     } );
 
@@ -1463,7 +1493,7 @@ app.post("/applyTemplate", function (req, res) {
 
 function pickUser(user){ return _.pick( user, 'userid', 'name', 'depart', 'id', 'pId', 'parentid', 'placeholder' ) }
 
-function placerholderToUser (fromUserId, placeholder) {
+function placerholderToUser (fromUserId, placeholder, getFullInfo) {
 
   var thePerson = null;
   var fromPerson = _.find( COMPANY_TREE, function(v){ return v.userid== fromUserId } );
@@ -1502,10 +1532,12 @@ function placerholderToUser (fromUserId, placeholder) {
     thePerson = _.find( COMPANY_TREE, function(v){ return v.userid== placeholder } );
 
   }
+
   if(!thePerson) return thePerson;
 
   thePerson.placeholder = placeholder;
-  return thePerson;
+
+  return getFullInfo? thePerson : pickUser(thePerson);
 
 }
 
@@ -1568,14 +1600,14 @@ app.post("/applyTemplate2", function (req, res) {
       data.flowSteps = doc.flowSteps;
 
       var toPerson = doc.flowSteps[0].person.map(function(s){
-        return pickUser( placerholderToUser(userid, s) );
+        return placerholderToUser(userid, s);
       } );
 
       data.fromPerson = [ pickUser(fromPerson) ];
       data.toPerson  = [toPerson];
 
       data.selectRange =  doc.flowSteps.filter(function(v){return v.mainPerson}).map(function  (v) {
-        return pickUser(placerholderToUser(userid, v.mainPerson));
+        return placerholderToUser(userid, v.mainPerson);
       });
 
       insertShareData( data, res, true );
@@ -1592,7 +1624,7 @@ app.post("/applyTemplate2", function (req, res) {
 
 app.post("/getTemplateFiles", function (req, res) {
 
-  col.find( { role:'upfile', isTemplate:true } , {limit:2000} ).sort({title:1,date:-1}).toArray(function(err, docs){
+  col.find( { role:'upfile', isTemplate:true } , {limit:2000,fields:{drawData:0,inputData:0,signIDS:0} } ).sort({title:1,date:-1}).toArray(function(err, docs){
     if(err) {
       return res.send('error');
     }
@@ -1623,7 +1655,7 @@ app.post("/getfile", function (req, res) {
     return res.send('');
   }, 5000);
 
-  col.find( { person: person, role:'upfile', status:{$ne:-1} } , {limit:2000, timeout:true} ).sort({order:-1, title:1}).toArray(function(err, docs){
+  col.find( { person: person, role:'upfile', status:{$ne:-1} } , {limit:50, fields:{drawData:0,inputData:0,signIDS:0}, timeout:true} ).sort({order:-1, title:1}).toArray(function(err, docs){
       clearTimeout(connInter); if(timeout)return;
     if(err) {
       return res.send('');
@@ -1732,7 +1764,7 @@ app.post("/updatefile", function (req, res) {
     newV.role = 'upfile';
     console.log('updatefile:', v.hash,  newV.order);
     delete newV._id;
-    col.update({hash: v.hash}, newV, {upsert:true, w:1}, function  (err, result) {
+    col.update({hash: v.hash}, {$set:newV}, {upsert:true, w:1}, function  (err, result) {
       if(err) {
       	console.log(err);
         return isErr=true;
@@ -1954,14 +1986,21 @@ app.post("/getSavedSign", function (req, res) {
     if(shareID){
 
         col.findOne( {role:'share', shareID:shareID, 'files.key':filename },  { },  function(err, doc){
-        	//return console.log(err, doc);
-        	if(err ||!doc) return res.send('');
-          var file = doc.files.shift();
-        	if(!file) return res.send('');
+          	//return console.log(err, doc);
+          	if(err ||!doc) return res.send('');
 
-            var curFlowPos = doc.curFlowPos||0;
+            var file = doc.files.shift();
+          	if(!file) return res.send('');
 
-            getSignData(err, file.signIDS.slice(0, curFlowPos+1) , doc.fromPerson.shift().userid );
+            if(doc.isSign){
+              var curFlowPos = doc.curFlowPos||0;
+
+              if(file.signIDS) getSignData(err, file.signIDS.slice(0, curFlowPos+1) , doc.fromPerson.shift().userid );
+              else res.send(doc);
+
+            }else{
+              res.send(doc);
+            }
 
           } );
 
@@ -1974,7 +2013,8 @@ app.post("/getSavedSign", function (req, res) {
         var signIDS = result.signIDS;
         if(!signIDS ) return res.send('');
 
-        getSignData(err, signIDS );
+        if(file.signIDS) getSignData(err, signIDS );
+        else res.send(doc);
 
       });
 
@@ -2051,7 +2091,7 @@ app.post("/getShareFrom", function (req, res) {
     timeout = true;
     return res.send('');
   }, 15000);
-  col.find( { 'fromPerson.userid': person, role:'share' } , {limit:500, timeout:true} ).sort({shareID:-1}).toArray(function(err, docs){
+  col.find( { 'fromPerson.userid': person, role:'share' } , {limit:50, fields:{ fileIDS:0, filePathS:0, selectRange:0, 'files.drawData':0,'files.inputData':0,'files.signIDS':0}, timeout:true} ).sort({shareID:-1}).toArray(function(err, docs){
       clearTimeout(connInter); if(timeout)return;
       if(err || !docs) {
         return res.send('error');
@@ -2068,12 +2108,16 @@ app.post("/getShareTo", function (req, res) {
     timeout = true;
     return res.send('');
   }, 15000);
-  col.find( { 'toPerson.userid': person, role:'share' } , {limit:500, timeout:true} ).sort({shareID:-1}).toArray(function(err, docs){
+  //col.aggregate([ {$match:{role:'share'}}, {$unwind:'$toPerson'}, { $match: {'toPerson.userid': person} } ] ).sort({shareID:-1}).toArray(function(err, docs){
+  //col.find( { 'toPerson.userid': person, role:'share' } , {limit:500, timeout:true} ).sort({shareID:-1}).toArray(function(err, docs){
+  col.find( { $or:[ {'toPerson.userid':person}, { 'toPerson':{$elemMatch: {$elemMatch:{'userid': person } } } } ], role:'share' } , {limit:50, fields:{fileIDS:0, filePathS:0, selectRange:0, 'files.drawData':0,'files.inputData':0,'files.signIDS':0},  timeout:true} ).sort({shareID:-1}).toArray(function(err, docs){
       clearTimeout(connInter); if(timeout)return;
       if(err || !docs) {
         return res.send('error');
       }
       var count = docs.length;
+      docs.forEach(function(v){ v.toPerson = futurist.array_unique( _.flatten(v.toPerson) ) });
+
       res.send( JSON.stringify(docs) );
   });
 });
@@ -2125,7 +2169,7 @@ app.post("/getShareMsg", function (req, res) {
   }
 
   if(toPerson){
-    col.find( { 'toPerson.userid': toPerson, role:'share' }, {shareID:1, _id:0} , {limit:500} ).sort({shareID:1}).toArray(function(err, docs){
+    col.find( { $or:[ {'toPerson.userid':toPerson}, { 'toPerson':{$elemMatch: {$elemMatch:{'userid': toPerson } } } } ], role:'share' }, {shareID:1, _id:0} , {limit:500} ).sort({shareID:1}).toArray(function(err, docs){
         if(err || !docs) {
           return res.send('error');
         }
@@ -2266,6 +2310,9 @@ app.post("/finishSign", function (req, res) {
   var person =  req.body.person;
 
   col.findOne({shareID:shareID, role:'share'}, function(err, colShare){
+
+    if(colShare.isFinish) return res.send('');
+
     var flowName = colShare.flowName;
     var curFlowPos = colShare.curFlowPos+1;
     var file = colShare.files[0];
@@ -2292,42 +2339,98 @@ app.post("/finishSign", function (req, res) {
 
     if(curFlowPos >= colShare.selectRange.length){
 
-    	selPosObj.isFinish = true;
-    	col.update({role:'share', shareID:shareID }, { $set: selPosObj, $inc:{curFlowPos:1}  });
-		wsBroadcast( {role:'share', isFinish:true, key:fileKey, data:colShare } );
 
-        res.send( util.format( '流程%d %s (%s-%s)已结束，系统将通知相关人员知悉',
-                    colShare.shareID,
-                    msg,
-                    colShare.flowName,
-                    colShare.fromPerson[0].name ) );
+		      wsBroadcast( {role:'share', isFinish:true, key:fileKey, data:colShare } );
 
 
-              var wxmsg = {
-               "touser": _.flatten(colShare.toPerson.concat(colShare.fromPerson)).map(function(v){return v.userid}).join('|'),
-               "touserName": _.flatten(colShare.toPerson.concat(colShare.fromPerson)).map(function(v){return v.name}).join('|'),
-               "msgtype": "text",
-               "text": {
-                 "content":
-                 util.format('流程%d %s (%s-%s)已由%s签署,此流程已结束 <a href="%s">点此预览</a>',
-                    colShare.shareID,
-                    msg,
-                    colShare.flowName,
-                    colShare.fromPerson[0].name,
-                    curPerson.depart+'-'+curPerson.name,
-                    overAllPath  // if we need segmented path:   pathName.join('-'),
-                  )
-               },
-               "safe":"0",
-                date : new Date(),
-                role : 'shareMsg',
-                shareID:shareID
-              };
+        selPosObj.isFinish = true;
 
-              sendWXMessage(wxmsg);
+        var updateObj = { $set: selPosObj, $inc:{curFlowPos:1} };
+
+        var lastStep = colShare.flowSteps.slice(colShare.selectRange.length).shift();
+
+        if( lastStep ) {
+          var lastPersons = lastStep.person.map(function(x){
+            return placerholderToUser( colShare.fromPerson[0].userid, x );
+          });
+
+          updateObj['$push'] = { toPerson: lastPersons };
+
+          res.send( util.format( '流程%d %s (%s-%s)已结束，转交至%s处理',
+                      colShare.shareID,
+                      msg,
+                      colShare.flowName,
+                      colShare.fromPerson[0].name ),
+                      lastPersons.map(function(x){ return x.depart+'-'+x.name }).join(',')
+                       );
+
+          var wxmsg = {
+           "touser": _.flatten(colShare.toPerson.concat(colShare.fromPerson).concat(lastPersons) ).map(function(v){return v.userid}).join('|'),
+           "touserName": _.flatten(colShare.toPerson.concat(colShare.fromPerson).concat(lastPersons) ).map(function(v){return v.name}).join('|'),
+           "msgtype": "text",
+           "text": {
+             "content":
+             util.format('流程%d %s (%s-%s)已由%s签署,此流程已结束并转交至：%s, <a href="%s">点此预览</a>',
+                colShare.shareID,
+                msg,
+                colShare.flowName,
+                colShare.fromPerson[0].name,
+                curPerson.depart+'-'+curPerson.name,
+                lastPersons.map(function(x){ return x.depart+'-'+x.name }).join(','),
+                overAllPath  // if we need segmented path:   pathName.join('-'),
+              )
+           },
+           "safe":"0",
+            date : new Date(),
+            role : 'shareMsg',
+            shareID:shareID
+          };
+
+          sendWXMessage(wxmsg);
 
 
-      }else{
+        } else {
+
+
+          var wxmsg = {
+           "touser": _.flatten(colShare.toPerson.concat(colShare.fromPerson)).map(function(v){return v.userid}).join('|'),
+           "touserName": _.flatten(colShare.toPerson.concat(colShare.fromPerson)).map(function(v){return v.name}).join('|'),
+           "msgtype": "text",
+           "text": {
+             "content":
+             util.format('流程%d %s (%s-%s)已由%s签署,此流程已结束 <a href="%s">点此预览</a>',
+                colShare.shareID,
+                msg,
+                colShare.flowName,
+                colShare.fromPerson[0].name,
+                curPerson.depart+'-'+curPerson.name,
+                overAllPath  // if we need segmented path:   pathName.join('-'),
+              )
+           },
+           "safe":"0",
+            date : new Date(),
+            role : 'shareMsg',
+            shareID:shareID
+          };
+
+          sendWXMessage(wxmsg);
+
+
+          res.send( util.format( '流程%d %s (%s-%s)已结束，系统将通知相关人员知悉',
+                      colShare.shareID,
+                      msg,
+                      colShare.flowName,
+                      colShare.fromPerson[0].name ) );
+
+        }
+
+
+        col.update({role:'share', shareID:shareID }, updateObj, function  () {
+
+        });
+
+
+      } else {
 
         //info to all person about the status
         var wxmsg = {
@@ -2652,7 +2755,7 @@ app.post("/getAllShareID", function (req, res) {
   var data = req.body;
   var person = data.person;
 
-  col.find( {role:'share', isSign:{$in:[null,'',false]}, isFinish:{$in:[null,'',false]}, $or:[ {'toPerson.userid':person}, {'fromPerson.userid':person } ]  }
+  col.find( {role:'share', isSign:{$in:[null,'',false]}, isFinish:{$in:[null,'',false]}, $or:[ {'fromPerson.userid':person}, {'toPerson.userid':person}, { 'toPerson':{$elemMatch: {$elemMatch:{'userid': person } } } } ]  }
       , { limit: 1000, sort:{ shareID:-1 }, fields: {shareID:1, msg:1, fromPerson:1, toPerson:1 } }).toArray(function(err, result) {
       if(err) return res.send('');
       res.send(result);

@@ -115,6 +115,7 @@ $(function(){
 var wxInitTryCount=0;
 function initWX() {
 	$.post(host+'/getJSConfig', { url:window.location.href.split('#')[0] }, function(data){
+
 		if(!data || data[0]!='{') {
 			if(wxInitTryCount++<3){
         initWX();
@@ -3417,10 +3418,14 @@ function restoreSignature (pageIndex) {
       view.scrollTop(off.top+view.scrollTop() -$(window).height()/2+off.height/2);
       view.scrollLeft(off.left+view.scrollLeft() -$(window).width()/2+off.width/2);
       setTimeout(function  () {
-        if( window.signID && window.signPos && window.confirm('签名已应用，确认完成签名？') ){
-          window.signPos = '';
-          finishSign();
-        }
+
+        window.confirm('签名已应用，确认完成签名？', function(ok){
+          if( ok&& window.signID && window.signPos ){
+            window.signPos = '';
+            finishSign();
+          }
+        });
+
       }, 3000);
 
     }
@@ -3498,31 +3503,36 @@ function drawSign () {
 	if(pos.left<0 || pos.top<0
 		|| padOffset.width+padOffset.left> offset.left+offset.width
 		|| padOffset.height+padOffset.top>offset.top+offset.height ){
-		if( !confirm("签名框有部分超出页面，可能会导致签名无法全部显示"))
-		return;
+
+
+		window.confirm("签名框有部分超出页面，可能会导致签名无法全部显示", function(ok){
+
+      if(!ok) return;
+
+      var page = $(el[0]).data('page-number');
+
+      var curPage = PDFViewerApplication.pdfViewer.currentPageNumber;
+      var offset = getRealOffset( $('.page').eq(curPage-1) );
+
+      var scaleValue = PDFViewerApplication.pdfViewer.currentScaleValue;
+      if(!isNaN(scaleValue)) scaleValue= Math.round(scaleValue*100);
+
+      var hashleft = -offset.left/window.curScale;
+      var hashtop = viewBox[3] + offset.top/window.curScale - 30;
+
+      var urlhash = 'page='+page+'&zoom='+ scaleValue +','+ ~~hashleft+','+ ~~hashtop;
+      var data = { signPerson:'yangjiming', file:window.curFile, page:page, scale:window.curScale, pos: pos, urlhash: urlhash, isMobile:isMobile, role:'sign', _id: +new Date()+Math.random().toString().slice(2,5) };
+
+      savedSignData.push(data);
+
+      savedSignData = savedSignData.sort(function(a,b){
+        return a.order-b.order;
+      });
+
+      $('.signPad, .signPadHandler').hide();
+      restoreSignature( curPage-1 );
+    });
 	}
-	var page = $(el[0]).data('page-number');
-
-	var curPage = PDFViewerApplication.pdfViewer.currentPageNumber;
-	var offset = getRealOffset( $('.page').eq(curPage-1) );
-
-	var scaleValue = PDFViewerApplication.pdfViewer.currentScaleValue;
-	if(!isNaN(scaleValue)) scaleValue= Math.round(scaleValue*100);
-
-	var hashleft = -offset.left/window.curScale;
-	var hashtop = viewBox[3] + offset.top/window.curScale - 30;
-
-	var urlhash = 'page='+page+'&zoom='+ scaleValue +','+ ~~hashleft+','+ ~~hashtop;
-	var data = { signPerson:'yangjiming', file:window.curFile, page:page, scale:window.curScale, pos: pos, urlhash: urlhash, isMobile:isMobile, role:'sign', _id: +new Date()+Math.random().toString().slice(2,5) };
-
-	savedSignData.push(data);
-
-	savedSignData = savedSignData.sort(function(a,b){
-		return a.order-b.order;
-	});
-
-	$('.signPad, .signPadHandler').hide();
-	restoreSignature( curPage-1 );
 
 	return;
 	//updateSignIDS();
@@ -3560,7 +3570,8 @@ function beginSign(el){
     $.post(host+'/signInWeiXin', {url:url, shareID:shareID, fileKey:fileKey, person: rootPerson.userid }, function(data){
 
       if(!data) return alert('发送微信错误');
-      alert('签署微信已发送到手机，请查看微信并点击签署');
+
+      alert( !data? '签署微信已发送到您手机，请查看微信并点击签署' : '已转交至'+data+'签署，后续更新会微信通知');
 
       var inter1 = setInterval(function  () {
         $.post(host+'/getSignStatus', {person: curSignData.realMainPerson.userid , shareID:shareID }, function  (ret) {
@@ -3890,6 +3901,14 @@ $(function initPage () {
 
 
 
+  function quitCanvas (){
+    confirm('确认不保存退出吗？',
+      function(ok){
+        console.log(ok);
+        if(ok) {restoreCanvas(true);setStage('viewer');}
+    });
+  }
+
 
 
 
@@ -4120,6 +4139,39 @@ function chooseTemplate(){
         return this;
     }
 })(window.Zepto||window.jQuery);
+
+
+function alert (msg) {
+  var args =Array.prototype.slice.call(arguments);
+  args.splice(1,0,false);
+  confirm.apply( this, args );
+}
+
+function confirm (msg) {
+
+  var arglen = arguments.length;
+  var arg1 = arguments[1];
+  var arg2 = arguments[2];
+  var lastArg = arguments[arglen-1];
+  var callback = typeof lastArg=='function' ? lastArg : function(){};
+  var text1 = typeof arg1=='string' ? arg1 : '取消';
+  var text2 = typeof arg2=='string' ? arg2 : '确定';
+
+  if(arg1===false)  $("#confirm p.button a:first, #confirm p.button span").hide();
+  if(arg2===false)  $("#confirm p.button a:last, #confirm p.button span").hide();
+
+  if(text1) $("#confirm p.button a").first().html(text1);
+  if(text2) $("#confirm p.button a").last().html(text2);
+
+  $("#confirm .shareMsg").html(msg);
+  $("#confirm").trigger("dialog-open");
+
+  $("#confirm p.button a").off().on('click', function(){
+    $("#confirm").trigger("dialog-close");
+    callback( $(this).data('confirm')==1 );
+  });
+
+}
 
 
 

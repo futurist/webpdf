@@ -64,12 +64,8 @@ See https://github.com/adobe-type-tools/cmap-resources
 
     <script src="victor.js"></script>
     <script src="path.js"></script>
-    <script src="drawer.js?t=3453463456345"></script>
+    <script src="drawer.js?t=234234"></script>
 <script type="text/javascript" src="draggable.js"></script>
-
-<link href="js/select2.css" rel="stylesheet" />
-<script src="js/select2.js"></script>
-<script src="js/select2_locale_zh-CN.js"></script>
 
 <link href="css/font-awesome.min.css" rel="stylesheet" />
 <link href="js/selectivity-full.css" rel="stylesheet" />
@@ -1012,6 +1008,34 @@ div.selectivity-dropdown{
   min-width:154px;
 }
 
+
+#alert .shareMsg {
+  margin: 20px;
+  text-align: center;
+  color: #888;
+}
+
+#alert p.button>a
+#alert p.button {
+  display: block;
+  text-align: center;
+  text-decoration: none;
+  color: #333;
+}
+
+#confirm .shareMsg {
+  margin: 20px;
+  text-align: center;
+  color: #888;
+}
+
+#confirm p.button>a,
+#confirm p.button {
+  text-align: center;
+  text-decoration: none;
+  color: #333;
+}
+
 </style>
 
 <div class="select2DIV" style="display:none; position:absolute; z-index:99999999999; top:0; left:0;">
@@ -1076,7 +1100,7 @@ div.selectivity-dropdown{
 </div>
 
 <div class="subtool subtool_operation">
-  <a href="javascript:;" class="button" data-onclick="if(confirm('确认不保存退出吗？')){restoreCanvas(true);setStage('viewer');}">取消</a>
+  <a href="javascript:;" class="button" data-onclick="quitCanvas()">取消</a>
   <a href="javascript:;" class="button btnRedo" data-onclick="OPHistory.redo()">重做</a>
   <a href="javascript:;" class="button btnUndo" data-onclick="OPHistory.undo()">还原</a>
   <a href="javascript:;" class="button btnDel" data-onclick="deleteEl()">删除</a>
@@ -1141,6 +1165,18 @@ div.selectivity-dropdown{
 
 
 <div id="debug" style="display:none; position:absolute; z-index:99999999; top:0; left:0;"></div>
+
+
+<div class="dialog" id="confirm">
+
+    <div class="shareMsg"></div>
+    <p class="button">
+      <a href="javascript:;" class="dialog-close2">取消</a>
+      <span>&nbsp;&nbsp;</span>
+      <a href="javascript:;" class="dialog-close2" data-confirm="1">确定</a>
+    </p>
+</div>
+
 
 
   </body>

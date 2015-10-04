@@ -161,6 +161,12 @@ window.jQuery = window.Zepto || window.jQuery || window.shoestring;
 				if( e.which === 27 ){
 					dialog.close();
 				}
+				if( e.which === 13 ){
+					if(dialog.$el.is(':visible')){
+						dialog.$el.find('a:last').click();
+					}
+					dialog.close();
+				}
 			});
 
 			return;

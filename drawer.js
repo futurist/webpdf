@@ -59,7 +59,7 @@ if(window.signPos){
 var host = "http://1111hui.com:88";
 
 FILE_HOST = 'http://7xkeim.com1.z0.glb.clouddn.com/';
-TREE_URL = "http://1111hui.com:88/tree.html";
+TREE_URL = "http://1111hui.com/pdf/client/tree.html";
 VIEWER_URL = "http://1111hui.com/pdf/webpdf/viewer.html";
 
 var wxOAuthUrl = 'https://open.weixin.qq.com/connect/oauth2/authorize?appid=wx59d46493c123d365&redirect_uri=http%3A%2F%2F1111hui.com%2F/pdf/getUserID.php&response_type=code&scope=snsapi_base&state='+ encodeURIComponent( window.location.href.replace('#','{@@@}') ) +'#wechat_redirect';
@@ -4143,7 +4143,7 @@ function chooseTemplate(){
 
 function alert (msg) {
   var args =Array.prototype.slice.call(arguments);
-  args.splice(1,0,false);
+  args.splice(1,0,null);
   confirm.apply( this, args );
 }
 
@@ -4157,8 +4157,9 @@ function confirm (msg) {
   var text1 = typeof arg1=='string' ? arg1 : '取消';
   var text2 = typeof arg2=='string' ? arg2 : '确定';
 
-  if(arg1===false)  $("#confirm p.button a:first, #confirm p.button span").hide();
-  if(arg2===false)  $("#confirm p.button a:last, #confirm p.button span").hide();
+  $("#confirm p.button a:first").css('display', arg1===null?'none':'inline');
+  $("#confirm p.button a:last").css('display', arg2===null?'none':'inline');
+  $("#confirm p.button span").css('display', arg1===null||arg2===null ?'none':'inline');
 
   if(text1) $("#confirm p.button a").first().html(text1);
   if(text2) $("#confirm p.button a").last().html(text2);

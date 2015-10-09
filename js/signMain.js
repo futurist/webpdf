@@ -62,7 +62,7 @@ function searchToObject(search) {
 }
 
 
-window.scaleRatio = 456/984;
+window.SIGN_RATIO = 496/984;
 window.historyData = null;
 var signID = searchToObject(window.location.hash).signID;
 var fileKey = searchToObject(window.location.hash).fileKey;
@@ -75,7 +75,7 @@ var hash = searchToObject(window.location.hash).hash;
 // This also causes canvas to be cleared.
 function resizeCanvas() {
 
-    var w = signCanvas.offsetHeight * window.scaleRatio + 58;
+    var w = signCanvas.offsetHeight * window.SIGN_RATIO + 58;
     $('#signature-pad').width( w );
 
     // When zoomed out to less than 100%, for some very strange reason,
@@ -225,3 +225,20 @@ function displayHistory (data) {
 
 $('.historyMenu').hide();
 $('.historyLayer').hide();
+
+window.addEventListener('orientationchange', function () {
+    if (window.orientation == -90) {
+        document.getElementById('orient').className = 'orientright';
+        alert(1);
+    }
+    if (window.orientation == 90) {
+        document.getElementById('orient').className = 'orientleft';
+        alert(2);
+    }
+    if (window.orientation == 0) {
+        document.getElementById('orient').className = '';
+        alert(0);
+    }
+}, true);
+
+

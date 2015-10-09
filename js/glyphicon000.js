@@ -13,7 +13,7 @@
         'localStorage' in window &&
         'addEventListener' in window
       ),
-      md5 = 'e90ba95faca6e63b5516ed839f451-fontawesome',
+      md5 = 'e90ba95faca6e63b5516ed839f451',
       key = 'glyphiconFonts',
       cache;
 
@@ -51,7 +51,7 @@
     window.addEventListener('load', function() {
       var request = new XMLHttpRequest(),
           response;
-      request.open('GET', 'js/fontawesome.json', true);
+      request.open('GET', 'js/glyphicon.json', true);
       request.onload = function() {
 
         if (this.status == 200) {

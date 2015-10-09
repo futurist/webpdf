@@ -11,6 +11,7 @@
 */
 
 
+var SIGN_RATIO = 496/984;
 
 DEFAULT_SCALE_DELTA = 1.5;
 
@@ -3252,9 +3253,9 @@ var optionsResize = {
   	var offset = getRealOffset($('.signPad') );
   	if(offset.width<MINIMAL_SIGN_WIDTH) {
   		$('.signPad').width(MINIMAL_SIGN_WIDTH);
-  		$('.signPad').height(MINIMAL_SIGN_WIDTH*456/984);
+  		$('.signPad').height(MINIMAL_SIGN_WIDTH*SIGN_RATIO);
   		$(element).css('left', offset.left+MINIMAL_SIGN_WIDTH);
-	    $(element).css('top', offset.top+MINIMAL_SIGN_WIDTH*456/984 );
+	    $(element).css('top', offset.top+MINIMAL_SIGN_WIDTH*SIGN_RATIO );
   	}
   },
   onDrag: function (element, x, y, e) {
@@ -3262,7 +3263,7 @@ var optionsResize = {
   	var top = offset.top;
   	var left = offset.left;
   	var W = x- left;
-  	var H = W*456/984;
+  	var H = W*SIGN_RATIO;
     $(element).css('left', x);
     $(element).css('top', top +H );
     $('.signPad').css('width',  W );
@@ -3476,7 +3477,7 @@ function finishSign () {
 
 function showSign(){
   var w = 200;
-  var h= w*456/984;
+  var h= w*SIGN_RATIO;
   $('.signPad').show().css({width:w, height:h, left:$(window).width()/2-w/2, top:$(window).height()/2-h/2 });
   var offset = getRealOffset($('.signPad') );
   $('.signPadHandler').show().css({left: offset.left+offset.width, top: offset.top+offset.height });
@@ -3488,12 +3489,40 @@ function showSign(){
 
 function drawSign () {
 
+  function applySign () {
+    var page = $(el[0]).data('page-number');
+
+    var curPage = PDFViewerApplication.pdfViewer.currentPageNumber;
+    var offset = getRealOffset( $('.page').eq(curPage-1) );
+
+    var scaleValue = PDFViewerApplication.pdfViewer.currentScaleValue;
+    if(!isNaN(scaleValue)) scaleValue= Math.round(scaleValue*100);
+
+    var hashleft = -offset.left/window.curScale;
+    var hashtop = viewBox[3] + offset.top/window.curScale - 30;
+
+    var urlhash = 'page='+page+'&zoom='+ scaleValue +','+ ~~hashleft+','+ ~~hashtop;
+    var data = { signPerson:'yangjiming', file:window.curFile, page:page, scale:window.curScale, pos: pos, urlhash: urlhash, isMobile:isMobile, role:'sign', _id: +new Date()+Math.random().toString().slice(2,5) };
+
+    savedSignData.push(data);
+
+    savedSignData = savedSignData.sort(function(a,b){
+      return a.order-b.order;
+    });
+
+    $('.signPad, .signPadHandler').hide();
+    restoreSignature( curPage-1 );
+  }
+
+
+
 	if( !isTemplate || !$('.signPad').is(':visible') ) return;
 	var padOffset = getRealOffset($('.signPad'));
 	var el = $('#inputViewer .page').filter(function(){
 		var offset = getRealOffset($(this));
 		return rectsIntersect(offset, padOffset);
 	});
+
 	if(el.length>1){
 		alert("签名位置不可跨越两页，请调整一下");
 		return;
@@ -3502,37 +3531,18 @@ function drawSign () {
 	var pos = {left: padOffset.left - offset.left, top: padOffset.top - offset.top, width: padOffset.width, height: padOffset.height };
 	if(pos.left<0 || pos.top<0
 		|| padOffset.width+padOffset.left> offset.left+offset.width
-		|| padOffset.height+padOffset.top>offset.top+offset.height ){
+		|| padOffset.height+padOffset.top>offset.top+offset.height ) {
 
 
 		window.confirm("签名框有部分超出页面，可能会导致签名无法全部显示", function(ok){
 
-      if(!ok) return;
+      if(ok) applySign();
 
-      var page = $(el[0]).data('page-number');
-
-      var curPage = PDFViewerApplication.pdfViewer.currentPageNumber;
-      var offset = getRealOffset( $('.page').eq(curPage-1) );
-
-      var scaleValue = PDFViewerApplication.pdfViewer.currentScaleValue;
-      if(!isNaN(scaleValue)) scaleValue= Math.round(scaleValue*100);
-
-      var hashleft = -offset.left/window.curScale;
-      var hashtop = viewBox[3] + offset.top/window.curScale - 30;
-
-      var urlhash = 'page='+page+'&zoom='+ scaleValue +','+ ~~hashleft+','+ ~~hashtop;
-      var data = { signPerson:'yangjiming', file:window.curFile, page:page, scale:window.curScale, pos: pos, urlhash: urlhash, isMobile:isMobile, role:'sign', _id: +new Date()+Math.random().toString().slice(2,5) };
-
-      savedSignData.push(data);
-
-      savedSignData = savedSignData.sort(function(a,b){
-        return a.order-b.order;
-      });
-
-      $('.signPad, .signPadHandler').hide();
-      restoreSignature( curPage-1 );
     });
-	}
+	} else {
+    applySign();
+  }
+
 
 	return;
 	//updateSignIDS();
@@ -3864,9 +3874,12 @@ $(function initPage () {
     	var id = $('.selStuff').data('id');
     	if(!id) return;
     	var targetEl = $('[data-id="'+ id +'"]');
+      var v = savedSignData[ targetEl.data('idx') ];
 
     	var itemID = $(this).data('item-id');
     	$(targetEl).data('main-person', itemID );
+      v.mainPerson = itemID;
+
     	$('.selStuff').selectivity('close');
     });
 
@@ -3879,11 +3892,20 @@ $(function initPage () {
       e.value = e.value.filter(function(v){ return v!=''});
       var val = e.value.join('|');
 
-      if(val) $(targetEl).data('person', val );
-      else $(targetEl).removeAttr('data-person' );
+      var idx = targetEl.data('idx');
+      var v = savedSignData[idx];
+
+      if(val){
+        $(targetEl).data('person', val );
+        v.person = val;
+      }else{
+        $(targetEl).removeAttr('data-person' );
+        delete v.person;
+      }
 
       if( e.value.indexOf(targetEl.data('main-person'))==-1 ){
       	targetEl.removeAttr('data-main-person');
+        delete v.mainPerson;
       }
 
     });
@@ -3993,7 +4015,7 @@ $(function initPage () {
        window.isSigned = true;
        //alert('您已签署过此文档');
     }else if(isSign) {
-      $('.btnSign').css({display: 'table-cell' });
+      //$('.btnSign').css({display: 'table-cell' });
     }
 
     window.isFinished = data.isFinish;

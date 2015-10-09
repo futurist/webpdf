@@ -557,7 +557,7 @@ ul,li{
 }
 .userInputText{
   position: absolute;
-  z-index: 9999999999999999;
+  z-index: 999999999;
 }
 .userInputText textarea{
   width: 100%;
@@ -604,7 +604,7 @@ body.shareMode .userInputText textarea[readonly]{
 .inputLayer .inputCon{
   position: absolute;
   overflow: visible;
-  z-index: 999999999999999999;
+  z-index: 999999999;
   top: 0;
   left: 0;
   transform-origin: left top;
@@ -673,7 +673,7 @@ body.shareMode .userInputText textarea[readonly]{
     position: absolute;
     border:0;
     outline: 0;
-    z-index: 999999999999999999;
+    z-index: 99999999;
   }
   .page .signImg span {
     position: absolute;
@@ -790,7 +790,7 @@ body.shareMode .userInputText textarea[readonly]{
       bottom: 90px;
       right: 20px;
       min-height: 50px;
-      z-index: 999999999;
+      z-index: 99999999999999;
   }
 
   .colorCon a{
@@ -837,7 +837,7 @@ body.shareMode .userInputText textarea[readonly]{
     border-top:1px solid #bfbfbf;
     font:18px/1 "黑体";
     background: #fff;
-    z-index: 999999999999;
+    z-index: 99999999;
   }
 
   .botmenu a.button{
@@ -948,18 +948,6 @@ body.shareMode .userInputText textarea[readonly]{
   display: none;
 }
 
-.glyphicon {
-    font-size: 18px;
-    position: relative;
-    top: 1px;
-    display: inline-block;
-    font-family: 'Glyphicons Halflings';
-    font-style: normal;
-    font-weight: 400;
-    line-height: 1;
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-}
 
 .textWrap[data-person] .bbox:before{
     font-size: 12px;
@@ -967,10 +955,7 @@ body.shareMode .userInputText textarea[readonly]{
     top: -16px;
     color: rgba(0,0,0,0.3);
     display: inline-block;
-    font-family: 'Glyphicons Halflings';
-    font-style: normal;
-    font-weight: 400;
-    line-height: 1;
+    font: normal normal normal 14px/1 FontAwesome;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     content: "\e008";
@@ -1013,6 +998,14 @@ div.selectivity-dropdown{
   margin: 20px;
   text-align: center;
   color: #888;
+}
+
+.dialog-content{
+  z-index: 999999999999;
+}
+
+.dialog-background{
+  z-index: 999999990;
 }
 
 #alert p.button>a

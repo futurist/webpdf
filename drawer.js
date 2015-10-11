@@ -1237,7 +1237,7 @@ var svgns = "http://www.w3.org/2000/svg";
         beginDrag();
 
         if(isTemplate && isText){
-          showSelect2(targetEl, evt.clientY);
+          //showSelect2(targetEl, evt.clientY);
           // $('.selStuff').selectivity('val', ['AL']);
         } else {
           $('.select2DIV').hide();
@@ -3201,7 +3201,7 @@ function showCanvas () {
 
 	  }
 
-		$('#drawViewer').show();
+		$('#drawViewer').width( $('#viewer').width() ).show();
 		$('#drawTool').show();
 		$('#mainMenu').hide();
     $('.textLayer').hide();
@@ -3351,7 +3351,7 @@ function restoreSignature (pageIndex) {
 
       var evt = /touch/.test(e.type) ? e.touches[0] : e;
 
-      if( (shareID && !window.isSign) || window.isSigned || window.isFinished ){
+      if( (shareID && !window.isSign) || window.isSigned || window.isFinished || $(this).data('idx')<shareData.curFlowPos ){
           //alert('您已签署过此文档，此签名位置将留给其它经办人');
          return;
       }
@@ -3367,7 +3367,7 @@ function restoreSignature (pageIndex) {
 
       var signPerson = $(this).data('signPerson');
       if( signPerson && signPerson!= rootPerson.userid ){
-        return;
+        //return;
       }
 
       if($(this).hasClass('active')){
@@ -3412,7 +3412,7 @@ function restoreSignature (pageIndex) {
 
     });
 
-    if(window.signID == v._id ){
+    if(window.signID == v._id && !shareData.selectRange[i].isSigned ){
       img.click();
       var off=img.offset();
       var view = $('#viewerContainer');
@@ -3465,7 +3465,10 @@ function deleteSign(el){
 
 function finishSign () {
   $.post(host+'/finishSign', {shareID:window.shareID, person:rootPerson.userid }, function(data){
-    if(data)alert(data);
+    if(data) alert(data, '确定并关闭', function(){
+      isWeiXin? wx.closeWindow() : window.close();
+    });
+    else alert('网络错误，点击签名后按完成按钮，重试提交');
   } );
   window.isSigned = true;
   $('.btnSign').hide();
@@ -3502,7 +3505,7 @@ function drawSign () {
     var hashtop = viewBox[3] + offset.top/window.curScale - 30;
 
     var urlhash = 'page='+page+'&zoom='+ scaleValue +','+ ~~hashleft+','+ ~~hashtop;
-    var data = { signPerson:'yangjiming', file:window.curFile, page:page, scale:window.curScale, pos: pos, urlhash: urlhash, isMobile:isMobile, role:'sign', _id: +new Date()+Math.random().toString().slice(2,5) };
+    var data = { signPerson: rootPerson.userid, file:window.curFile, page:page, scale:window.curScale, pos: pos, urlhash: urlhash, isMobile:isMobile, role:'sign', _id: +new Date()+Math.random().toString().slice(2,5) };
 
     savedSignData.push(data);
 
@@ -3571,7 +3574,7 @@ function beginSign(el){
 	var idx = $(el).data('idx');
   var fileKey = curFile.replace(FILE_HOST, '');
 
-	var url = 'http://1111hui.com/pdf/webpdf/signpad.html#fileKey='+ fileKey +'&shareID='+ (shareID||'') +'&idx='+ idx +'&signID='+signID+'&hash='+(+new Date());
+	var url = 'http://1111hui.com/pdf/webpdf/signpad.html#fileKey='+ fileKey +'&shareID='+ (shareID||'') +'&idx='+ idx +'&signID='+signID+'&curFlowPos='+shareData.curFlowPos+'&hash='+(+new Date());
 
   //return alert(curSignData.realMainPerson.userid);
   if (isWeiXin && curSignData.realMainPerson && curSignData.realMainPerson.userid ==rootPerson.userid ) {
@@ -3581,10 +3584,10 @@ function beginSign(el){
 
       if(!data) return alert('发送微信错误');
 
-      alert( !data? '签署微信已发送到您手机，请查看微信并点击签署' : '已转交至'+data+'签署，后续更新会微信通知');
+      alert( rootPerson.userid ==data ? '签署微信已发送到您手机，请查看微信并点击签署' : '已转交至'+data+'签署，后续更新会微信通知');
 
       var inter1 = setInterval(function  () {
-        $.post(host+'/getSignStatus', {person: curSignData.realMainPerson.userid , shareID:shareID }, function  (ret) {
+        $.post(host+'/getSignStatus', {curFlowPos: shareData.curFlowPos , shareID:shareID }, function  (ret) {
           if(ret==1){
             clearInterval(inter1);
             window.location.reload();
@@ -3765,7 +3768,7 @@ function finishTemplate (){
 	}).filter('[data-main-person]').length;
 
 	if(signLength < totalSign || mainLength<totalSign-1  ){
-		return alert('请指定所有签署人，并点亮头像(签名人)，最后一步流程不需签名人');
+		//return alert('请指定所有签署人，并点亮头像(签名人)，最后一步流程不需签名人');
 	}
 
 
@@ -3860,11 +3863,30 @@ $(function initPage () {
 
     $('select.selStuff').append( html );
 
+    function matcher (item, term) {
+
+          var result = null;
+          if (item.text.indexOf(term) > -1 || item.id&&item.id.indexOf(term)>-1 ) {
+              result = item;
+          } else if (item.children) {
+              var matchingChildren = item.children.map(function(child) {
+                  return matcher(child, term);
+              }).filter(function(child) {
+                  return !!child;
+              });
+              if (matchingChildren.length) {
+                  result = { id: item.id, text: item.text, children: matchingChildren };
+              }
+          }
+          return result;
+      }
+
     $('.selStuff').selectivity({
       allowClear: true,
       language: "zh-CN",
       multiple:true,
       placeholder:'选择流程人..',
+      matcher:matcher,
       positionDropdown: function  ($dropEl, $selEl) {
         $dropEl.css({top:'auto'});
       }
@@ -3897,10 +3919,10 @@ $(function initPage () {
 
       if(val){
         $(targetEl).data('person', val );
-        v.person = val;
+        if(v) v.person = val;
       }else{
         $(targetEl).removeAttr('data-person' );
-        delete v.person;
+        if(v) delete v.person;
       }
 
       if( e.value.indexOf(targetEl.data('main-person'))==-1 ){
@@ -4190,8 +4212,8 @@ function confirm (msg) {
   $("#confirm").trigger("dialog-open");
 
   $("#confirm p.button a").off().on('click', function(){
-    $("#confirm").trigger("dialog-close");
-    callback( $(this).data('confirm')==1 );
+    var ret = callback( $(this).data('confirm')==1 );
+    if(ret!==false) $("#confirm").trigger("dialog-close");
   });
 
 }

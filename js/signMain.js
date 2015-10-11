@@ -1,4 +1,27 @@
 
+
+
+function searchToObject(search) {
+  return search.substring(1).split("&").reduce(function(result, value) {
+    var parts = value.split('=');
+    if (parts[0]) result[decodeURIComponent(parts[0])] = decodeURIComponent(parts[1]);
+    return result;
+  }, {})
+}
+
+var urlObj = searchToObject(window.location.hash);
+window.SIGN_RATIO = 496/984;
+window.historyData = null;
+var signID = urlObj.signID;
+var fileKey = urlObj.fileKey;
+var shareID = urlObj.shareID;
+var signIDX = urlObj.idx;
+var hash = urlObj.hash;
+var curFlowPos = urlObj.curFlowPos;
+
+
+
+
 var isAndroid = /(android)/i.test(navigator.userAgent);
 var isWeiXin = navigator.userAgent.match(/MicroMessenger\/([\d.]+)/i);
 var isiOS = /iPhone/i.test(navigator.userAgent) || /iPod/i.test(navigator.userAgent) || /iPad/i.test(navigator.userAgent);
@@ -18,22 +41,23 @@ if( !wxUserInfo ){
   window.location = wxOAuthUrl;
 } else {
    wxUserInfo = JSON.parse(wxUserInfo);
-   
+
     if(signID && wxUserInfo.UserId) {
-        $.post(host+'/getSignStatus', {person: wxUserInfo.UserId, shareID:shareID }, function  (ret) {
+        $.post(host+'/getSignStatus', {curFlowPos:curFlowPos, shareID:shareID, t: Math.random() }, function  (ret) {
             if(ret==0) {
                 $('.drawerMenu').show();
                 initSignPad();
             } else {
-                alert('您已签署过此文档，按确定查看');
-                var url = 'http://1111hui.com/pdf/webpdf/viewer.html#file='+ FILE_HOST+fileKey +'&isSign=1&signID='+ signID +'&shareID='+(shareID||'');
-                window.location = url;
+                alert('您已签署过此文档');
+                isWeiXin? wx.closeWindow() : window.close();
+                // var url = 'http://1111hui.com/pdf/webpdf/viewer.html#file='+ FILE_HOST+fileKey +'&isSign=1&signID='+ signID +'&shareID='+(shareID||'');
+                // window.location = url;
             }
         });
-        
+
     }
     else alert('请求非法');
-} 
+}
 });
 
 }else{
@@ -52,23 +76,6 @@ var wrapper = document.getElementById("signature-pad"),
     signPAD;
 
 $('.m-signature-pad--footer').width( $('.m-signature-pad--body').height()-40 );
-
-function searchToObject(search) {
-  return search.substring(1).split("&").reduce(function(result, value) {
-    var parts = value.split('=');
-    if (parts[0]) result[decodeURIComponent(parts[0])] = decodeURIComponent(parts[1]);
-    return result;
-  }, {})
-}
-
-
-window.SIGN_RATIO = 496/984;
-window.historyData = null;
-var signID = searchToObject(window.location.hash).signID;
-var fileKey = searchToObject(window.location.hash).fileKey;
-var shareID = searchToObject(window.location.hash).shareID;
-var signIDX = searchToObject(window.location.hash).idx;
-var hash = searchToObject(window.location.hash).hash;
 
 // Adjust canvas coordinate space taking into account pixel ratio,
 // to make it look crisp on mobile devices.
@@ -112,8 +119,8 @@ function initSignPad(){
         if (signPAD.isEmpty()) {
             alert("请签名后再保存.");
         } else {
-
-            saveButton.setAttribute('disabled', 'disabled');
+            $('.drawerMenu').hide();
+            //saveButton.setAttribute('disabled', 'disabled');
             var canvas = document.createElement("canvas");
               canvas.height = signCanvas.width;
               canvas.width = signCanvas.height;
@@ -127,12 +134,14 @@ function initSignPad(){
             var data = window.signHisID? { signID:signID, fileKey:fileKey, shareID:shareID, hisID: window.signHisID, signIDX:signIDX} : {data: signData, width:canvas.width, height:canvas.height, signID:signID,  fileKey:fileKey, shareID:shareID, signIDX:signIDX };
 
             data.signPerson = wxUserInfo.UserId;
+            data.curFlowPos = curFlowPos;
 
             $.post( host+ '/saveSign', data , function(ret){
-                
+
                 // return console.log(ret);
                 if(!ret){
-                    return alert('签名保存失败，请检查网络稍后再试');
+                    $('.drawerMenu').show();
+                    return alert('签名保存失败');
                 }
                 if(ret){
                     //ret = ret.signIDS.filter(function(v){ return v._id == signID  }  ).shift();
@@ -140,7 +149,7 @@ function initSignPad(){
                     var url = 'http://1111hui.com/pdf/webpdf/viewer.html#file='+ FILE_HOST+fileKey +'&isSign=1&signID='+ signID +'&shareID='+(shareID||'')+'&pos='+ret.urlhash.replace('#','');
                     window.location = url;
                 }
-            });            
+            });
         }
     });
 

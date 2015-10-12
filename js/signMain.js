@@ -85,31 +85,35 @@ function resizeCanvas() {
 
 	windowRatio = $(window).width()/$(window).height();
 	var $pad = $('#signature-pad').removeAttr('style');
+    if(signPAD) signPAD.clear();
+
+    if( windowRatio<1 ){
+
+        var w = $pad.data('width') || signCanvas.offsetHeight * window.SIGN_RATIO + 58;
+        $pad.width( w ).data('width', w);
+
+        $('body').removeClass().addClass('portrait');
+
+    } else {
+
+        var w = $pad.data('height') || signCanvas.offsetWidth * window.SIGN_RATIO + 58;
+        $pad.height( w ).data('height', w);
+
+        $('body').removeClass().addClass('landscape');
+    }
+
+
+    // When zoomed out to less than 100%, for some very strange reason,
+    // some browsers report devicePixelRatio as less than 1
+    // and only part of the canvas is cleared then.
+    var ratio =  Math.max(window.devicePixelRatio || 1, 1);
+    signCanvas.width = signCanvas.offsetWidth * ratio;
+    signCanvas.height = signCanvas.offsetHeight * ratio;
+    signCanvas.getContext("2d").scale(ratio, ratio);
 
 	setTimeout(function  () {
-		if( windowRatio<1 ){
 
-			var w = $pad.data('width') || signCanvas.offsetHeight * window.SIGN_RATIO + 58;
-			$pad.width( w ).data('width', w);
-
-			$('body').removeClass().addClass('portrait');
-
-		} else {
-
-			var w = $pad.data('height') || signCanvas.offsetWidth * window.SIGN_RATIO + 58;
-			$pad.height( w ).data('height', w);
-
-			$('body').removeClass().addClass('landscape');
-		}
-
-
-		// When zoomed out to less than 100%, for some very strange reason,
-		// some browsers report devicePixelRatio as less than 1
-		// and only part of the canvas is cleared then.
-		var ratio =  Math.max(window.devicePixelRatio || 1, 1);
-		signCanvas.width = signCanvas.offsetWidth * ratio;
-		signCanvas.height = signCanvas.offsetHeight * ratio;
-		signCanvas.getContext("2d").scale(ratio, ratio);
+        $(window).scrollTop(999999999);
 
 	}, 30);
 

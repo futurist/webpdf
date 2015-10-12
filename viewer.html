@@ -961,7 +961,7 @@ body.shareMode .userInputText textarea[readonly]{
 
 
 body.showStep .signImg[data-order] .signPerson:before,
-.textWrap[data-person] .bbox:before,
+body.template .textWrap[data-person] .bbox:before,
 body.showStep .userInputText[data-person]:before
 {
     font-size: 12px;
@@ -1184,6 +1184,7 @@ div.selectivity-dropdown{
 </div>
 
 <div class="subtool subtool_operation">
+  <a href="javascript:;" class="button" data-onclick="HandTool.handTool.toggle()">手形</a>
   <a href="javascript:;" class="button" data-onclick="quitCanvas()">取消</a>
   <a href="javascript:;" class="button btnRedo" data-onclick="OPHistory.redo()">重做</a>
   <a href="javascript:;" class="button btnUndo" data-onclick="OPHistory.undo()">还原</a>

@@ -1063,6 +1063,7 @@ var svgns = "http://www.w3.org/2000/svg";
     function getElementsFromPoint (rectPoint) {
       var els = [];
       $('.shape, .textWrap').each( function  (i,v) {
+        if( !$(v).is(':visible') ) return true;
         var _bb = $(v).data('bbox');
         var _trans = getTranslateXY(v, 'getElementsFromPoint');
         if(_bb && _trans){
@@ -2476,6 +2477,7 @@ var svgns = "http://www.w3.org/2000/svg";
     }
 
     function addSelectionList (el, isNew) {
+      if( !$(el).is(':visible') )return;
       if( $(el).data('hl') )return;
       $(el).data('hl', 1);
       var oldTrans = getTranslateXY(el, 'selectionList');
@@ -3265,7 +3267,11 @@ function showCanvas () {
 
 	  }
 
-		$('#drawViewer').width( $('#viewer').width() ).show();
+    var W = $('#viewer').width();
+
+    $('#drawViewer').css( { 'width': W , 'z-index':'999' } ).show();
+		$('#inputViewer').css( { 'width': W , 'z-index':'0' } ).show();
+
     $('#drawTool').show();
 		$('#mainMenu').hide();
     $('.textLayer').hide();
@@ -3714,7 +3720,7 @@ function setStage (stat) {
       		$('.signImg').hide();
 			   showCanvas();
   			$('#viewerContainer').css({overflow:'hidden'});
-        $('#inputViewer').hide();
+        // $('#inputViewer').hide();
   			svgHistory.update('force');
 			break;
 		case 'viewer':

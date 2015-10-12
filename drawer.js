@@ -291,6 +291,7 @@ var DrawView  = (function () {
 
 window.addEventListener('scalechange', function scalechange(evt) {
 
+  $('#inputViewer').hide();
 
 });
 
@@ -299,6 +300,10 @@ document.addEventListener('textlayerrendered', function (e) {  //textlayerrender
 
   setTimeout(function(){
     RERenderDrawerLayer(pageIndex);
+    if(curStage!='remark'){
+      $('#inputViewer').show();
+    }
+
   }, 0);
 
 });
@@ -763,7 +768,10 @@ var svgns = "http://www.w3.org/2000/svg";
       return +new Date()+Math.random();
     }
 
-
+    function capitalize(s)
+    {
+        return s && s[0].toUpperCase() + s.slice(1);
+    }
 
     function exportCanvas () {
       var svg = document.querySelector('svg');
@@ -891,6 +899,8 @@ var svgns = "http://www.w3.org/2000/svg";
 
       if(!options) options={};
 
+      $('.maintool>.button').removeClass('stepOn');
+      $('.btn'+ capitalize(tool) ).addClass('stepOn');
       $('#drawTool .subtool').hide();
       $('#drawTool .subtool_'+tool).show();
 
@@ -996,9 +1006,10 @@ var svgns = "http://www.w3.org/2000/svg";
 
 
     function startWindowEvent(){
+
       var win = $('#viewerContainer').get(0);
       win = window;
-      win.addEventListener(moveE, moveFunc )
+      win.addEventListener('mousemove', moveFunc )
       win.addEventListener(downE, downFunc )
       win.addEventListener(upE, upFunc )
     }
@@ -1006,7 +1017,7 @@ var svgns = "http://www.w3.org/2000/svg";
     function endWindowEvent(){
       var win = $('#viewerContainer').get(0);
       win = window;
-      win.removeEventListener(moveE, moveFunc )
+      win.removeEventListener('mousemove', moveFunc )
       win.removeEventListener(downE, downFunc )
       win.removeEventListener(upE, upFunc )
     }
@@ -1190,6 +1201,7 @@ var svgns = "http://www.w3.org/2000/svg";
 
       //** DOUBLE CLICK event on canvas or element
       //******************************************
+      var enableSelection = isAndroid ? false : true;
 
       if( e.timeStamp - prevTime<500 && prevEl && $(prevEl).data('id') == $(targetEl).data('id')  ){
         prevTime = 0;
@@ -1210,7 +1222,7 @@ var svgns = "http://www.w3.org/2000/svg";
       prevTime = e.timeStamp;
 
       // long click to trigger dragging mode && selecting mode
-      if(0&&!selecting && !dragging && !drawing )
+      if(enableSelection &&!selecting && !dragging && !drawing )
       downTimer = window.setTimeout(function() {
         //we are longclick on shape
         if( isShape || isText ){
@@ -1225,7 +1237,7 @@ var svgns = "http://www.w3.org/2000/svg";
             $('svg.canvas',context).addClass('selectState');
           },300);
         }
-      }, 5000);
+      }, 300);
 
 
 
@@ -1434,7 +1446,7 @@ var svgns = "http://www.w3.org/2000/svg";
 
           }
 
-      }else{
+      }else if(!selecting) {
 
         if(curTool=='curve'){
 
@@ -1448,14 +1460,18 @@ var svgns = "http://www.w3.org/2000/svg";
           var L = rPath.length;
 
           if(L && calcDist(rPath[L-1], [x, y])<DOT_DISTANCE )return;
-          var el = makeShape("circle", { class:"hint", cx:x, cy:y, r:3, fill:"red" });
-          curContext.querySelector('svg.canvas').appendChild( el );
+
+          if(!isAndroid) {
+            var el = makeShape("circle", { class:"hint", cx:x, cy:y, r:3, fill:"red" });
+            curContext.querySelector('svg.canvas').appendChild( el );
+          }
+          
 
           rPath.push( [x, y] );
 
         }
 
-        if(curTool=='line'){
+        if(curTool=='line' && downX && downY){
 
           if( !drawing && dist >DRAW_TOLERANCE ){
             drawing = true;
@@ -1674,7 +1690,7 @@ var svgns = "http://www.w3.org/2000/svg";
 
         if(isAndroid && curTool=='line') {
           var line = curContext.querySelector('[data-id="'+ curShapeID +'"]');
-          createLine([prevX, prevY], [x,y]);
+          if(prevX && prevY) createLine([prevX, prevY], [x,y]);
         }
 
         if(isAndroid && curTool=='rect') {
@@ -1925,13 +1941,30 @@ var svgns = "http://www.w3.org/2000/svg";
 
       var swidth = options['stroke-width']||2;
       var light = options.highLight;
+      var curColor = path.getAttribute('stroke');
+      var prevColor = safeEval(path.getAttribute('data-prev-color'));
+      var prevLight = safeEval(path.getAttribute('data-light') );
+      path.setAttribute("data-light", light );
+
+      if (options.highLight && !prevLight) {
+        path.setAttribute('data-prev-color', curColor );
+      }
+
+      var color = options['stroke']||'#f00';
+
+      if (!options.highLight && prevLight) {
+        color = prevColor||'#f00';
+      }
+
 
       //"stroke-linecap":"round", "stroke-linejoin":"miter", "stroke-miterlimit":"4",
-      var attr = {"d":d,  stroke:options['stroke']||'#f00', "stroke-width": light ? swidth*4 : swidth , "opacity": light?0.5:1 }
+      var attr = {"d":d,  stroke:color, "stroke-width": light ? swidth*4 : swidth , "opacity": light?0.5:1 }
       path.style['opacity'] = light?0.5:1;
 
       for(var i in attr){
-        path.setAttribute(i, attr[i]);
+        try{
+          path.setAttribute(i, attr[i]);
+        }catch(e){ console.log(i, attr[i] ) }
       }
 
       path.setAttribute("marker-start", bit_check(options.arrow, 0x1) ? "url(#triangle)" : "none" );
@@ -3035,9 +3068,10 @@ function copyDrawerLayerData(pageIndex){
   var svgCon = $('.svgCon', drawCon).toArray();
   svgCon.forEach(function(v,i){
     var page = $(v).parent().data('page-number');
-    $(v).clone().insertAfter('#pageContainer'+page+' .canvasWrapper');
+    var p = $('#pageContainer'+page+' .canvasWrapper');
+    $(v).clone().insertAfter(p);
   });
-
+  
   var textCon = $('.textCon', drawCon).toArray();
   textCon.forEach(function(v,i){
     var page = $(v).parent().data('page-number');
@@ -3046,7 +3080,18 @@ function copyDrawerLayerData(pageIndex){
     if(!isTemplate) $('#pageContainer'+page).find('.textWrap[data-template]').show().html('');
   });
 
+
+  if(curStage=='remark'){
+    $('#viewer').find('.textCon, .svgCon').hide();
+    $('#drawViewer').width( $('#viewer').width() ).show();
+  }
+
 }
+
+
+$(window).on('resize', function  () {
+   $('#drawViewer, #inputViewer').width( $('#viewer').width() );
+});
 
 function copyInputLayerData(pageIndex){
 
@@ -3221,7 +3266,7 @@ function showCanvas () {
 	  }
 
 		$('#drawViewer').width( $('#viewer').width() ).show();
-		$('#drawTool').show();
+    $('#drawTool').show();
 		$('#mainMenu').hide();
     $('.textLayer').hide();
 		// $('.canvasWrapper').hide();
@@ -3498,6 +3543,20 @@ function finishSign () {
   $('.userInputText select').hide();
   $('.userInputText').show();
 }
+
+function removeActive(el){
+  $( el || '.stepOn').removeClass('stepOn');
+}
+
+function addActive(el){
+  $(el).addClass('stepOn');
+}
+
+function showStep(el){
+  $('body').toggleClass('showStep');
+  $(el).toggleClass('stepOn');
+}
+
 
 function showSign(){
   var w = 200;
@@ -3851,6 +3910,9 @@ $(function initPage () {
   makeTemplatePicker();
   setStage('viewer');
 
+  if(isTemplate||isSign){
+    $('.btnShowStep').css('display', 'table-cell');
+  }
   if(isTemplate){
     $('body').addClass('template');
   	$('.maintool .btnPrint').hide();
@@ -3985,12 +4047,17 @@ $(function initPage () {
 
   $('#viewerContainer').on('resize scroll', function(e){
     $('.select2DIV').hide();
+    $('#drawViewer').width( $('#viewer').width() );
   });
 
   $('.button').on(downE, function  (e) {
     e.stopPropagation();
+    var self = this;
     $(this).parent().children().removeClass('active');
+
     $(this).addClass('active');
+    setTimeout(function(){ $(self).removeClass('active'); }, 200);
+
     var evt = /touch/.test(e.type) ? e.touches[0] : e;
     eval( $(evt.target).data('onclick') );
     if( !$(this).hasClass('btnColorCon') ) setTimeout(function(){ $('.colorCon').hide(); }, 200);

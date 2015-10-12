@@ -65,6 +65,7 @@ if( !wxUserInfo ){
 }
 
 
+var windowRatio = $(window).width()/$(window).height();
 var host = 'http://1111hui.com:88';
 
 FILE_HOST = 'http://7xkeim.com1.z0.glb.clouddn.com/';
@@ -82,16 +83,35 @@ $('.m-signature-pad--footer').width( $('.m-signature-pad--body').height()-40 );
 // This also causes canvas to be cleared.
 function resizeCanvas() {
 
-    var w = signCanvas.offsetHeight * window.SIGN_RATIO + 58;
-    $('#signature-pad').width( w );
+	windowRatio = $(window).width()/$(window).height();
+	var $pad = $('#signature-pad').removeAttr('style');
 
-    // When zoomed out to less than 100%, for some very strange reason,
-    // some browsers report devicePixelRatio as less than 1
-    // and only part of the canvas is cleared then.
-    var ratio =  Math.max(window.devicePixelRatio || 1, 1);
-    signCanvas.width = signCanvas.offsetWidth * ratio;
-    signCanvas.height = signCanvas.offsetHeight * ratio;
-    signCanvas.getContext("2d").scale(ratio, ratio);
+	setTimeout(function  () {
+		if( windowRatio<1 ){
+
+			var w = $pad.data('width') || signCanvas.offsetHeight * window.SIGN_RATIO + 58;
+			$pad.width( w ).data('width', w);
+
+			$('body').removeClass().addClass('portrait');
+
+		} else {
+
+			var w = $pad.data('height') || signCanvas.offsetWidth * window.SIGN_RATIO + 58;
+			$pad.height( w ).data('height', w);
+
+			$('body').removeClass().addClass('landscape');
+		}
+
+
+		// When zoomed out to less than 100%, for some very strange reason,
+		// some browsers report devicePixelRatio as less than 1
+		// and only part of the canvas is cleared then.
+		var ratio =  Math.max(window.devicePixelRatio || 1, 1);
+		signCanvas.width = signCanvas.offsetWidth * ratio;
+		signCanvas.height = signCanvas.offsetHeight * ratio;
+		signCanvas.getContext("2d").scale(ratio, ratio);
+
+	}, 30);
 
 }
 
@@ -121,15 +141,22 @@ function initSignPad(){
         } else {
             $('.drawerMenu').hide();
             //saveButton.setAttribute('disabled', 'disabled');
-            var canvas = document.createElement("canvas");
-              canvas.height = signCanvas.width;
-              canvas.width = signCanvas.height;
-              var ctx = canvas.getContext("2d");
-              ctx.rotate(90 * Math.PI / 180);
-              ctx.translate(0, -canvas.width);
-              //..check orientation data, this code assumes the case where its oriented 90 degrees off
-              ctx.drawImage(signCanvas, 0, 0);
-              var signData = canvas.toDataURL("image/png");
+
+            if(windowRatio<1){
+            	var canvas = document.createElement("canvas");
+            	canvas.height = signCanvas.width;
+            	canvas.width = signCanvas.height;
+            	var ctx = canvas.getContext("2d");
+            	ctx.rotate(90 * Math.PI / 180);
+            	ctx.translate(0, -canvas.width);
+            	//..check orientation data, this code assumes the case where its oriented 90 degrees off
+            	ctx.drawImage(signCanvas, 0, 0);
+            	var signData = canvas.toDataURL("image/png");
+            } else {
+            	var canvas = $('.m-signature-pad--body canvas').get(0);
+            	var signData = signPAD.toDataURL();
+            }
+
 
             var data = window.signHisID? { signID:signID, fileKey:fileKey, shareID:shareID, hisID: window.signHisID, signIDX:signIDX} : {data: signData, width:canvas.width, height:canvas.height, signID:signID,  fileKey:fileKey, shareID:shareID, signIDX:signIDX };
 
@@ -174,16 +201,29 @@ function initSignPad(){
         img.css('width', W);
         img.css('height', H);
 
-        var canvas = document.createElement("canvas");
-        canvas.height = W;
-        canvas.width = H;
-        var ctx = canvas.getContext("2d");
-        ctx.rotate(-90 * Math.PI / 180);
-        ctx.translate(-W, 0);
-        ctx.drawImage(img.get(0), 0, 0);
+        if(windowRatio<1){
+
+	        var canvas = document.createElement("canvas");
+	        canvas.height = W;
+	        canvas.width = H;
+	        var ctx = canvas.getContext("2d");
+	        ctx.rotate(-90 * Math.PI / 180);
+	        ctx.translate(-W, 0);
+	        ctx.drawImage(img.get(0), 0, 0);
+	        signPAD.fromDataURL( canvas.toDataURL() );
+
+	    } else {
+
+	    	var canvas = document.createElement("canvas");
+	    	canvas.height = H;
+	    	canvas.width = W;
+	    	var ctx = canvas.getContext("2d");
+	    	ctx.drawImage(img.get(0), 0, 0);
+	    	signPAD.fromDataURL( canvas.toDataURL() );
+
+	    }
 
 
-        signPAD.fromDataURL( canvas.toDataURL() );
         window.signHisID = $('img.active').data('hisID');
     });
 
@@ -236,18 +276,27 @@ $('.historyMenu').hide();
 $('.historyLayer').hide();
 
 window.addEventListener('orientationchange', function () {
+    updateOritation();
+
+}, true);
+
+function updateOritation () {
+    $('body').removeClass();
     if (window.orientation == -90) {
-        document.getElementById('orient').className = 'orientright';
-        alert(1);
+        $('body').addClass('landscape rotate-90');
     }
     if (window.orientation == 90) {
-        document.getElementById('orient').className = 'orientleft';
-        alert(2);
+        $('body').addClass('landscape rotate90');
     }
     if (window.orientation == 0) {
-        document.getElementById('orient').className = '';
-        alert(0);
+        $('body').addClass('portrait rotate0');
     }
-}, true);
+    if (window.orientation == 180) {
+        $('body').addClass('portrait rotate180');
+    }
+}
+updateOritation();
+
+
 
 

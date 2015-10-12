@@ -58,6 +58,17 @@ body {
   border: 1px solid #f4f4f4;
 }
 
+body.landscape .m-signature-pad--body {
+  position: absolute;
+  left: 20px;
+  right: 20px;
+  top: 20px;
+  bottom: 36px;
+  border: 1px solid #f4f4f4;
+}
+
+
+
 .m-signature-pad--body
   canvas {
     position: absolute;
@@ -77,6 +88,13 @@ body {
     -webkit-transform: rotate(-90deg) translate(100%,-6px);
     -webkit-transform-origin: 100% 0%;
 }
+
+body.landscape  .m-signature-pad--footer {
+  -webkit-transform: initial;
+  -webkit-transform-origin: initial;
+}
+
+
 
 .m-signature-pad--footer
   .description {

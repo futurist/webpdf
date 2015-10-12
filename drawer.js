@@ -1745,16 +1745,26 @@ var svgns = "http://www.w3.org/2000/svg";
       if (cmd === 0) { // no control key pressed at all.
 
       	if(isTemplate && !isInput) {
-			var img = $('.signImg.active');
-			if(!img.length) return;
-			var order =evt.keyCode-48;
-			if(order<0||order>15) return;
-			img.find('span').html(order);
-			img.data('order', order);
-			var id= ~~ img.data('idx');
-			savedSignData[id].order = order;
-			savedSignData = savedSignData.sort(function(a,b){return a.order-b.order});
-	    }
+
+            var order =evt.keyCode-48;
+            if(order<0||order>15) return;
+
+            var img = $('.signImg.active');
+      			if(img.length){
+
+                img.find('span').html(order);
+                img.data('order', order);
+                var id= ~~ img.data('idx');
+                savedSignData[id].order = order;
+                savedSignData = savedSignData.sort(function(a,b){return a.order-b.order});
+            }
+
+            var inputText = $('.textWrap[data-hl]');
+            if(inputText.length){
+              inputText.data('person', order);
+            }
+
+	       }
 
         //console.log(evt, evt.keyCode);
         switch (evt.keyCode) {
@@ -2173,7 +2183,7 @@ var svgns = "http://www.w3.org/2000/svg";
       var offset = pointsToRect(box[0], box[1], getTranslateXY(targetEl) );
       //offset.width += 30;
 
-     $(curContext).find('.textCon').append('<textarea class="text textarea" wrap="hard"></textarea>');
+     $(curContext).find('.textCon').append('<textarea spellcheck="false" class="text textarea" wrap="hard"></textarea>');
      $(curContext).find('.textCon').append('<div class="handler"></div>');
 
      var offset2 = { left:offset.left+offset.width, top:offset.top+offset.height } ;
@@ -2221,7 +2231,7 @@ var svgns = "http://www.w3.org/2000/svg";
       }
 
       if(!path){
-        path = $('<div class="textWrap"><textarea class="pre text textholder"></textarea></div>');
+        path = $('<div class="textWrap"><textarea spellcheck="false" class="pre text textholder"></textarea></div>');
         curShapeID = +new Date+Math.random();
         $('.textCon', curContext).append( path );
         path.attr("data-id", curShapeID );
@@ -3061,7 +3071,7 @@ function copyInputLayerData(pageIndex){
       var text = $('[data-input-id="'+id+'"]');
 
       if( !text.length ){
-        text = $('<div class="userInputText"><textarea name="userinput'+i+'"></textarea></div>');
+        text = $('<div class="userInputText"><textarea spellcheck="false" name="userinput'+i+'"></textarea></div>');
         text.data('input-id', id );
         text.data('person', person );
         text.appendTo( inputCon );
@@ -3096,16 +3106,25 @@ function copyInputLayerData(pageIndex){
       setInputTextValue(id, t);
 
 
+      function disableInput () {
+          $('body').addClass('shareMode');
+          text.find('textarea').show().prop('readonly', true);
+          //text.find('textarea').show().prop('disabled', true);
+          text.find('select').hide();
+          $('.userInputText').show();
+      }
+
+
       if( (shareID&&!window.isSign) ||
         ( window.isSigned || window.isFinished ) ||
-        (shareID && person && (rootPerson.userid!=person && rootPerson.userid!=userPlacerholder[person] )  )
+        (shareID && person && ( shareData.curFlowPos+1!= person )  )
       ){
+        disableInput();
 
-        $('body').addClass('shareMode');
-        text.find('textarea').show().prop('readonly', true);
-      	//text.find('textarea').show().prop('disabled', true);
-      	text.find('select').hide();
-      	$('.userInputText').show();
+      }
+
+      if (shareID && person &&  shareData.flowSteps[person-1].person.indexOf(rootPerson.userid)<0) {
+        disableInput();
       }
 
     });
@@ -3453,7 +3472,6 @@ function deleteSign(el){
   	  savedSignData = $.grep(savedSignData, function(v){ return v._id!=id })
   	  $('.select2DIV').hide();
 
-  	  setStage('viewer');
 	} else {
 		$.post(host+'/deleteSignOnly', {id:img.data('id'), idx:img.data('idx'), person:rootPerson.userid, file:curFile, shareID:shareID  } );
 		img.find('img').remove();
@@ -3461,6 +3479,9 @@ function deleteSign(el){
 		img.click();
 		img.click();
 	}
+
+  setStage('viewer');
+
 }
 
 function finishSign () {

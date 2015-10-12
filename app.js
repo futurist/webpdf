@@ -2558,6 +2558,8 @@ app.post("/finishSign", function (req, res) {
 app.post("/saveSignFlow", function (req, res) {
   var signIDS =  req.body.signIDS;
   var key =  req.body.key;
+  var pageWidth =  req.body.pageWidth;
+  var pageHeight =  req.body.pageHeight;
 
   var selectRange = signIDS.map(function(v){
     var obj = _.pick(v, '_id', 'person', 'mainPerson', 'order' );
@@ -2571,7 +2573,25 @@ app.post("/saveSignFlow", function (req, res) {
   col.findOneAndUpdate( {role:'upfile', key:key}, {$set: { signIDS: signIDS, flowSteps:selectRange } }, {projection:{title:1, key:1}},  function(err, result){
     // console.log(err, result);
     if(err||!result) return res.send('');
-    return res.send('ok');
+    
+    res.send('ok');
+
+	var cmd = 'phantomjs --config=client/config client/template.js '+ FILE_HOST + key + ' ' + pageWidth + ' ' + pageHeight;
+
+	var child = exec(cmd, function(err, stdout, stderr) {
+
+    if(err) return console.log(cmd, err, stdout, stderr);
+
+    var filename = key.split('/').pop();
+    qiniu_uploadFile( 'uploads/'+ filename +'.jpg', function(ret){
+
+        col.updateOne( {role:'upfile', key:key}, {$set: { templateImage: ret.key } }, function(err, result){
+        });
+
+    } );
+
+
+	});
 
   } );
 

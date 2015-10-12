@@ -975,6 +975,20 @@ body.showStep .userInputText[data-person]:before
     content: "\f111";
 }
 
+
+body.template .textWrap[data-person="0"] .bbox:before
+{
+  left: 0px;
+  color: rgba(100,100,100,0.5);
+}
+
+
+body.showStep .signImg[data-order="0"] .signPerson:before,
+body.showStep .userInputText[data-person="0"]:before
+{
+  content: "";
+}
+
 body.showStep .signImg[data-order] .signPerson:after,
 body.template .textWrap[data-person] .bbox:after,
 body.showStep .userInputText[data-person]:after

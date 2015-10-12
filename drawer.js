@@ -292,7 +292,7 @@ var DrawView  = (function () {
 window.addEventListener('scalechange', function scalechange(evt) {
 
   setStage('viewer');
-  $('#inputViewer').hide();
+  //$('#inputViewer').hide();
 
 });
 
@@ -303,6 +303,14 @@ document.addEventListener('textlayerrendered', function (e) {  //textlayerrender
     RERenderDrawerLayer(pageIndex);
     if(curStage!='remark'){
       $('#inputViewer').show();
+    }
+
+    if(isTemplate && pdfViewer.pagesCount == e.detail.pageNumber ){
+        var totalHeight = 0;
+        $('#viewer .page').each(function(){
+          totalHeight += $(this).height()
+        });
+        console.log('_PageRenderFinished', $('.page').width(), totalHeight );
     }
 
   }, 0);
@@ -3166,17 +3174,29 @@ function copyInputLayerData(pageIndex){
           $('.userInputText').show();
       }
 
+      function enableInput () {
+          var sel = text.find('select').show();
+          sel.length ? text.find('textarea').hide() : text.find('textarea').show();
+          text.find('textarea').removeAttr('readonly');
+          $('.userInputText').show();
+      }
+
 
       if( (shareID&&!window.isSign) ||
         ( window.isSigned || window.isFinished ) ||
-        (shareID && person && ( shareData.curFlowPos+1!= person )  )
+        (shareID )
       ){
         disableInput();
-
       }
 
-      if (shareID && person &&  shareData.flowSteps[person-1].person.indexOf(rootPerson.userid)<0) {
-        disableInput();
+      if ( window.isFinished ) return;
+
+      if ( shareID && person && ( shareData.curFlowPos+1== person ) && shareData.flowSteps[person-1].person.indexOf(rootPerson.userid)>-1 ) {
+        enableInput();
+      }
+
+      if( shareID && (person===undefined||person===null) ){
+        enableInput();
       }
 
     });
@@ -3432,6 +3452,7 @@ function restoreSignature (pageIndex) {
 
       var evt = /touch/.test(e.type) ? e.touches[0] : e;
 
+      if(!isTemplate)
       if( (shareID && !window.isSign) || window.isSigned || window.isFinished || $(this).data('idx')<shareData.curFlowPos ){
           //alert('您已签署过此文档，此签名位置将留给其它经办人');
          return;
@@ -3722,6 +3743,7 @@ function setStage (stat) {
     $('.signPad, .signPadHandler').hide();
     HandTool.handTool.deactivate();
     $('#viewerContainer').css({overflow:'auto'});
+    $('#inputViewer').css('z-index', '99999999999');
     $('#drawViewer').hide();
   }
 
@@ -3730,7 +3752,8 @@ function setStage (stat) {
         resetState();
       		$('.signImg').hide();
 			   showCanvas();
-  			$('#viewerContainer').css({overflow:'hidden'});
+  			/** Disable Mouse Scrolling when in remark mode **/
+        // $('#viewerContainer').css({overflow:'hidden'});
         // $('#inputViewer').hide();
   			svgHistory.update('force');
 			break;
@@ -3871,7 +3894,7 @@ function finishTemplate (){
 
 	updateSignIDS();
 
-	$.post(host+'/saveSignFlow', {key: curFile.replace(FILE_HOST, ''), signIDS:savedSignData}, function(ret){
+	$.post(host+'/saveSignFlow', {key: curFile.replace(FILE_HOST, ''), signIDS:savedSignData, pageWidth:$('.page').width(), pageHeight: $('#viewerContainer').prop('scrollHeight') }, function(ret){
 		alert('流程保存成功');
 	});
 }
@@ -3927,7 +3950,7 @@ $(function initPage () {
   makeTemplatePicker();
   setStage('viewer');
 
-  if(isTemplate||isSign){
+  if(isSign){
     $('.btnShowStep').css('display', 'table-cell');
   }
   if(isTemplate){

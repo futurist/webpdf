@@ -291,6 +291,7 @@ var DrawView  = (function () {
 
 window.addEventListener('scalechange', function scalechange(evt) {
 
+  setStage('viewer');
   $('#inputViewer').hide();
 
 });
@@ -2546,13 +2547,17 @@ var svgns = "http://www.w3.org/2000/svg";
        }else{
           var newTransform = transform.replace(re, 'translate('+parseInt(x)+'px,'+ parseInt(y) +'px)');
           $(obj).css('-webkit-transform', newTransform  );
-	          return;
+
+         //  $(obj).css('-webkit-transform', 'initial'  ).css('transform', 'initial'  );
+	        // $(obj).css({ left: parseFloat(style.left)+x + 'px', top: parseFloat(style.top)+y + 'px'});
+
+          return;
           if(isAndroid){
 	          var oldCSS = $(obj).get(0).style.cssText + '-webkit-transform:none;';
 	          $(obj).get(0).style.cssText = oldCSS.replace( /-webkit-transform:[^;]*;|transform:[^;]*;/ig, '-webkit-transform:'+newTransform+';' );
-	      } else {
-	          $(obj).css('transform', newTransform  );
-	      }
+  	      } else {
+  	          $(obj).css('-webkit-transform', newTransform  ).css('transform', newTransform  );
+  	      }
        }
     }
     function calcInterpo (rPath, tension) {
@@ -3387,9 +3392,15 @@ function restoreSignature (pageIndex) {
 
       if(v.sign){
         img.find('.img').attr({ 'src': v.sign.signData });
-        $.post(host+'/getUserInfo', { userid: v.sign.person }, function  (userinfo) {
-          img.append('<div class="signPerson">'+ userinfo.name +'</div>');
-        });
+        if(!v.signPersonName){
+          $.post(host+'/getUserInfo', { userid: v.sign.person }, function  (userinfo) {
+            v.signPersonName = userinfo.name;
+            img.append('<div class="signPerson">'+ userinfo.name +'</div>');
+          });
+        } else {
+          img.append('<div class="signPerson">'+ v.signPersonName +'</div>');
+        }
+        
 
       } else {
 
@@ -4102,7 +4113,10 @@ $(function initPage () {
   if(window.isTemplate) $('.btnSign').css('display', 'table-cell');
 
   $.post( host + '/getCanvas', { file:curFile, shareID:shareID }, function(data){
-    if(data) savedCanvasData = JSON.parse( data );
+    if(data){
+      data = data.replace(/([^-])transform:/g, '$1-webkit-transform:');
+      savedCanvasData = JSON.parse( data );
+    }
   } );
 
   $.post( host + '/getSavedSign', { file:curFile, shareID:shareID }, function(data){

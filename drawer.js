@@ -74,13 +74,13 @@ var isMobile = isAndroid||isWeiXin||isiOS;
 var wxUserInfo;
 var DEBUG= eval(urlQuery.debug||0);
 
-var rootPerson = {userid: 'yangjiming', name:"杨吉明", depart:"行政" };
+var rootPerson = {};
 
 if(window.navigator.userAgent == "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_4) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/42.0.2311.152 Safari/537.36"
   || window.navigator.userAgent == "Mozilla/5.0 (Windows NT 5.1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/45.0.2454.99 Safari/537.36"
   ) DEBUG=1;
 
-
+if(DEBUG) rootPerson = {userid: 'yangjiming', name:"杨吉明", depart:"行政", isAdmin:true };
 if(isWeiXin){
   if(!DEBUG)
   {
@@ -1018,7 +1018,7 @@ var svgns = "http://www.w3.org/2000/svg";
 
       var win = $('#viewerContainer').get(0);
       win = window;
-      win.addEventListener('mousemove', moveFunc )
+      win.addEventListener(moveE, moveFunc )
       win.addEventListener(downE, downFunc )
       win.addEventListener(upE, upFunc )
     }
@@ -1026,7 +1026,7 @@ var svgns = "http://www.w3.org/2000/svg";
     function endWindowEvent(){
       var win = $('#viewerContainer').get(0);
       win = window;
-      win.removeEventListener('mousemove', moveFunc )
+      win.removeEventListener(moveE, moveFunc )
       win.removeEventListener(downE, downFunc )
       win.removeEventListener(upE, upFunc )
     }
@@ -3425,7 +3425,9 @@ function restoreSignature (pageIndex) {
       } else {
 
         if( !isSign || isSigned || isFinished ){
-          img.hide();
+          // img.hide();
+          img.addClass('notFlow');
+          img.html('<a href="javascript:;"><span>点此签名</span></a>').autoFontSize();
         } else {
           img.html('<a href="javascript:;"><span>点此签名</span></a>').autoFontSize();
         }
@@ -3453,12 +3455,16 @@ function restoreSignature (pageIndex) {
       var evt = /touch/.test(e.type) ? e.touches[0] : e;
 
       if(!isTemplate)
-      if( (shareID && !window.isSign) || window.isSigned || window.isFinished || $(this).data('idx')<shareData.curFlowPos ){
+      if( (shareID && !window.isSign) || window.isSigned || window.isFinished || shareData&& i <shareData.curFlowPos ){
           //alert('您已签署过此文档，此签名位置将留给其它经办人');
          return;
       }
-      if(!shareID&& !isTemplate ){
-        return alert('请在文件柜选择流程后会通知签署');
+      if( !v.isFlow ){
+          var signPerson = $(this).data('signPerson');
+          if( signPerson && signPerson!= rootPerson.userid ){
+          alert('您不可签署此签名');
+            //return;
+          }
       }
       if(shareID){
         var emptyList = $('.userInputText textarea').not('[readonly]').filter(function  (v) {
@@ -3467,10 +3473,6 @@ function restoreSignature (pageIndex) {
         if(emptyList.length) return alert('填写完整信息后才可签署');
       }
 
-      var signPerson = $(this).data('signPerson');
-      if( signPerson && signPerson!= rootPerson.userid ){
-        //return;
-      }
 
       if($(this).hasClass('active')){
 
@@ -3623,7 +3625,7 @@ function drawSign () {
     var hashtop = viewBox[3] + offset.top/window.curScale - 30;
 
     var urlhash = 'page='+page+'&zoom='+ scaleValue +','+ ~~hashleft+','+ ~~hashtop;
-    var data = { signPerson: rootPerson.userid, file:window.curFile, page:page, scale:window.curScale, pos: pos, urlhash: urlhash, isMobile:isMobile, role:'sign', _id: +new Date()+Math.random().toString().slice(2,5) };
+    var data = { signPerson: rootPerson.userid, file:window.curFile, page:page, scale:window.curScale, pos: pos, urlhash: urlhash, isMobile:isMobile, role:'sign', _id: +new Date()+Math.random().toString().slice(2,5), isFlow: isTemplate?true:false };
 
     savedSignData.push(data);
 
@@ -3632,12 +3634,13 @@ function drawSign () {
     });
 
     $('.signPad, .signPadHandler').hide();
+    HandTool.handTool.deactivate();
     restoreSignature( curPage-1 );
   }
 
 
 
-	if( !isTemplate || !$('.signPad').is(':visible') ) return;
+	if( !$('.signPad').is(':visible') ) return;
 	var padOffset = getRealOffset($('.signPad'));
 	var el = $('#inputViewer .page').filter(function(){
 		var offset = getRealOffset($(this));
@@ -3687,12 +3690,13 @@ function drawSign () {
 
 
 function beginSign(el){
-
+  if(!el) el = $('.signImg.active');
   var signID = $(el).data('id');
 	var idx = $(el).data('idx');
   var fileKey = curFile.replace(FILE_HOST, '');
 
-	var url = 'http://1111hui.com/pdf/webpdf/signpad.html#fileKey='+ fileKey +'&shareID='+ (shareID||'') +'&idx='+ idx +'&signID='+signID+'&curFlowPos='+shareData.curFlowPos+'&hash='+(+new Date());
+	var url = 'http://1111hui.com/pdf/webpdf/signpad.html#fileKey='+ fileKey +'&shareID='+ (shareID||'') +'&idx='+ idx +'&signID='+signID
+            +'&curFlowPos='+(shareData&&shareData.curFlowPos||'')+'&hash='+(+new Date());
 
   //return alert(curSignData.realMainPerson.userid);
   if (isWeiXin && curSignData.realMainPerson && curSignData.realMainPerson.userid ==rootPerson.userid ) {
@@ -3705,10 +3709,12 @@ function beginSign(el){
       alert( rootPerson.userid ==data ? '签署微信已发送到您手机，请查看微信并点击签署' : '已转交至'+data+'签署，后续更新会微信通知');
 
       var inter1 = setInterval(function  () {
-        $.post(host+'/getSignStatus', {curFlowPos: shareData.curFlowPos , shareID:shareID }, function  (ret) {
+        $.post(host+'/getSignStatus', {shareID:shareID, signID:signID }, function  (ret) {
           if(ret==1){
             clearInterval(inter1);
-            window.location.reload();
+            setTimeout( function  () {
+              window.location.reload();
+            }, 3000);
           }
 
         });
@@ -4133,7 +4139,8 @@ $(function initPage () {
     });
 
   if(!window.isSign) $('.btnSign').hide();
-  if(window.isTemplate) $('.btnSign').css('display', 'table-cell');
+  // if(window.isTemplate) $('.btnSign').css('display', 'table-cell');
+  $('.btnSign').css('display', 'table-cell');
 
   $.post( host + '/getCanvas', { file:curFile, shareID:shareID }, function(data){
     if(data){

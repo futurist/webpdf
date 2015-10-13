@@ -1133,6 +1133,13 @@ div.selectivity-dropdown{
   color: #333;
 }
 
+.page .signImg.notFlow{
+  border:1px solid red;
+}
+.page .signImg.notFlow.active{
+  border:2px solid red;
+}
+
 </style>
 
 <div class="select2DIV" style="display:none; position:absolute; z-index:99999999999; top:0; left:0;">
@@ -1255,7 +1262,7 @@ div.selectivity-dropdown{
   <div class="signPadCanvas"><span>签名处</span></div>
   <div class="signPadInfo">
     <div>移动＜签名处＞字样到需要签名的位置，然后按确定。</div>
-    <a href="javascript:;" class="button signBtnOK" data-onclick="drawSign()">确定</a>
+    <a href="javascript:;" class="button signBtnOK" data-onclick="drawSign()">确定</a>&nbsp;&nbsp;&nbsp;&nbsp;
     <a href="javascript:;" class="button signBtnCancel" data-onclick="setStage('viewer')">取消</a>
   </div>
 </div>

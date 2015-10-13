@@ -43,7 +43,7 @@ if( !wxUserInfo ){
    wxUserInfo = JSON.parse(wxUserInfo);
 
     if(signID && wxUserInfo.UserId) {
-        $.post(host+'/getSignStatus', {curFlowPos:curFlowPos, shareID:shareID, t: Math.random() }, function  (ret) {
+        $.post(host+'/getSignStatus', {shareID:shareID, signID:signID, t: Math.random() }, function  (ret) {
             if(ret==0) {
                 $('.drawerMenu').show();
                 initSignPad();

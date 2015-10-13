@@ -1087,7 +1087,7 @@ app.post("/upfile", function (req, res) {
 
     var client = data.client.replace(/\\/g,'').toLowerCase();
 
-    col.findOne({role:'stuff', $or:[ {'stuffList.client': client}, {'stuffList.ip': client} ] }, 
+    col.findOne({role:'stuff', $or:[ {'stuffList.client': client}, {'stuffList.ip': client} ] },
                 {fields: {'stuffList': {$elemMatch: { $or:[ {client: client}, {ip:client} ] } }  } }, function(err, ret){
       if(err|| !ret) {
         console.log('No client found:', client);
@@ -2370,10 +2370,10 @@ function getSubStr (str, len) {
 app.post("/getSignStatus", function (req, res) {
   var shareID = safeEval(req.body.shareID);
   var signID =  req.body.signID;
-  
+
   if(shareID){
-      col.findOne({role:'share', shareID:shareID, 'selectRange.signID': signID }, 
-        { fields:{ selectRange: { $elemMatch:{ signID:signID } } } }, 
+      col.findOne({role:'share', shareID:shareID, 'selectRange.signID': signID },
+        { fields:{ selectRange: { $elemMatch:{ signID:signID } } } },
         function  (err, ret) {
 
           if(err||!ret) return res.send('');
@@ -2388,7 +2388,7 @@ app.post("/getSignStatus", function (req, res) {
 app.post("/getSignStatus3", function (req, res) {
   var shareID = safeEval(req.body.shareID);
   var signID =  req.body.signID;
-  
+
   if(shareID){
       col.aggregate( [ {$match:{role:'share', shareID:shareID} }, {$unwind:'$files'}, {$unwind:'$files.signIDS'}, {$match:{ 'files.signIDS._id':signID }}, {$project: {'files.signIDS':1} } ], function(err, ret) {
 
@@ -2730,31 +2730,73 @@ app.post("/saveSign", function (req, res) {
       function insertHis(id){
       	if(shareID){
 
-      		var key1 = 'files.$.signIDS.'+ signIDX +'.signData';
-      		var key2 = 'files.$.signIDS.'+ signIDX +'.signPerson';
-      		var setObj = {};
-      		setObj[key1] =  new ObjectID(id);
-      		setObj[key2] =  person;
+          col.mapReduce(
+            function() {
+              var val, signIdx;
+              this.files.some(function(v,i){ if(v.key==fileKey) return val=i; });
+              this.files[val].signIDS.some(function(v,i){ if(v._id==signID) return signIdx=i; });
+              emit(this._id, {fileIdx:val, signIdx:signIdx} );
+            },
+            function() {},
+            {
+              "out": { "inline": 1 },
+              "query": { shareID:shareID, "files.key": fileKey },
+              "scope": {fileKey:fileKey, signID:signID}
+            },
+            function(err, ret) {
 
-          var condition = {role:'share', shareID:shareID, 'files.key':fileKey };
-          condition['selectRange.'+curFlowPos+'.isSigned'] = {$ne: true };
+              if(err) return res.end();
+              var val = ret.shift().value;
 
-      		// http://stackoverflow.com/questions/18986505/mongodb-array-element-projection-with-findoneandupdate-doesnt-work
-  			   col.findOneAndUpdate( condition, { $set: setObj }, { projection:{ key:1, 'files': {$elemMatch: {key: fileKey} } } } , function(err, result) {
+              findKeyOK( val.fileIdx, val.signIdx );
 
-                if(err || !result ) {
-      						return res.send('');
-      					}
-
-      					try{var ret=result.value.files.shift().signIDS[ signIDX ]; }
-      					catch(e){
-      						return res.send('');
-      					}
-  	          	res.send( ret );
+            });
 
 
-  	        });
+      		function findKeyOK ( fileIdx, signIdx ) {
+            var key1 = 'files.'+ fileIdx +'.signIDS.'+signIdx+'.signData';
+            var key2 = 'files.'+ fileIdx +'.signIDS.'+signIdx+'.signPerson';
+            var setObj = {};
+            setObj[key1] =  new ObjectID(id);
+            setObj[key2] =  person;
+
+            var condition = {role:'share', shareID:shareID, 'files.key':fileKey };
+
+            condition['files.'+fileIdx+'.signIDS._id'] = signID;
+            condition['selectRange.'+curFlowPos+'.isSigned'] = {$ne: true };
+
+            var projection = {  };
+            projection[ 'files' ] = {$elemMatch: {key: fileKey} }
+
+            // console.log(condition, setObj, projection);
+            // BELOW WILL THROW ERROR: exception: Cannot use $elemMatch projection on a nested field (currently unsupported).
+            // projection[ 'files.'+fileIdx+'.signIDS' ] = {$elemMatch: {_id: signID} }
+
+            // http://stackoverflow.com/questions/18986505/mongodb-array-element-projection-with-findoneandupdate-doesnt-work
+             col.findOneAndUpdate( condition, { $set: setObj }, { projection:projection  } , function(err, result) {
+
+                  if(err || !result ) {
+                    console.log(err);
+                    return res.send('');
+                  }
+
+                  try{var ret=result.value.files.shift().signIDS.filter(function(v){ return v._id==signID }).shift() ; }
+                  catch(e){
+                    return res.send('');
+                  }
+
+                  res.send( ret );
+
+
+              });
+            }
+
+
+
+
       	} else {
+
+
       		col.findOneAndUpdate( {role:'upfile', 'key':fileKey, 'signIDS._id': signID },
 				{ $set:{'signIDS.$.signData': new ObjectID(id), 'signIDS.$.signPerson': person } }, { projection:{ key:1, 'signIDS':1} }, function(err, result) {
 

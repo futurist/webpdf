@@ -3558,11 +3558,11 @@ function deleteSign(el){
   	  $('.select2DIV').hide();
 
 	} else {
-		$.post(host+'/deleteSignOnly', {id:img.data('id'), idx:img.data('idx'), person:rootPerson.userid, file:curFile, shareID:shareID  } );
+		$.post(host+'/deleteSignOnly', { signID:img.data('id'), person:rootPerson.userid, file:curFile, shareID:shareID  } );
 		img.find('img').remove();
 		img.html('<span>点此签名</span>').autoFontSize();
-		img.click();
-		img.click();
+		// img.click();
+		// img.click();
 	}
 
   setStage('viewer');

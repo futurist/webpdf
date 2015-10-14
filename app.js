@@ -2331,28 +2331,39 @@ app.post("/deleteSign", function (req, res) {
 });
 
 app.post("/deleteSignOnly", function (req, res) {
-  var id =  req.body.id;
+  var signID =  req.body.signID;
   var person =  req.body.person;
   var file =  req.body.file;
   var shareID =  safeEval( req.body.shareID);
-  var signIDX =  safeEval( req.body.idx);
-  if(!file || !id.length){
+  if(!file || !signID.length){
     return res.send('');
   }
 
   var fileKey = file.replace(FILE_HOST, '');
 
   	if(shareID){
-  		var unsetObj = {};
-  		unsetObj[ 'files.$.signIDS.'+ signIDX +'.signData' ] = '';
-  		unsetObj[ 'files.$.signIDS.'+ signIDX +'.signPerson' ] = '';
 
-		col.findOneAndUpdate( {role:'share', shareID:shareID, 'files.key':fileKey, 'files.signIDS._id': id },
-			{ $unset:unsetObj }, { projection:{ key:1, 'signIDS':1} }, function(err, result) {
-          res.send( result );
-        });
+
+      getSignIndex(shareID, fileKey, signID, _relay);
+
+      function _relay(err, val) {
+        if(err) return res.end();
+        var fileIdx = val.fileIdx;
+        var signIdx = val.signIdx;
+
+        var unsetObj = {};
+        unsetObj[ 'files.'+ fileIdx +'.signIDS.'+ signIdx +'.signData' ] = '';
+        unsetObj[ 'files.'+ fileIdx +'.signIDS.'+ signIdx +'.signPerson' ] = '';
+
+        col.findOneAndUpdate( {role:'share', shareID:shareID, 'files.key':fileKey, 'files.signIDS._id': signID },
+          { $unset:unsetObj }, { projection:{ key:1, 'signIDS':1} }, function(err, result) {
+              res.send( result );
+            });
+      }
+  		
+
   	} else {
-  		col.findOneAndUpdate( {role:'upfile', 'key':fileKey, 'signIDS._id': id },
+  		col.findOneAndUpdate( {role:'upfile', 'key':fileKey, 'signIDS._id': signID },
 			{ $unset:{'signIDS.$.signData': '', 'signIDS.$.signPerson': '' } }, { projection:{ key:1, 'signIDS':1} }, function(err, result) {
           res.send( result.value );
         });
@@ -2715,22 +2726,9 @@ app.post("/saveSignFlow2", function (req, res) {
 
 });
 
-app.post("/saveSign", function (req, res) {
-  var data =  req.body.data;
-  var signID =  req.body.signID;
-  var signIDX =  safeEval(req.body.signIDX);
-  var fileKey =  req.body.fileKey;
-  var shareID =  safeEval(req.body.shareID);
-  var hisID =  req.body.hisID;
-  var width =  safeEval(req.body.width);
-  var height =  safeEval(req.body.height);
-  var person =  req.body.signPerson;
-  var curFlowPos = safeEval(req.body.curFlowPos);
 
-      function insertHis(id){
-      	if(shareID){
-
-          col.mapReduce(
+function getSignIndex (shareID, fileKey, signID, callback) {
+  col.mapReduce(
             function() {
               var val, signIdx;
               this.files.some(function(v,i){ if(v.key==fileKey) return val=i; });
@@ -2745,15 +2743,35 @@ app.post("/saveSign", function (req, res) {
             },
             function(err, ret) {
 
-              if(err) return res.end();
+              if(err) return callback(err, null);
               var val = ret.shift().value;
-
-              findKeyOK( val.fileIdx, val.signIdx );
+              callback(null, val);
 
             });
+}
 
+app.post("/saveSign", function (req, res) {
+  var data =  req.body.data;
+  var signID =  req.body.signID;
+  var fileKey =  req.body.fileKey;
+  var shareID =  safeEval(req.body.shareID);
+  var hisID =  req.body.hisID;
+  var width =  safeEval(req.body.width);
+  var height =  safeEval(req.body.height);
+  var person =  req.body.signPerson;
+  var curFlowPos = safeEval(req.body.curFlowPos);
 
-      		function findKeyOK ( fileIdx, signIdx ) {
+      function insertHis(id){
+      	if(shareID){
+
+          getSignIndex( shareID, fileKey, signID, _relay );
+
+      		function _relay (err, val) {
+            if(err) return res.end();
+
+            var fileIdx = val.fileIdx;
+            var signIdx = val.signIdx;
+
             var key1 = 'files.'+ fileIdx +'.signIDS.'+signIdx+'.signData';
             var key2 = 'files.'+ fileIdx +'.signIDS.'+signIdx+'.signPerson';
             var setObj = {};
@@ -2798,17 +2816,17 @@ app.post("/saveSign", function (req, res) {
 
 
       		col.findOneAndUpdate( {role:'upfile', 'key':fileKey, 'signIDS._id': signID },
-				{ $set:{'signIDS.$.signData': new ObjectID(id), 'signIDS.$.signPerson': person } }, { projection:{ key:1, 'signIDS':1} }, function(err, result) {
+  				  { $set:{'signIDS.$.signData': new ObjectID(id), 'signIDS.$.signPerson': person } }, 
+            { projection:{ key:1, 'signIDS':1} }, function(err, result) {
 
-			if(err) return res.send('');
+            if(err) return res.send('');
 
-				try{var ret=result.value.signIDS[signIDX]; }
-				catch(e){
-					return res.send('');
-				}
+            try{var ret=result.value.signIDS.filter(function(v){ return v._id==signID }).shift(); }
+            catch(e){
+            	return res.send('');
+            }
 
 	          res.send( ret );
-
 
 	        });
       	}

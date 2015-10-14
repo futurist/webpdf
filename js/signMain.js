@@ -15,7 +15,6 @@ window.historyData = null;
 var signID = urlObj.signID;
 var fileKey = urlObj.fileKey;
 var shareID = urlObj.shareID;
-var signIDX = urlObj.idx;
 var hash = urlObj.hash;
 var curFlowPos = urlObj.curFlowPos;
 
@@ -43,7 +42,7 @@ if( !wxUserInfo ){
    wxUserInfo = JSON.parse(wxUserInfo);
 
     if(signID && wxUserInfo.UserId) {
-        $.post(host+'/getSignStatus', {shareID:shareID, signID:signID, t: Math.random() }, function  (ret) {
+        $.post(host+'/getSignStatus', {shareID:shareID, fileKey:fileKey, signID:signID, t: Math.random() }, function  (ret) {
             if(ret==0) {
                 $('.drawerMenu').show();
                 initSignPad();
@@ -162,7 +161,7 @@ function initSignPad(){
             }
 
 
-            var data = window.signHisID? { signID:signID, fileKey:fileKey, shareID:shareID, hisID: window.signHisID, signIDX:signIDX} : {data: signData, width:canvas.width, height:canvas.height, signID:signID,  fileKey:fileKey, shareID:shareID, signIDX:signIDX };
+            var data = window.signHisID? { signID:signID, fileKey:fileKey, shareID:shareID, hisID: window.signHisID} : {data: signData, width:canvas.width, height:canvas.height, signID:signID,  fileKey:fileKey, shareID:shareID };
 
             data.signPerson = wxUserInfo.UserId;
             data.curFlowPos = curFlowPos;

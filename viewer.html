@@ -1134,10 +1134,10 @@ div.selectivity-dropdown{
 }
 
 .page .signImg.notFlow{
-  border:1px solid red;
+  border:1px dotted #999;
 }
 .page .signImg.notFlow.active{
-  border:2px solid red;
+  border:2px dotted red;
 }
 
 </style>
@@ -1156,6 +1156,7 @@ div.selectivity-dropdown{
     <a href="javascript:;" class="btnCommon button" data-onclick="setStage('viewer')">返回主菜单</a>
     <a href="javascript:;" class="btnSigned button btnDelete" data-onclick="deleteSign()">删除签名</a>
     <a href="javascript:;" class="btnSigned button btnSignComplete" data-onclick="finishSign()">完成签名</a>
+    <a href="javascript:;" class="btnNotSigned button btnSign NotFlowOnly" data-onclick="deleteSignAll()">删除</a>
     <a href="javascript:;" class="btnNotSigned button btnSign" data-onclick="beginSign()">签名</a>
     <a href="javascript:;" class="button btnFinish" data-onclick="finishTemplate()">完成</a>
   </div>

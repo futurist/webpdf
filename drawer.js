@@ -1782,7 +1782,7 @@ var svgns = "http://www.w3.org/2000/svg";
                 img.data('order', order);
                 var id= ~~ img.data('idx');
                 savedSignData[id].order = order;
-                savedSignData = savedSignData.sort(function(a,b){return a.order-b.order});
+                savedSignData = savedSignData.sort(function(a,b){return (a.order||999)-(b.order||999) });
             }
 
             var inputText = $('.textWrap[data-hl]');
@@ -3135,35 +3135,37 @@ function copyInputLayerData(pageIndex){
         text.data('input-id', id );
         text.data('person', person );
         text.appendTo( inputCon );
-
-        function saveInputData() {
-          var val =  $(this).val();
-          var id = $(this).parent().data('input-id');
-          if( savedInputData[id]==val ) return;
-          savedInputData[id] = val;
-          var inter1;
-          function saveInterval(){
-            $.post(host+'/saveInputData', { shareID:window.shareID, file:curFile, value:val, textID: id }, function(data){
-
-              if(data!='OK'){
-                clearTimeout(inter1);
-                inter1 = setTimeout(function(){saveInterval()}, 1000);
-              }
-            } );
-          }
-          saveInterval();
-        }
-
-        text.find('textarea').off().on('keyup', $.debounce(1000, saveInputData) );
-        text.find('textarea').on('change', saveInputData );
       }
 
       text.get(0).style.cssText = v.style.cssText;
       if( $(v).find('.text').size() )
       	text.find('textarea').get(0).style.cssText = $(v).find('.text').get(0).style.cssText;
       var t = parseTemplate( $(v).text(), v );
+
       t = savedInputData[id] || t;
       setInputTextValue(id, t);
+
+
+      function saveInputData() {
+        var val =  $(this).val();
+        var id = $(this).parent().data('input-id');
+        if( savedInputData[id]==val ) return;
+        savedInputData[id] = val;
+        var inter1;
+        function saveInterval(){
+          $.post(host+'/saveInputData', { shareID:window.shareID, file:curFile, value:val, textID: id }, function(data){
+
+            if(data!='OK'){
+              clearTimeout(inter1);
+              inter1 = setTimeout(function(){saveInterval()}, 1000);
+            }
+          } );
+        }
+        saveInterval();
+      }
+
+      text.find('textarea').off().on('keyup', $.debounce(1000, saveInputData) );
+      text.find('textarea').on('change', saveInputData );
 
 
       function disableInput () {
@@ -3387,7 +3389,7 @@ function getSignData (page) {
 }
 
 
-function restoreSignature (pageIndex) {
+function restoreSignature (pageIndex, selectedID) {
   $('.signImg').remove();
 
   savedSignData.forEach(function  (v,i) {
@@ -3397,8 +3399,11 @@ function restoreSignature (pageIndex) {
     var scale = v.scale? window.curScale/v.scale : 1;
     //var img = $('<div class="signImg"><div class="img"></div></div>');
     var img = $('<div class="signImg"><img class="img"></div></div>');
+
     img.appendTo( $('#inputViewer .page').eq(v.page-1) );
     img.css({left:v.pos.left*scale+'px', top:v.pos.top*scale+'px', width:v.pos.width*scale+'px', height:v.pos.height*scale+'px' });
+    
+    img.addClass( v.isFlow? 'isFlow' : 'notFlow');
 
     // http://stackoverflow.com/questions/11753485/set-img-src-to-dynamic-svg-element
     // var svg = $('#signImgSVG').attr('viewBox', '0 0 '+v.pos.width*scale+' '+v.pos.height*scale ).get(0);
@@ -3410,7 +3415,7 @@ function restoreSignature (pageIndex) {
 
     } else {
 
-      if(v.sign){
+      if(v.sign && (v.isSigned || v.sign.person==rootPerson.userid ) ) {
         img.find('.img').attr({ 'src': v.sign.signData });
         if(!v.signPersonName){
           $.post(host+'/getUserInfo', { userid: v.sign.person }, function  (userinfo) {
@@ -3424,18 +3429,23 @@ function restoreSignature (pageIndex) {
 
       } else {
 
-        if( !isSign || isSigned || isFinished ){
+        if(!v.isFlow){
 
-          if(v.isFlow){
-            img.hide();
-          } else {
-            img.addClass('notFlow');
-            img.html('<a href="javascript:;"><span>点此签名</span></a>').autoFontSize();
-          }
+          img.html('<a href="javascript:;"><span>    </span></a>').autoFontSize();
 
         } else {
-          img.html('<a href="javascript:;"><span>点此签名</span></a>').autoFontSize();
+
+          if( !isSign || isSigned || isFinished ){
+              img.remove();
+          } else if(!v.sign) {
+            img.html('<a href="javascript:;"><span>点此签名</span></a>').autoFontSize();
+          } else {
+            img.remove();
+          }
+
         }
+
+
       }
 
     }
@@ -3458,6 +3468,8 @@ function restoreSignature (pageIndex) {
     img.on( isWeiXin? 'touchstart' : 'click' , function(e){
 
       var evt = /touch/.test(e.type) ? e.touches[0] : e;
+
+      if( v.isSigned ) return;
 
       if(!isTemplate)
       if( (shareID && !window.isSign) || window.isSigned || window.isFinished || shareData&& i <shareData.curFlowPos ){
@@ -3496,8 +3508,13 @@ function restoreSignature (pageIndex) {
         		$('.btnCommon, .btnSigned').css('display', 'table-cell');
         	} else {
         		$('.btnCommon, .btnNotSigned').css('display', 'table-cell');
-            beginSign(img);
-            setStage('viewer');
+            if( $(this).hasClass('isFlow') ){
+              $('.NotFlowOnly').hide();
+              beginSign(img);
+              setStage('viewer');
+            }else{
+            }
+            
         	}
         } else {
           if(isTemplate){
@@ -3521,7 +3538,7 @@ function restoreSignature (pageIndex) {
 
     });
 
-    if(window.signID == v._id && !shareData.selectRange[i].isSigned ){
+    if(window.signID == v._id && ( !shareData.selectRange[i].isSigned || ( !v.isFlow && !v.isSigned ) ) ) {
       img.click();
       var off=img.offset();
       var view = $('#viewerContainer');
@@ -3538,6 +3555,10 @@ function restoreSignature (pageIndex) {
 
       }, 1000);
 
+    } else if ( v._id == selectedID ){
+
+      img.click();
+
     }
 
     // var r = v.sign.width/v.sign.height;
@@ -3548,13 +3569,24 @@ function restoreSignature (pageIndex) {
   });
 }
 
+function deleteSignAll(el){
+
+  var img = $(el);
+  if(!img.length) img = $('.signImg.active');
+  var id = img.data('id');
+  img.remove();
+  $.post(host+'/deleteSign', { person:rootPerson.userid, file:curFile, id:id, shareID:shareID} );
+  setStage('viewer');
+
+}
+
+
 function deleteSign(el){
   var img = $(el);
   if(!img.length) img = $('.signImg.active');
   if(isTemplate) {
   	  var id = img.data('id');
 
-  	  //$.post(host+'/deleteSign', { person:rootPerson.userid, file:curFile, id:id} );
 
   	  img.remove();
 
@@ -3563,11 +3595,13 @@ function deleteSign(el){
   	  $('.select2DIV').hide();
 
 	} else {
+
 		$.post(host+'/deleteSignOnly', { signID:img.data('id'), person:rootPerson.userid, file:curFile, shareID:shareID  } );
 		img.find('img').remove();
 		img.html('<span>点此签名</span>').autoFontSize();
 		// img.click();
 		// img.click();
+
 	}
 
   setStage('viewer');
@@ -3575,9 +3609,20 @@ function deleteSign(el){
 }
 
 function finishSign (signID) {
-  $.post(host+'/finishSign', { shareID:window.shareID, fileKey: curFile.replace(FILE_HOST, ''),  signID:signID, person:rootPerson.userid }, function(data){
-    if(data) alert(data, '确定并关闭', function(){
-      isWeiXin? wx.closeWindow() : window.close();
+
+  var el = $('.signImg.active');
+  if(!signID){
+    signID = el.data('id');
+  }
+  var isFlow = el.hasClass('isFlow');
+
+  $.post(host+'/finishSign', { shareID:window.shareID,  fileKey: curFile.replace(FILE_HOST, ''),  signID:signID, person:rootPerson.userid }, function(data){
+
+    if(data) alert(data, isFlow?'确定并关闭':'确定', function(){
+      if(isFlow){
+        isWeiXin? wx.closeWindow() : window.close();
+      }
+      
     });
     else alert('网络错误，点击签名后按完成按钮，重试提交');
   } );
@@ -3634,13 +3679,22 @@ function drawSign () {
 
     savedSignData.push(data);
 
-    savedSignData = savedSignData.sort(function(a,b){
-      return a.order-b.order;
-    });
+    savedSignData = savedSignData.sort(function(a,b){return (a.order||999)-(b.order||999) });
 
     $('.signPad, .signPadHandler').hide();
     HandTool.handTool.deactivate();
-    restoreSignature( curPage-1 );
+    restoreSignature( curPage-1, data._id );
+
+    if(!isTemplate){
+    
+      $.post(host+'/drawSign', { data: data, shareID:shareID } , function(data){
+        console.log('sign id', data);
+        
+      });
+
+    }
+
+
   }
 
 
@@ -3673,20 +3727,6 @@ function drawSign () {
   }
 
 
-	return;
-	//updateSignIDS();
-	// $.post(host+'/saveSignFlow', {key: curFile.replace(FILE_HOST, ''), signIDS:savedSignData}, function(ret){
-
-		$.post(host+'/drawSign', {data: data} , function(data){
-			console.log('sign id', data);
-
-			$.post( host + '/getSavedSign', { file:curFile }, function(data){
-			  if(!data || !data.map) return;
-			  savedSignData = data;
-			  $('.page').eq(curPage-1).find('.signImg').remove();
-			  restoreSignature( curPage-1 );
-			} );
-		});
 
 	// });
 
@@ -3700,21 +3740,28 @@ function beginSign(el){
 	var idx = $(el).data('idx');
   var fileKey = curFile.replace(FILE_HOST, '');
 
+  var signPerson = $(el).data('sign-person');
+  var isFlow = $(el).hasClass('isFlow');
+
 	var url = 'http://1111hui.com/pdf/webpdf/signpad.html#fileKey='+ fileKey +'&shareID='+ (shareID||'') +'&idx='+ idx +'&signID='+signID
             +'&curFlowPos='+(shareData&&shareData.curFlowPos||'')+'&hash='+(+new Date());
 
   //return alert(curSignData.realMainPerson.userid);
-  if (isWeiXin && curSignData.realMainPerson && curSignData.realMainPerson.userid ==rootPerson.userid ) {
+  var isValidPerson = isFlow
+                      ? curSignData.realMainPerson && curSignData.realMainPerson.userid ==rootPerson.userid
+                      : signPerson === rootPerson.userid;
+
+  if (isWeiXin && isValidPerson ) {
     window.location = url;
   } else {
-    $.post(host+'/signInWeiXin', {url:url, shareID:shareID, fileKey:fileKey, person: rootPerson.userid }, function(data){
+    $.post(host+'/signInWeiXin', {url:url, shareID:shareID, fileKey:fileKey, isFlow:isFlow, signPerson:signPerson, person: rootPerson.userid }, function(data){
 
       if(!data) return alert('发送微信错误');
 
       alert( rootPerson.userid ==data ? '签署微信已发送到您手机，请查看微信并点击签署' : '已转交至'+data+'签署，后续更新会微信通知');
 
       var inter1 = setInterval(function  () {
-        $.post(host+'/getSignStatus', {shareID:shareID, signID:signID }, function  (ret) {
+        $.post(host+'/getSignStatus', {shareID:shareID, fileKey:fileKey, signID:signID }, function  (ret) {
           if(ret==1){
             clearInterval(inter1);
             setTimeout( function  () {
@@ -3730,14 +3777,6 @@ function beginSign(el){
   }
 
 	return;
-
-	if(!signID) return;
-
-	var data = savedSignData.filter(function  (v, i) {
-		return v._id == signID;
-	}).shift();
-
-	if(!data) return;
 
 
 }
@@ -3852,7 +3891,8 @@ function updateSignIDS (){
 		var id = $(this).data('id');
 		var person = $(this).data('person');
 		var mainPerson = $(this).data('main-person');
-		var order = $(this).data('order');
+    var order = $(this).data('order');
+		var isFlow = $(this).data('isFlow');
 		signIDS.forEach(function(v){
 			if(v._id == id) {
 				v.person = person;
@@ -3867,10 +3907,10 @@ function updateSignIDS (){
 function finishTemplate (){
 
 
-	var totalSign = $('.signImg').length;
+	var totalSign = $('.signImg.isFlow').length;
 	if(!totalSign) return;
 
-	var orders = $('.signImg[data-order]').map(function(v){
+	var orders = $('.signImg.isFlow[data-order]').map(function(v){
 		return $(this).data('order');
 	})
 	.sort(function(a,b){ return a-b});
@@ -3893,8 +3933,8 @@ function finishTemplate (){
 
 
 
-	var signLength = $('.signImg[data-person]').length;
-	var mainLength = $('.signImg[data-person]').filter(function(){
+	var signLength = $('.signImg.isFlow[data-person]').length;
+	var mainLength = $('.signImg.isFlow[data-person]').filter(function(){
 		return $(this).data('order') < orders[orders.length-1];
 	}).filter('[data-main-person]').length;
 
@@ -4147,41 +4187,40 @@ $(function initPage () {
   // if(window.isTemplate) $('.btnSign').css('display', 'table-cell');
   $('.btnSign').css('display', 'table-cell');
 
-  $.post( host + '/getCanvas', { file:curFile, shareID:shareID }, function(data){
-    if(data){
-      data = data.replace(/([^-])transform:/g, '$1-webkit-transform:');
-      savedCanvasData = JSON.parse( data );
-    }
-  } );
-
   $.post( host + '/getSavedSign', { file:curFile, shareID:shareID }, function(data){
-    if(data && data.map) savedSignData = data;
+    if(!data) return alert('获取签名信息错误');
+    savedSignData = data.signIDS;
 
-    if(window.isSign){
-    	window.curSignData = savedSignData[savedSignData.length-1];
+    if(data.curID){
+    	window.curSignData = savedSignData.filter(function(v){ return v._id == data.curID }).shift() || {};
     }
 
   } );
 
-  $.post( host + '/getInputData', { file:curFile, shareID:shareID }, function(data){
-    if(data) savedInputData = data;
-  } );
 
-
-  $.post( host + '/getShareData', { shareID:shareID }, function(data){
+  $.post( host + '/getShareData', { shareID:shareID, file:curFile.replace(FILE_HOST,'') }, function(data){
     if(data)   window.shareData = data;
     else return;
 
-    var t = data.toPerson.filter(function(v){
-      return v.userid == rootPerson.userid && v.isSigned
-    });
+    savedInputData = data.files[0].inputData;
 
-    if(t.length){
-       window.isSigned = true;
-       //alert('您已签署过此文档');
-    }else if(isSign) {
-      //$('.btnSign').css({display: 'table-cell' });
+    if( shareID ){
+
+      var canvasData = data.files[0].drawData.replace(/([^-])transform:/g, '$1-webkit-transform:');
+      savedCanvasData = JSON.parse( canvasData );
+
+    } else {
+
+      $.post( host + '/getCanvas', { file:curFile, shareID:shareID }, function(canvasData){
+        if(canvasData){
+          canvasData = canvasData.replace(/([^-])transform:/g, '$1-webkit-transform:');
+          savedCanvasData = JSON.parse( canvasData );
+        }
+      } );
+
     }
+   
+
 
     window.isFinished = data.isFinish;
     if(data.isSign){

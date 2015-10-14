@@ -3425,9 +3425,14 @@ function restoreSignature (pageIndex) {
       } else {
 
         if( !isSign || isSigned || isFinished ){
-          // img.hide();
-          img.addClass('notFlow');
-          img.html('<a href="javascript:;"><span>点此签名</span></a>').autoFontSize();
+
+          if(v.isFlow){
+            img.hide();
+          } else {
+            img.addClass('notFlow');
+            img.html('<a href="javascript:;"><span>点此签名</span></a>').autoFontSize();
+          }
+
         } else {
           img.html('<a href="javascript:;"><span>点此签名</span></a>').autoFontSize();
         }
@@ -3527,11 +3532,11 @@ function restoreSignature (pageIndex) {
         window.confirm('签名已应用，确认完成签名？', function(ok){
           if( ok&& window.signID && window.signPos ){
             window.signPos = '';
-            finishSign();
+            finishSign(v._id);
           }
         });
 
-      }, 3000);
+      }, 1000);
 
     }
 
@@ -3569,8 +3574,8 @@ function deleteSign(el){
 
 }
 
-function finishSign () {
-  $.post(host+'/finishSign', {shareID:window.shareID, person:rootPerson.userid }, function(data){
+function finishSign (signID) {
+  $.post(host+'/finishSign', { shareID:window.shareID, fileKey: curFile.replace(FILE_HOST, ''),  signID:signID, person:rootPerson.userid }, function(data){
     if(data) alert(data, '确定并关闭', function(){
       isWeiXin? wx.closeWindow() : window.close();
     });
@@ -4056,7 +4061,7 @@ $(function initPage () {
 
       if( e.value.indexOf(targetEl.data('main-person'))==-1 ){
       	targetEl.removeAttr('data-main-person');
-        delete v.mainPerson;
+        if(v) delete v.mainPerson;
       }
 
     });

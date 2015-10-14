@@ -2431,103 +2431,157 @@ app.post("/getSignStatus2", function (req, res) {
 app.post("/finishSign", function (req, res) {
   var shareID =  safeEval(req.body.shareID);
   var person =  req.body.person;
+  var fileKey =  req.body.fileKey;
+  var signID =  req.body.signID;
 
-  col.findOne({shareID:shareID, role:'share'}, function(err, colShare){
+  getSignIndex( shareID, fileKey, signID, _relay );
 
-    if(colShare.isFinish) return res.send('');
+  function _relay(err, indexVal) {
 
-    var flowName = colShare.flowName;
-    var curFlowPos = colShare.curFlowPos+1;
-    var file = colShare.files[0];
+    if(err) return res.end();
 
-    var fileKey = file.key;
-    var flowName = colShare.flowName;
-    var msg = colShare.msg;
-    var title = getSubStr( '流程-'+shareID+flowName+ (msg), 50);
-    var overAllPath = util.format('%s#file=%s&shareID=%d&isSign=1', VIEWER_URL, FILE_HOST+ encodeURIComponent(fileKey), shareID ) ;
+    var fileIdx = indexVal.fileIdx;
+    var signIdx = indexVal.signIdx;
 
+    col.findOne({shareID:shareID, role:'share'}, function(err, colShare) {
 
+      if(colShare.isFinish) return res.send('');
 
-    var selPosObj = {};
-    var selPos = 'selectRange.'+ (curFlowPos-1) + '.isSigned';
-    selPosObj[selPos] = true;
+      var flowName = colShare.flowName;
+      var curFlowPos = colShare.curFlowPos+1;
+      var file = colShare.files[fileIdx];
 
-
-    var prevPerson = colShare.selectRange.slice(0,curFlowPos);
-    var nextPerson = colShare.selectRange[curFlowPos];
-    var curPerson = _.last(prevPerson);
-
-    var toPerson = colShare.toPerson;
+      var fileKey = file.key;
+      var flowName = colShare.flowName;
+      var msg = colShare.msg;
+      var title = getSubStr( '流程-'+shareID+flowName+ (msg), 50);
+      var overAllPath = util.format('%s#file=%s&shareID=%d&isSign=1', VIEWER_URL, FILE_HOST+ encodeURIComponent(fileKey), shareID ) ;
 
 
-    if(curFlowPos >= colShare.selectRange.length){
+
+      var selPosObj = {};
+      var selPos = 'selectRange.'+ (curFlowPos-1) + '.isSigned';
+      selPosObj[selPos] = true;
+      selPosObj['files.'+fileIdx+'.signIDS.'+signIdx+'.isSigned'] = true;
 
 
-		      wsBroadcast( {role:'share', isFinish:true, key:fileKey, data:colShare } );
+      var prevPerson = colShare.selectRange.slice(0,curFlowPos);
+      var nextPerson = colShare.selectRange[curFlowPos];
+      var curPerson = _.last(prevPerson);
+
+      var toPerson = colShare.toPerson;
 
 
-        selPosObj.isFinish = true;
+      if(curFlowPos >= colShare.selectRange.length){
 
-        var updateObj = { $set: selPosObj, $inc:{curFlowPos:1} };
 
-        var lastStep = colShare.flowSteps.slice(colShare.selectRange.length).shift();
+  		      wsBroadcast( {role:'share', isFinish:true, key:fileKey, data:colShare } );
 
-        if( lastStep ) {
-          var lastPersons = lastStep.person.map(function(x){
-            return placerholderToUser( colShare.fromPerson[0].userid, x );
+
+          selPosObj.isFinish = true;
+
+          var updateObj = { $set: selPosObj, $inc:{curFlowPos:1} };
+
+          var lastStep = colShare.flowSteps.slice(colShare.selectRange.length).shift();
+
+          if( lastStep ) {
+            var lastPersons = lastStep.person.map(function(x){
+              return placerholderToUser( colShare.fromPerson[0].userid, x );
+            });
+
+            updateObj['$push'] = { toPerson: lastPersons };
+
+            res.send( util.format( '流程%d %s (%s-%s)已结束，转交至%s处理',
+                        colShare.shareID,
+                        msg,
+                        colShare.flowName,
+                        colShare.fromPerson[0].name,
+                        lastPersons.map(function(x){ return x.depart+'-'+x.name }).join(',')
+                        )
+                         );
+
+            var wxmsg = {
+             "touser": _.flatten(colShare.toPerson.concat(colShare.fromPerson).concat(lastPersons) ).map(function(v){return v.userid}).join('|'),
+             "touserName": _.flatten(colShare.toPerson.concat(colShare.fromPerson).concat(lastPersons) ).map(function(v){return v.name}).join('|'),
+             "msgtype": "text",
+             "text": {
+               "content":
+               util.format('流程%d %s (%s-%s)已由%s签署,此流程已结束并转交至：%s, <a href="%s">点此预览</a>',
+                  colShare.shareID,
+                  msg,
+                  colShare.flowName,
+                  colShare.fromPerson[0].name,
+                  curPerson.depart+'-'+curPerson.name,
+                  lastPersons.map(function(x){ return x.depart+'-'+x.name }).join(','),
+                  overAllPath  // if we need segmented path:   pathName.join('-'),
+                )
+             },
+             "safe":"0",
+              date : new Date(),
+              role : 'shareMsg',
+              shareID:shareID
+            };
+
+            sendWXMessage(wxmsg);
+
+
+          } else {
+
+
+            var wxmsg = {
+             "touser": _.flatten(colShare.toPerson.concat(colShare.fromPerson)).map(function(v){return v.userid}).join('|'),
+             "touserName": _.flatten(colShare.toPerson.concat(colShare.fromPerson)).map(function(v){return v.name}).join('|'),
+             "msgtype": "text",
+             "text": {
+               "content":
+               util.format('流程%d %s (%s-%s)已由%s签署,此流程已结束 <a href="%s">点此预览</a>',
+                  colShare.shareID,
+                  msg,
+                  colShare.flowName,
+                  colShare.fromPerson[0].name,
+                  curPerson.depart+'-'+curPerson.name,
+                  overAllPath  // if we need segmented path:   pathName.join('-'),
+                )
+             },
+             "safe":"0",
+              date : new Date(),
+              role : 'shareMsg',
+              shareID:shareID
+            };
+
+            sendWXMessage(wxmsg);
+
+
+            res.send( util.format( '流程%d %s (%s-%s)已结束，系统将通知相关人员知悉',
+                        colShare.shareID,
+                        msg,
+                        colShare.flowName,
+                        colShare.fromPerson[0].name ) );
+
+          }
+
+
+          col.update({role:'share', shareID:shareID }, updateObj, function  () {
+
           });
-
-          updateObj['$push'] = { toPerson: lastPersons };
-
-          res.send( util.format( '流程%d %s (%s-%s)已结束，转交至%s处理',
-                      colShare.shareID,
-                      msg,
-                      colShare.flowName,
-                      colShare.fromPerson[0].name,
-                      lastPersons.map(function(x){ return x.depart+'-'+x.name }).join(',')
-                      )
-                       );
-
-          var wxmsg = {
-           "touser": _.flatten(colShare.toPerson.concat(colShare.fromPerson).concat(lastPersons) ).map(function(v){return v.userid}).join('|'),
-           "touserName": _.flatten(colShare.toPerson.concat(colShare.fromPerson).concat(lastPersons) ).map(function(v){return v.name}).join('|'),
-           "msgtype": "text",
-           "text": {
-             "content":
-             util.format('流程%d %s (%s-%s)已由%s签署,此流程已结束并转交至：%s, <a href="%s">点此预览</a>',
-                colShare.shareID,
-                msg,
-                colShare.flowName,
-                colShare.fromPerson[0].name,
-                curPerson.depart+'-'+curPerson.name,
-                lastPersons.map(function(x){ return x.depart+'-'+x.name }).join(','),
-                overAllPath  // if we need segmented path:   pathName.join('-'),
-              )
-           },
-           "safe":"0",
-            date : new Date(),
-            role : 'shareMsg',
-            shareID:shareID
-          };
-
-          sendWXMessage(wxmsg);
 
 
         } else {
 
-
+          //info to all person about the status
           var wxmsg = {
            "touser": _.flatten(colShare.toPerson.concat(colShare.fromPerson)).map(function(v){return v.userid}).join('|'),
            "touserName": _.flatten(colShare.toPerson.concat(colShare.fromPerson)).map(function(v){return v.name}).join('|'),
            "msgtype": "text",
            "text": {
              "content":
-             util.format('流程%d %s (%s-%s)已由%s签署,此流程已结束 <a href="%s">点此预览</a>',
+             util.format('流程%d %s (%s-%s)已由 %s 签署,此流程已转交给下一经办人：%s <a href="%s">点此查看</a>',
                 colShare.shareID,
                 msg,
                 colShare.flowName,
                 colShare.fromPerson[0].name,
                 curPerson.depart+'-'+curPerson.name,
+                nextPerson.name,
                 overAllPath  // if we need segmented path:   pathName.join('-'),
               )
            },
@@ -2540,95 +2594,57 @@ app.post("/finishSign", function (req, res) {
           sendWXMessage(wxmsg);
 
 
-          res.send( util.format( '流程%d %s (%s-%s)已结束，系统将通知相关人员知悉',
-                      colShare.shareID,
-                      msg,
-                      colShare.flowName,
-                      colShare.fromPerson[0].name ) );
+          var nextGroup = colShare.flowSteps[curFlowPos].person.map(function(x){
+            return placerholderToUser( colShare.fromPerson[0].userid, x );
+          });
+          //info to next Person via WX
+          var wxmsg = {
+           "touser": nextGroup.map(function(x){ return x.userid }).join('|'),
+           "touserName": nextGroup.map(function(x){ return x.name }).join('|'),
+           "msgtype": "text",
+           "text": {
+             "content":
+             util.format('流程%d %s (%s-%s)需处理, 本组成员：(%s), 前置签署：%s。<a href="%s">点此查看</a>',
+                colShare.shareID,
+                msg,
+                colShare.flowName,
+                colShare.fromPerson[0].name,
+                nextGroup.map(function(x){ return x.name }).join(','),
+                prevPerson.map(function(x){return x.depart+'-'+x.name}).join(','),
+                overAllPath  // if we need segmented path:   pathName.join('-'),
+              )
+           },
+           "safe":"0",
+            date : new Date(),
+            role : 'shareMsg',
+            privateShareID:shareID
+          };
+
+          _.delay(function  () {
+          	sendWXMessage(wxmsg);
+          }, 3000);
+
+
+          col.update( {_id: colShare._id }, { $push: { toPerson: nextGroup }, $set:selPosObj, $inc:{curFlowPos:1} }, {w:1}, function(){
+            res.send( util.format( '流程%d(%s-%s)已转交给下一经办人：\n%s',
+                    colShare.shareID,
+                    colShare.flowName,
+                    colShare.fromPerson[0].name,
+                    nextPerson.depart+'-'+nextPerson.name ) );
+          });
+
+          // col.update({role:'share', shareID:shareID }, {$set: selPosObj } ) ;
+
 
         }
 
+      // col.findOne({role:'flow', name:flowName }, function(err, colFlow){});
 
-        col.update({role:'share', shareID:shareID }, updateObj, function  () {
-
-        });
-
-
-      } else {
-
-        //info to all person about the status
-        var wxmsg = {
-         "touser": _.flatten(colShare.toPerson.concat(colShare.fromPerson)).map(function(v){return v.userid}).join('|'),
-         "touserName": _.flatten(colShare.toPerson.concat(colShare.fromPerson)).map(function(v){return v.name}).join('|'),
-         "msgtype": "text",
-         "text": {
-           "content":
-           util.format('流程%d %s (%s-%s)已由 %s 签署,此流程已转交给下一经办人：%s <a href="%s">点此查看</a>',
-              colShare.shareID,
-              msg,
-              colShare.flowName,
-              colShare.fromPerson[0].name,
-              curPerson.depart+'-'+curPerson.name,
-              nextPerson.name,
-              overAllPath  // if we need segmented path:   pathName.join('-'),
-            )
-         },
-         "safe":"0",
-          date : new Date(),
-          role : 'shareMsg',
-          shareID:shareID
-        };
-
-        sendWXMessage(wxmsg);
+    } );
+  }
 
 
-        var nextGroup = colShare.flowSteps[curFlowPos].person.map(function(x){
-          return placerholderToUser( colShare.fromPerson[0].userid, x );
-        });
-        //info to next Person via WX
-        var wxmsg = {
-         "touser": nextGroup.map(function(x){ return x.userid }).join('|'),
-         "touserName": nextGroup.map(function(x){ return x.name }).join('|'),
-         "msgtype": "text",
-         "text": {
-           "content":
-           util.format('流程%d %s (%s-%s)需处理, 本组成员：(%s), 前置签署：%s。<a href="%s">点此查看</a>',
-              colShare.shareID,
-              msg,
-              colShare.flowName,
-              colShare.fromPerson[0].name,
-              nextGroup.map(function(x){ return x.name }).join(','),
-              prevPerson.map(function(x){return x.depart+'-'+x.name}).join(','),
-              overAllPath  // if we need segmented path:   pathName.join('-'),
-            )
-         },
-         "safe":"0",
-          date : new Date(),
-          role : 'shareMsg',
-          privateShareID:shareID
-        };
 
-        _.delay(function  () {
-        	sendWXMessage(wxmsg);
-        }, 3000);
-
-
-        col.update( {_id: colShare._id }, { $push: { toPerson: nextGroup }, $set:selPosObj, $inc:{curFlowPos:1} }, {w:1}, function(){
-          res.send( util.format( '流程%d(%s-%s)已转交给下一经办人：\n%s',
-                  colShare.shareID,
-                  colShare.flowName,
-                  colShare.fromPerson[0].name,
-                  nextPerson.depart+'-'+nextPerson.name ) );
-        });
-
-        // col.update({role:'share', shareID:shareID }, {$set: selPosObj } ) ;
-
-
-      }
-
-    // col.findOne({role:'flow', name:flowName }, function(err, colFlow){});
-
-  } );
 
 });
 

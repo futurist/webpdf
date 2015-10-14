@@ -1475,7 +1475,7 @@ var svgns = "http://www.w3.org/2000/svg";
             var el = makeShape("circle", { class:"hint", cx:x, cy:y, r:3, fill:"red" });
             curContext.querySelector('svg.canvas').appendChild( el );
           }
-          
+
 
           rPath.push( [x, y] );
 
@@ -3086,7 +3086,7 @@ function copyDrawerLayerData(pageIndex){
     var p = $('#pageContainer'+page+' .canvasWrapper');
     $(v).clone().insertAfter(p);
   });
-  
+
   var textCon = $('.textCon', drawCon).toArray();
   textCon.forEach(function(v,i){
     var page = $(v).parent().data('page-number');
@@ -3402,7 +3402,7 @@ function restoreSignature (pageIndex, selectedID) {
 
     img.appendTo( $('#inputViewer .page').eq(v.page-1) );
     img.css({left:v.pos.left*scale+'px', top:v.pos.top*scale+'px', width:v.pos.width*scale+'px', height:v.pos.height*scale+'px' });
-    
+
     img.addClass( v.isFlow? 'isFlow' : 'notFlow');
 
     // http://stackoverflow.com/questions/11753485/set-img-src-to-dynamic-svg-element
@@ -3425,7 +3425,7 @@ function restoreSignature (pageIndex, selectedID) {
         } else {
           img.append('<div class="signPerson">'+ v.signPersonName +'</div>');
         }
-        
+
 
       } else {
 
@@ -3514,7 +3514,7 @@ function restoreSignature (pageIndex, selectedID) {
               setStage('viewer');
             }else{
             }
-            
+
         	}
         } else {
           if(isTemplate){
@@ -3538,7 +3538,8 @@ function restoreSignature (pageIndex, selectedID) {
 
     });
 
-    if(window.signID == v._id && ( !shareData.selectRange[i].isSigned || ( !v.isFlow && !v.isSigned ) ) ) {
+
+    if(window.signID == v._id && ( v.isFlow&&!shareData.selectRange[i].isSigned || ( !v.isFlow && !v.isSigned ) ) ) {
       img.click();
       var off=img.offset();
       var view = $('#viewerContainer');
@@ -3547,8 +3548,8 @@ function restoreSignature (pageIndex, selectedID) {
       setTimeout(function  () {
 
         window.confirm('签名已应用，确认完成签名？', function(ok){
-          if( ok&& window.signID && window.signPos ){
-            window.signPos = '';
+          if( ok&& window.signID ){
+            window.signID = '';
             finishSign(v._id);
           }
         });
@@ -3622,7 +3623,7 @@ function finishSign (signID) {
       if(isFlow){
         isWeiXin? wx.closeWindow() : window.close();
       }
-      
+
     });
     else alert('网络错误，点击签名后按完成按钮，重试提交');
   } );
@@ -3686,10 +3687,10 @@ function drawSign () {
     restoreSignature( curPage-1, data._id );
 
     if(!isTemplate){
-    
+
       $.post(host+'/drawSign', { data: data, shareID:shareID } , function(data){
         console.log('sign id', data);
-        
+
       });
 
     }
@@ -3766,12 +3767,12 @@ function beginSign(el){
             clearInterval(inter1);
             setTimeout( function  () {
               window.location.reload();
-            }, 3000);
+            }, 1000);
           }
 
         });
 
-      }, 1000);
+      }, 3000);
 
     } );
   }
@@ -4219,7 +4220,7 @@ $(function initPage () {
       } );
 
     }
-   
+
 
 
     window.isFinished = data.isFinish;

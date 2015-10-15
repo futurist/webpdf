@@ -29,6 +29,27 @@ function toggleDevTools (){
   }
 }
 
+// to make postJSON request, not use $post since it's become all string!
+// http://stackoverflow.com/questions/22236555/accessing-json-string-parsed-by-nodes-express-bodyparser
+function $post (url, data, callback) {
+  if (arguments.length == 2) { // if only two arguments were supplied
+    if ( $.type(data)=='function' ) {
+      callback = data; 
+      data = {};
+    }
+  }
+
+  return $.ajax({
+    url: url,
+    type: "POST",
+    crossDomain: true,  // 'true' will cause additional OPTIONS request
+    data: JSON.stringify(data),
+    contentType : 'application/json',
+    // dataType: "json", // response type; 'json' will not receive string ret
+    success:callback
+  });
+}
+
 
 function searchToObject(search) {
   return search.substring(1).split("&").reduce(function(result, value) {
@@ -103,7 +124,7 @@ if(isWeiXin){
 
 $(function(){
 
-    $.post(host+'/getUserInfo', { userid: isWeiXin ? wxUserInfo.UserId : rootPerson.userid }, function  (userinfo) {
+    $post(host+'/getUserInfo', { userid: isWeiXin ? wxUserInfo.UserId : rootPerson.userid }, function  (userinfo) {
         if(!userinfo){
           alert('非法用户');
           return;
@@ -115,7 +136,7 @@ $(function(){
 
 var wxInitTryCount=0;
 function initWX() {
-	$.post(host+'/getJSConfig', { url:window.location.href.split('#')[0] }, function(data){
+	$post(host+'/getJSConfig', { url:window.location.href.split('#')[0] }, function(data){
 
 		if(!data || data[0]!='{') {
 			if(wxInitTryCount++<3){
@@ -149,6 +170,7 @@ function safeEval (str) {
   }
   return /object/i.test(typeof ret) ? (ret===null?null:str) : ret;
 }
+
 
 var DrawView  = (function () {
 
@@ -212,6 +234,7 @@ var DrawView  = (function () {
     $(div).append('<div class="inputCon"></div>');
     //$inputCon.hide();
 
+    var DRAW_TEMPLATE = '<div class="svgCon" style="padding-top:0px;"><svg viewBox="0 0 {{width}} {{height}}" preserveAspectRatio="xMidYMid meet" class="canvas" xmlns="http://www.w3.org/2000/svg" version="1.1"><defs><marker id="triangle" preserveAspectRatio="xMinYMin meet" viewBox="0 0 100 100" refX="50" refY="50" markerUnits="userSpaceOnUse" stroke="#f00" fill="#f00" stroke-linecap="round" stroke-width="10" stroke-linejoin="bevel" markerWidth="40" markerHeight="30" orient="auto"><path d="M 0 0 L 100 50 L 0 100 L 30 50 z" /></marker></defs><rect class="selrect" style="display:none; stroke:#999; stroke-width:1; stroke-dasharray:10,5; fill:none;" /></svg></div><div class="textCon" class="canvas"></div>';
 
     window.viewBox = pageView.viewport.viewBox;
     var R = pageView.viewport.rotation;
@@ -220,8 +243,7 @@ var DrawView  = (function () {
 
     var $drawerLayer = $(this.div);
 
-    var str = '<div class="svgCon" style="padding-top:0px;"> <svg viewBox="0 0 {{width}} {{height}}" preserveAspectRatio="xMidYMid meet" class="canvas" xmlns="http://www.w3.org/2000/svg" version="1.1"> <defs> <marker id="triangle" preserveAspectRatio="xMinYMin meet" viewBox="0 0 100 100" refX="50" refY="50" markerUnits="userSpaceOnUse" stroke="#f00" fill="#f00" stroke-linecap="round" stroke-width="10" stroke-linejoin="bevel" markerWidth="40" markerHeight="30" orient="auto"> <path d="M 0 0 L 100 50 L 0 100 L 30 50 z" /> </marker> </defs> <rect class="selrect" style="display:none; stroke:#999; stroke-width:1; stroke-dasharray:10,5; fill:none;" /> </svg> </div> <div class="textCon" class="canvas"> </div>';
-    str = str.replace('{{width}}', W).replace('{{height}}', H);
+    var str = DRAW_TEMPLATE.replace('{{width}}', W).replace('{{height}}', H);
 
     $drawerLayer.empty().append(str).data('page-number', this.id);
 
@@ -229,7 +251,7 @@ var DrawView  = (function () {
     window.pdfViewer = PDFViewerApplication.pdfViewer;
     window.curFile = PDFViewerApplication.url;
 
-    init( $drawerLayer );
+    init( $drawerLayer, this.id );
 
     restoreCanvas();
 
@@ -299,8 +321,22 @@ window.addEventListener('scalechange', function scalechange(evt) {
 document.addEventListener('textlayerrendered', function (e) {  //textlayerrendered, pagerendered
   var pageIndex = e.detail.pageNumber - 1;
 
+  $('#drawViewer, #inputViewer').width( $('#viewer').width() );
+
+  var w = parseInt($('#viewer .page').get(0).style.width);
+  var h = parseInt($('#viewer .page').get(0).style.height);
+  if(w) $('#drawViewer, #inputViewer').find('.page').width( w );
+  if(h) $('#drawViewer, #inputViewer').find('.page').height( h );
+
   setTimeout(function(){
     RERenderDrawerLayer(pageIndex);
+
+    $('#viewer .page').each(function(i){
+      var text = $(this).find('.textLayer');
+      $('#inputViewer .page').eq(i).prepend(text);
+      $('#inputViewer .page').eq(i).find('.textLayer').eq(1).remove();
+    });
+
     if(curStage!='remark'){
       $('#inputViewer').show();
     }
@@ -690,7 +726,7 @@ $(document).add($(window)).on('touchmove', function(e) {
 
 
 // init function
-function init (context) {
+function init (context, pageNum) {
 
   var pos = $('svg.canvas', context).offset();
 
@@ -702,7 +738,14 @@ function init (context) {
   $('.textCon', context).data('id', NewID() );
   $('.textLayer').hide();
 
+  // save empty canvas data to let signImg to show
+  // console.log( pageNum, PDFViewerApplication.pagesCount, pdfViewer.pdfDocument.numPages, savedCanvasData.length );
+  if(pageNum== PDFViewerApplication.pagesCount && !savedCanvasData.length) {
 
+    saveCanvas(1);
+
+  }
+  
 
 }
 
@@ -864,7 +907,7 @@ var svgns = "http://www.w3.org/2000/svg";
     function rotatePDF(dir){
 
 
-      $.post(host+'/rotateFile', {url: window.curFile, dir:dir}, function(data){
+      $post(host+'/rotateFile', {url: window.curFile, dir:dir}, function(data){
         data = JSON.parse(data);
         var oldUrl = window.location.href.split('/')
         oldUrl.pop();
@@ -3090,8 +3133,10 @@ function copyDrawerLayerData(pageIndex){
   var textCon = $('.textCon', drawCon).toArray();
   textCon.forEach(function(v,i){
     var page = $(v).parent().data('page-number');
-	var con = $('#pageContainer'+page+' .canvasWrapper');
-    $(v).clone().insertAfter(con);
+	var con = $('#inputLayer'+page+'');
+    var text = $(v).clone();
+    text.find('.bbox').remove();
+    text.prependTo(con);
     if(!isTemplate) $('#pageContainer'+page).find('.textWrap[data-template]').show().html('');
   });
 
@@ -3153,7 +3198,7 @@ function copyInputLayerData(pageIndex){
         savedInputData[id] = val;
         var inter1;
         function saveInterval(){
-          $.post(host+'/saveInputData', { shareID:window.shareID, file:curFile, value:val, textID: id }, function(data){
+          $post(host+'/saveInputData', { shareID:window.shareID, file:curFile, value:val, textID: id }, function(data){
 
             if(data!='OK'){
               clearTimeout(inter1);
@@ -3253,7 +3298,7 @@ function parseTemplate(str, templateEl){
 
 
 
-function saveCanvas () {
+function saveCanvas (isSilent) {
 
 
 	$('[data-hl]').attr('data-hl',null);
@@ -3270,7 +3315,7 @@ function saveCanvas () {
       savedCanvasData = saveObj;
 
       setTimeout(function(){
-        $.post( host + '/saveCanvas', { file:curFile, shareID:shareID, personName:rootPerson.name, data: JSON.stringify(saveObj) } );
+        $post( host + '/saveCanvas', { file:curFile, isSilent:isSilent, shareID:shareID, personName:rootPerson.name, data: JSON.stringify(saveObj) } );
       },0);
 
     }
@@ -3390,12 +3435,14 @@ function getSignData (page) {
 
 
 function restoreSignature (pageIndex, selectedID) {
-  $('.signImg').remove();
+  
+  var page = pageIndex+1;
+  $('#inputLayer'+page).find('.signImg').remove();
 
   savedSignData.forEach(function  (v,i) {
     //if(!v.sign) return true;
-    var page = pageIndex+1;
     if(v.page!=page) return true;
+
     var scale = v.scale? window.curScale/v.scale : 1;
     //var img = $('<div class="signImg"><div class="img"></div></div>');
     var img = $('<div class="signImg"><img class="img"></div></div>');
@@ -3405,10 +3452,11 @@ function restoreSignature (pageIndex, selectedID) {
 
     img.addClass( v.isFlow? 'isFlow' : 'notFlow');
 
+    if(v.isSigned) img.addClass('isSigned');
+
     // http://stackoverflow.com/questions/11753485/set-img-src-to-dynamic-svg-element
     // var svg = $('#signImgSVG').attr('viewBox', '0 0 '+v.pos.width*scale+' '+v.pos.height*scale ).get(0);
     // var xml = "data:image/svg+xml;charset=utf-8,"+(new XMLSerializer).serializeToString(svg);
-
     if(isTemplate){
 
       img.html('<a href="javascript:;"><span>'+ (v.order||0) +'</span></a>').autoFontSize();
@@ -3418,20 +3466,20 @@ function restoreSignature (pageIndex, selectedID) {
       if(v.sign && (v.isSigned || v.sign.person==rootPerson.userid ) ) {
         img.find('.img').attr({ 'src': v.sign.signData });
         if(!v.signPersonName){
-          $.post(host+'/getUserInfo', { userid: v.sign.person }, function  (userinfo) {
+          $post(host+'/getUserInfo', { userid: v.sign.person }, function  (userinfo) {
             v.signPersonName = userinfo.name;
-            img.append('<div class="signPerson">'+ userinfo.name +'</div>');
+            img.append('<div class="signPerson"><strong>'+ userinfo.name +'</strong></div>');
           });
         } else {
-          img.append('<div class="signPerson">'+ v.signPersonName +'</div>');
+          img.append('<div class="signPerson"><strong>'+ v.signPersonName +'</strong></div>');
         }
 
 
       } else {
 
         if(!v.isFlow){
-          
-          if(v.signPerson == rootPerson.userid){
+
+          if(v.signPerson == rootPerson.userid) {
             img.html('<a href="javascript:;"><span>    </span></a>').autoFontSize();
           } else {
             return img.remove();
@@ -3474,11 +3522,13 @@ function restoreSignature (pageIndex, selectedID) {
 
       if( v.isSigned ) return;
 
-      if(!isTemplate)
-      if( (shareID && !window.isSign) || window.isSigned || window.isFinished || shareData&& i <shareData.curFlowPos ){
-          //alert('您已签署过此文档，此签名位置将留给其它经办人');
-         return;
+      if( v.isFlow ) {
+        if( window.isSigned || window.isFinished || v.isSigned ){
+            //alert('您已签署过此文档，此签名位置将留给其它经办人');
+           return;
+        }
       }
+    
       if( !v.isFlow ){
           var signPerson = $(this).data('signPerson');
           if( signPerson && signPerson!= rootPerson.userid ){
@@ -3486,6 +3536,7 @@ function restoreSignature (pageIndex, selectedID) {
             //return;
           }
       }
+
       if(shareID){
         var emptyList = $('.userInputText textarea').not('[readonly]').filter(function  (v) {
           return $(this).parent().data('person') && $(this).val()=='';
@@ -3529,8 +3580,8 @@ function restoreSignature (pageIndex, selectedID) {
               $('.btnCommon, .btnSigned').css('display', 'table-cell');
             } else {
               $('.btnCommon, .btnNotSigned').css('display', 'table-cell');
+              $('.btnSignComplete').hide();
             }
-            $('.btnSignComplete').hide();
           }
         }
 
@@ -3579,7 +3630,7 @@ function deleteSignAll(el){
   if(!img.length) img = $('.signImg.active');
   var id = img.data('id');
   img.remove();
-  $.post(host+'/deleteSign', { person:rootPerson.userid, file:curFile, id:id, shareID:shareID} );
+  $post(host+'/deleteSign', { person:rootPerson.userid, file:curFile, id:id, shareID:shareID} );
   setStage('viewer');
 
 }
@@ -3600,7 +3651,7 @@ function deleteSign(el){
 
 	} else {
 
-		$.post(host+'/deleteSignOnly', { signID:img.data('id'), person:rootPerson.userid, file:curFile, shareID:shareID  } );
+		$post(host+'/deleteSignOnly', { signID:img.data('id'), person:rootPerson.userid, file:curFile, shareID:shareID  } );
 		img.find('img').remove();
 		img.html('<span>点此签名</span>').autoFontSize();
 		// img.click();
@@ -3620,7 +3671,7 @@ function finishSign (signID) {
   }
   var isFlow = el.hasClass('isFlow');
 
-  $.post(host+'/finishSign', { shareID:window.shareID,  fileKey: curFile.replace(FILE_HOST, ''),  signID:signID, person:rootPerson.userid }, function(data){
+  $post(host+'/finishSign', { shareID:window.shareID,  fileKey: curFile.replace(FILE_HOST, ''),  signID:signID, person:rootPerson.userid }, function(data){
 
     if(data) alert(data, isFlow?'确定并关闭':'确定', function(){
       if(isFlow){
@@ -3691,7 +3742,7 @@ function drawSign () {
 
     if(!isTemplate){
 
-      $.post(host+'/drawSign', { data: data, shareID:shareID } , function(data){
+      $post(host+'/drawSign', { data: data, shareID:shareID } , function(data){
         console.log('sign id', data);
 
       });
@@ -3758,14 +3809,14 @@ function beginSign(el){
   if (isWeiXin && isValidPerson ) {
     window.location = url;
   } else {
-    $.post(host+'/signInWeiXin', {url:url, shareID:shareID, fileKey:fileKey, isFlow:isFlow, signPerson:signPerson, person: rootPerson.userid }, function(data){
+    $post(host+'/signInWeiXin', {url:url, shareID:shareID, fileKey:fileKey, isFlow:isFlow, signPerson:signPerson, person: rootPerson.userid }, function(data){
 
       if(!data) return alert('发送微信错误');
 
       alert( rootPerson.userid ==data ? '签署微信已发送到您手机，请查看微信并点击签署' : '已转交至'+data+'签署，后续更新会微信通知');
 
       var inter1 = setInterval(function  () {
-        $.post(host+'/getSignStatus', {shareID:shareID, fileKey:fileKey, signID:signID }, function  (ret) {
+        $post(host+'/getSignStatus', {shareID:shareID, fileKey:fileKey, signID:signID }, function  (ret) {
           if(ret==1){
             clearInterval(inter1);
             setTimeout( function  () {
@@ -3784,6 +3835,7 @@ function beginSign(el){
 
 
 }
+
 
 function setStage (stat) {
 
@@ -3806,6 +3858,7 @@ function setStage (stat) {
         resetState();
       		$('.signImg').hide();
 			   showCanvas();
+         $('#inputViewer').find('.textCon').remove();
   			/** Disable Mouse Scrolling when in remark mode **/
         // $('#viewerContainer').css({overflow:'hidden'});
         // $('#inputViewer').hide();
@@ -3949,7 +4002,7 @@ function finishTemplate (){
 
 	updateSignIDS();
 
-	$.post(host+'/saveSignFlow', {key: curFile.replace(FILE_HOST, ''), signIDS:savedSignData, pageWidth:$('.page').width(), pageHeight: $('#viewerContainer').prop('scrollHeight') }, function(ret){
+	$post(host+'/saveSignFlow', {key: curFile.replace(FILE_HOST, ''), signIDS:savedSignData, pageWidth:$('.page').width(), pageHeight: $('#viewerContainer').prop('scrollHeight') }, function(ret){
 		alert('流程保存成功');
 	});
 }
@@ -4015,7 +4068,7 @@ $(function initPage () {
   }
 
 
-  $.post(host+'/getCompanyTree', {company:'lianrun'}, function(data){
+  $post(host+'/getCompanyTree', {company:'lianrun'}, function(data){
     if(!data) return;
     data=JSON.parse(data);
 
@@ -4142,7 +4195,6 @@ $(function initPage () {
 
   $('#viewerContainer').on('resize scroll', function(e){
     $('.select2DIV').hide();
-    $('#drawViewer').width( $('#viewer').width() );
   });
 
   $('.button').on(downE, function  (e) {
@@ -4191,7 +4243,7 @@ $(function initPage () {
   // if(window.isTemplate) $('.btnSign').css('display', 'table-cell');
   $('.btnSign').css('display', 'table-cell');
 
-  $.post( host + '/getSavedSign', { file:curFile, shareID:shareID }, function(data){
+  $post( host + '/getSavedSign', { file:curFile, shareID:shareID }, function(data){
     if(!data) return alert('获取签名信息错误');
     savedSignData = data.signIDS;
 
@@ -4201,41 +4253,51 @@ $(function initPage () {
 
   } );
 
+  function getCanvasData(){
+    $post( host + '/getCanvas', { file:curFile, shareID:shareID }, function(canvasData){
+      if(canvasData){
+        canvasData = canvasData.replace(/([^-])transform:/g, '$1-webkit-transform:');
+        savedCanvasData = JSON.parse( canvasData );
+      }
+    } );
+  }
 
-  $.post( host + '/getShareData', { shareID:shareID, file:curFile.replace(FILE_HOST,'') }, function(data){
-    if(data)   window.shareData = data;
-    else return;
-
-    savedInputData = data.files[0].inputData;
-
-    if( shareID ){
-
-      var canvasData = data.files[0].drawData.replace(/([^-])transform:/g, '$1-webkit-transform:');
-      savedCanvasData = JSON.parse( canvasData );
-
-    } else {
-
-      $.post( host + '/getCanvas', { file:curFile, shareID:shareID }, function(canvasData){
-        if(canvasData){
-          canvasData = canvasData.replace(/([^-])transform:/g, '$1-webkit-transform:');
-          savedCanvasData = JSON.parse( canvasData );
-        }
-      } );
-
-    }
-
-
-
-    window.isFinished = data.isFinish;
-    if(data.isSign){
-      data.selectRange.forEach(function  (v) {
-        userPlacerholder[v.placeholder] = v.userid;
-      });
-    }
-  } );
 
   if(window.shareID){
+
+
+    $post( host + '/getShareData', { shareID:shareID, file:curFile.replace(FILE_HOST,'') }, function(data){
+      if(data)   window.shareData = data;
+      else return;
+
+      savedInputData = data.files[0].inputData;
+
+      if( shareID ){
+
+        var canvasData = data.files[0].drawData.replace(/([^-])transform:/g, '$1-webkit-transform:');
+        savedCanvasData = JSON.parse( canvasData );
+
+      } else {
+
+        getCanvasData();
+
+      }
+
+
+
+      window.isFinished = data.isFinish;
+      if(data.isSign){
+        data.selectRange.forEach(function  (v) {
+          userPlacerholder[v.placeholder] = v.userid;
+        });
+      }
+    } );
+
+
     $('.btnMessage').css({display: 'table-cell' });
+
+  } else {
+    getCanvasData();
   }
 
 });

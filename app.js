@@ -1401,14 +1401,59 @@ app.post("/signInWeiXin", function (req, res) {
   var isFlow = data.isFlow;
   var signPerson = data.signPerson;
 	var fileName = data.fileName;
-  console.log(isFlow, typeof isFlow);
-  
+
+
+  if( !shareID ){
+
+
+    col.findOne({role:'upfile', 'key':fileKey },  function(err, result) {
+
+          if(err || !result) return res.send('');
+
+
+          // send to one person wx on file
+          var file = result;
+          var content =
+            util.format('文件 <a href="%s">%s</a> 需要您签署，<a href="%s">点此签署</a>',
+                    makeViewURL(fileKey, null, null),
+                    file.title,
+                    url
+                  );
+
+          var wxmsg = {
+             "touser": signPerson,
+             "touserName": getUserInfo(signPerson).name,
+             "msgtype": "text",
+             "text": {
+               "content":content
+             },
+             "safe":"0",
+              date : new Date(),
+              role : 'shareMsg',
+              shareID:shareID,
+              WXOnly: true
+            };
+
+            sendWXMessage(wxmsg);
+            console.log(signPerson);
+
+            res.send(signPerson);
+
+
+    });
+
+
+  } else {
+
+
+
+
     col.findOne({role:'share', shareID:shareID, 'files':{ $elemMatch:{key:fileKey} } },
                         { fields:{ flowName:1, msg:1, fromPerson:1, toPerson:1, isSign:1, curFlowPos:1, flowSteps:1, 'files.$':1 } },
 
                         function(err, result){
 
-      		if(err || !result) return res.send('');
+          if(err || !result) return res.send('');
 
           if( !isFlow ) {
 
@@ -1416,7 +1461,7 @@ app.post("/signInWeiXin", function (req, res) {
             var file = result.files[0];
             var content =
               util.format('文件 <a href="%s">%s</a> 需要您签署，<a href="%s">点此签署</a>',
-                      makeViewURL(fileKey, shareID, 1),
+                      makeViewURL(fileKey, shareID, result.isSign),
                       file.title,
                       url
                     );
@@ -1464,7 +1509,7 @@ app.post("/signInWeiXin", function (req, res) {
                         msg,
                         colShare.flowName,
                         colShare.fromPerson[0].name,
-                        makeViewURL(fileKey, shareID, 1)
+                        makeViewURL(fileKey, shareID, result.isSign)
                       )
               var touser = realMainPerson.userid;
               var touserName = realMainPerson.depart+'-'+realMainPerson.name;
@@ -1515,6 +1560,16 @@ app.post("/signInWeiXin", function (req, res) {
           }
 
     } );
+
+
+
+
+
+  }
+
+  
+
+
 
 });
 
@@ -1929,6 +1984,7 @@ app.post("/saveCanvas", function (req, res) {
   var data = req.body.data;
   var file = req.body.file;
   var personName = req.body.personName;
+  var isSilent = req.body.isSilent;
   var shareID = parseInt( req.body.shareID );
 
   var filename = file.replace(FILE_HOST, '');
@@ -1941,6 +1997,8 @@ app.post("/saveCanvas", function (req, res) {
                         { projection:{'files':1, msg:1, fromPerson:1, toPerson:1, flowName:1, isSign:1  } },
                         function(err, result){
       res.send(err);
+      
+      if(isSilent) return;
 
             var colShare = result.value;
             var file = colShare.files.filter(function(v){ return v.key==filename; })[0];
@@ -2054,44 +2112,67 @@ app.post("/getSavedSign", function (req, res) {
   var file = req.body.file;
   var person = req.body.person;
   var shareID = parseInt( req.body.shareID );
+
   try{
     var filename = file.replace(FILE_HOST, '');
   }catch(e){
     return res.send("");
   }
-  if( 0 && !shareID){
-    return res.send("");
-  } else {
-    // col.find({role:'sign', shareID:shareID, file:file, signData:{$ne:null} }, {sort:{signData:1}}).toArray(function(err, docs){
-    // col.find({role:'sign', shareID:shareID, file:file }, { }).toArray(function(err, docs){
 
+
+    // common function to generate SignData
     function getSignData(err, docs, fromUserId, curID){
-      if(err||!docs) { return res.send(""); }
+      if(err||!docs) { return res.send({curID:null, signIDS: []}); }
       var ids = docs.filter(function(v){ return v.signData } ).map(function  (v) {
         return new ObjectID( v.signData );
       });
 
       col.find({_id:{$in:ids}}, {sort:{_id:1}}).toArray(function (err, items) {
-      	if(!items) return res.send('');
+        if(!items) return res.send('');
         docs.forEach(function  (v,i) {
 
           // Populate Signed Data into v.sign
           var t = items.filter(function(x){
-          	if(!v.signData) return false;
+            if(!v.signData) return false;
             return x&&x._id&& v && v.signData && (x._id.toHexString() == v.signData.toString() )
           });
           var sign = t.shift();
           v.sign = sign;
 
-          // Populate UserInfo from PlaceHolder
-          if(v.mainPerson) v.realMainPerson = placerholderToUser(fromUserId, v.mainPerson);
-          if(v.person) v.realPerson = v.person.split('|').map( function(s){ return placerholderToUser(fromUserId, s) } );
+          if(fromUserId){
+            // Populate UserInfo from PlaceHolder
+            if(v.mainPerson) v.realMainPerson = placerholderToUser(fromUserId, v.mainPerson);
+            if(v.person) v.realPerson = v.person.split('|').map( function(s){ return placerholderToUser(fromUserId, s) } );
+          }
 
         });
+
         res.send({curID:curID, signIDS: docs});
 
       });
     }
+
+
+
+  if( !shareID ){
+    
+    col.findOne( {role:'upfile', 'key':filename },  { },  function(err, doc){
+
+      if(err ||!doc) return res.send('');
+
+      if(doc.signIDS){
+        doc.signIDS.filter(function(v, i ){
+          doc.signIDS[i] = safeEvalObj(v, true);
+        });
+      }
+      
+      getSignData(err, doc.signIDS , null, null );
+    });
+
+
+  } else {
+    // col.find({role:'sign', shareID:shareID, file:file, signData:{$ne:null} }, {sort:{signData:1}}).toArray(function(err, docs){
+    // col.find({role:'sign', shareID:shareID, file:file }, { }).toArray(function(err, docs){
 
     // For role:'sign', if it's no shareID, then it's template, else it's RealSignData
 
@@ -2427,7 +2508,7 @@ app.post("/deleteSign", function (req, res) {
 });
 
 app.post("/deleteSignOnly", function (req, res) {
-  var signID =  req.body.signID;
+  var signID =  req.body.signID+'';
   var person =  req.body.person;
   var file =  req.body.file;
   var shareID =  safeEval( req.body.shareID);
@@ -2477,7 +2558,7 @@ function getSubStr (str, len) {
 app.post("/getSignStatus", function (req, res) {
   var shareID = safeEval(req.body.shareID);
   var fileKey =  req.body.fileKey;
-  var signID =  req.body.signID;
+  var signID =  req.body.signID+'';
 
   if(shareID){
     getSignIndex( shareID, fileKey, signID, _relay );
@@ -2497,6 +2578,14 @@ app.post("/getSignStatus", function (req, res) {
       });
 
     }
+  } else {
+
+      col.findOne( { key:fileKey, 'signIDS':{$elemMatch:{_id:signID}} }, {fields: {'signIDS.$':1} }, function  (err, ret) {
+
+        res.send( ret&&ret.signIDS.length&&ret.signIDS[0].isSigned ? '1' : '0' );
+
+      });
+
   }
   
 
@@ -2518,7 +2607,7 @@ app.post("/getSignStatus", function (req, res) {
 
 app.post("/getSignStatus3", function (req, res) {
   var shareID = safeEval(req.body.shareID);
-  var signID =  req.body.signID;
+  var signID =  req.body.signID+'';
 
   if(shareID){
       col.aggregate( [ {$match:{role:'share', shareID:shareID} }, {$unwind:'$files'}, {$unwind:'$files.signIDS'}, {$match:{ 'files.signIDS._id':signID }}, {$project: {'files.signIDS':1} } ], function(err, ret) {
@@ -2535,7 +2624,7 @@ app.post("/getSignStatus3", function (req, res) {
 app.post("/getSignStatus2", function (req, res) {
   var shareID = safeEval(req.body.shareID);
   var person =  req.body.person;
-  var signID =  req.body.signID;
+  var signID =  req.body.signID+'';
   var curFlowPos =  safeEval(req.body.curFlowPos);
   col.findOne({role:'share', shareID:shareID }, function  (err, ret) {
     if(err||!ret) return res.send('');
@@ -2552,244 +2641,264 @@ app.post("/finishSign", function (req, res) {
   var shareID =  safeEval(req.body.shareID);
   var person =  req.body.person;
   var fileKey =  req.body.fileKey;
-  var signID =  req.body.signID;
+  var signID =  req.body.signID+'';
 
-  getSignIndex( shareID, fileKey, signID, _relay );
+  if(!shareID){
 
-  function _relay(err, indexVal) {
+        var condition = { role:'upfile', key:fileKey, 'signIDS._id':signID };
 
-    if(err) return res.end();
+        col.updateOne( condition , { $set:{ 'signIDS.$.isSigned': true } }, function (err, ret) {
+          if(err || ret.matchedCount==0 ) return res.send('签名应用错误');
+          res.send('签名应用成功');
 
-    var fileIdx = indexVal.fileIdx;
-    var signIdx = indexVal.signIdx;
-
-    col.findOne({shareID:shareID, role:'share'}, function(err, colShare) {
-
-      var signImg = colShare.files[fileIdx].signIDS[signIdx];
-      signImg = safeEvalObj(signImg);
-
-      if(!signImg.isFlow){
-        // we sign a file not a flow
-
-            var selPosObj = {};
-            selPosObj['files.'+fileIdx+'.signIDS.'+signIdx+'.isSigned'] = true;
-            var updateObj = { $set: selPosObj };
-
-            col.update({role:'share', shareID:shareID }, updateObj, function  () { });
-
-            res.send('签名应用成功');
-
-      } else {
+        } );
 
 
-          // we are sign a flow document
+  } else {
 
 
-            if(colShare.isFinish) return res.send('');
+        getSignIndex( shareID, fileKey, signID, _relay );
 
-            var flowName = colShare.flowName;
-            var curFlowPos = colShare.curFlowPos+1;
-            var file = colShare.files[fileIdx];
+        function _relay(err, indexVal) {
 
-            var fileKey = file.key;
-            var flowName = colShare.flowName;
-            var msg = colShare.msg;
-            var title = getSubStr( '流程-'+shareID+flowName+ (msg), 50);
-            var overAllPath = util.format('%s#file=%s&shareID=%d&isSign=1', VIEWER_URL, FILE_HOST+ encodeURIComponent(fileKey), shareID ) ;
+          if(err) return res.end();
 
+          var fileIdx = indexVal.fileIdx;
+          var signIdx = indexVal.signIdx;
 
+          col.findOne({shareID:shareID, role:'share'}, function(err, colShare) {
 
-            var selPosObj = {};
-            var selPos = 'selectRange.'+ (curFlowPos-1) + '.isSigned';
-            selPosObj[selPos] = true;
-            selPosObj['files.'+fileIdx+'.signIDS.'+signIdx+'.isSigned'] = true;
+            var signImg = colShare.files[fileIdx].signIDS[signIdx];
+            signImg = safeEvalObj(signImg);
 
+            if(!signImg.isFlow){
+              // we sign a file not a flow
 
-            var prevPerson = colShare.selectRange.slice(0,curFlowPos);
-            var nextPerson = colShare.selectRange[curFlowPos];
-            var curPerson = _.last(prevPerson);
+                  var selPosObj = {};
+                  selPosObj['files.'+fileIdx+'.signIDS.'+signIdx+'.isSigned'] = true;
+                  var updateObj = { $set: selPosObj };
 
-            var toPerson = colShare.toPerson;
+                  col.update({role:'share', shareID:shareID }, updateObj, function  () { });
 
+                  res.send('签名应用成功');
 
-            if(curFlowPos >= colShare.selectRange.length){
+            } else {
 
 
-                  wsBroadcast( {role:'share', isFinish:true, key:fileKey, data:colShare } );
+                // we are sign a flow document
 
 
-                selPosObj.isFinish = true;
+                  if(colShare.isFinish) return res.send('');
 
-                var updateObj = { $set: selPosObj, $inc:{curFlowPos:1} };
+                  var flowName = colShare.flowName;
+                  var curFlowPos = colShare.curFlowPos+1;
+                  var file = colShare.files[fileIdx];
 
-                var lastStep = colShare.flowSteps.slice(colShare.selectRange.length).shift();
+                  var fileKey = file.key;
+                  var flowName = colShare.flowName;
+                  var msg = colShare.msg;
+                  var title = getSubStr( '流程-'+shareID+flowName+ (msg), 50);
+                  var overAllPath = util.format('%s#file=%s&shareID=%d&isSign=1', VIEWER_URL, FILE_HOST+ encodeURIComponent(fileKey), shareID ) ;
 
-                if( lastStep ) {
-                  var lastPersons = lastStep.person.map(function(x){
-                    return placerholderToUser( colShare.fromPerson[0].userid, x );
-                  });
 
-                  updateObj['$push'] = { toPerson: lastPersons };
 
-                  res.send( util.format( '流程%d %s (%s-%s)已结束，转交至%s处理',
+                  var selPosObj = {};
+                  var selPos = 'selectRange.'+ (curFlowPos-1) + '.isSigned';
+                  selPosObj[selPos] = true;
+                  selPosObj['files.'+fileIdx+'.signIDS.'+signIdx+'.isSigned'] = true;
+
+
+                  var prevPerson = colShare.selectRange.slice(0,curFlowPos);
+                  var nextPerson = colShare.selectRange[curFlowPos];
+                  var curPerson = _.last(prevPerson);
+
+                  var toPerson = colShare.toPerson;
+
+
+                  if(curFlowPos >= colShare.selectRange.length){
+
+
+                        wsBroadcast( {role:'share', isFinish:true, key:fileKey, data:colShare } );
+
+
+                      selPosObj.isFinish = true;
+
+                      var updateObj = { $set: selPosObj, $inc:{curFlowPos:1} };
+
+                      var lastStep = colShare.flowSteps.slice(colShare.selectRange.length).shift();
+
+                      if( lastStep ) {
+                        var lastPersons = lastStep.person.map(function(x){
+                          return placerholderToUser( colShare.fromPerson[0].userid, x );
+                        });
+
+                        updateObj['$push'] = { toPerson: lastPersons };
+
+                        res.send( util.format( '流程%d %s (%s-%s)已结束，转交至%s处理',
+                                    colShare.shareID,
+                                    msg,
+                                    colShare.flowName,
+                                    colShare.fromPerson[0].name,
+                                    lastPersons.map(function(x){ return x.depart+'-'+x.name }).join(',')
+                                    )
+                                     );
+
+                        var wxmsg = {
+                         "touser": _.flatten(colShare.toPerson.concat(colShare.fromPerson).concat(lastPersons) ).map(function(v){return v.userid}).join('|'),
+                         "touserName": _.flatten(colShare.toPerson.concat(colShare.fromPerson).concat(lastPersons) ).map(function(v){return v.name}).join('|'),
+                         "msgtype": "text",
+                         "text": {
+                           "content":
+                           util.format('流程%d %s (%s-%s)已由%s签署,此流程已结束并转交至：%s, <a href="%s">点此预览</a>',
                               colShare.shareID,
                               msg,
                               colShare.flowName,
                               colShare.fromPerson[0].name,
-                              lastPersons.map(function(x){ return x.depart+'-'+x.name }).join(',')
-                              )
-                               );
+                              curPerson.depart+'-'+curPerson.name,
+                              lastPersons.map(function(x){ return x.depart+'-'+x.name }).join(','),
+                              overAllPath  // if we need segmented path:   pathName.join('-'),
+                            )
+                         },
+                         "safe":"0",
+                          date : new Date(),
+                          role : 'shareMsg',
+                          shareID:shareID
+                        };
 
-                  var wxmsg = {
-                   "touser": _.flatten(colShare.toPerson.concat(colShare.fromPerson).concat(lastPersons) ).map(function(v){return v.userid}).join('|'),
-                   "touserName": _.flatten(colShare.toPerson.concat(colShare.fromPerson).concat(lastPersons) ).map(function(v){return v.name}).join('|'),
-                   "msgtype": "text",
-                   "text": {
-                     "content":
-                     util.format('流程%d %s (%s-%s)已由%s签署,此流程已结束并转交至：%s, <a href="%s">点此预览</a>',
-                        colShare.shareID,
-                        msg,
-                        colShare.flowName,
-                        colShare.fromPerson[0].name,
-                        curPerson.depart+'-'+curPerson.name,
-                        lastPersons.map(function(x){ return x.depart+'-'+x.name }).join(','),
-                        overAllPath  // if we need segmented path:   pathName.join('-'),
-                      )
-                   },
-                   "safe":"0",
-                    date : new Date(),
-                    role : 'shareMsg',
-                    shareID:shareID
-                  };
-
-                  sendWXMessage(wxmsg);
+                        sendWXMessage(wxmsg);
 
 
-                } else {
+                      } else {
 
 
-                  var wxmsg = {
-                   "touser": _.flatten(colShare.toPerson.concat(colShare.fromPerson)).map(function(v){return v.userid}).join('|'),
-                   "touserName": _.flatten(colShare.toPerson.concat(colShare.fromPerson)).map(function(v){return v.name}).join('|'),
-                   "msgtype": "text",
-                   "text": {
-                     "content":
-                     util.format('流程%d %s (%s-%s)已由%s签署,此流程已结束 <a href="%s">点此预览</a>',
-                        colShare.shareID,
-                        msg,
-                        colShare.flowName,
-                        colShare.fromPerson[0].name,
-                        curPerson.depart+'-'+curPerson.name,
-                        overAllPath  // if we need segmented path:   pathName.join('-'),
-                      )
-                   },
-                   "safe":"0",
-                    date : new Date(),
-                    role : 'shareMsg',
-                    shareID:shareID
-                  };
-
-                  sendWXMessage(wxmsg);
-
-
-                  res.send( util.format( '流程%d %s (%s-%s)已结束，系统将通知相关人员知悉',
+                        var wxmsg = {
+                         "touser": _.flatten(colShare.toPerson.concat(colShare.fromPerson)).map(function(v){return v.userid}).join('|'),
+                         "touserName": _.flatten(colShare.toPerson.concat(colShare.fromPerson)).map(function(v){return v.name}).join('|'),
+                         "msgtype": "text",
+                         "text": {
+                           "content":
+                           util.format('流程%d %s (%s-%s)已由%s签署,此流程已结束 <a href="%s">点此预览</a>',
                               colShare.shareID,
                               msg,
                               colShare.flowName,
-                              colShare.fromPerson[0].name ) );
+                              colShare.fromPerson[0].name,
+                              curPerson.depart+'-'+curPerson.name,
+                              overAllPath  // if we need segmented path:   pathName.join('-'),
+                            )
+                         },
+                         "safe":"0",
+                          date : new Date(),
+                          role : 'shareMsg',
+                          shareID:shareID
+                        };
 
-                }
-
-
-                col.update({role:'share', shareID:shareID }, updateObj, function  () {
-
-                });
-
-
-              } else {
-
-                //info to all person about the status
-                var wxmsg = {
-                 "touser": _.flatten(colShare.toPerson.concat(colShare.fromPerson)).map(function(v){return v.userid}).join('|'),
-                 "touserName": _.flatten(colShare.toPerson.concat(colShare.fromPerson)).map(function(v){return v.name}).join('|'),
-                 "msgtype": "text",
-                 "text": {
-                   "content":
-                   util.format('流程%d %s (%s-%s)已由 %s 签署,此流程已转交给下一经办人：%s <a href="%s">点此查看</a>',
-                      colShare.shareID,
-                      msg,
-                      colShare.flowName,
-                      colShare.fromPerson[0].name,
-                      curPerson.depart+'-'+curPerson.name,
-                      nextPerson.name,
-                      overAllPath  // if we need segmented path:   pathName.join('-'),
-                    )
-                 },
-                 "safe":"0",
-                  date : new Date(),
-                  role : 'shareMsg',
-                  shareID:shareID
-                };
-
-                sendWXMessage(wxmsg);
+                        sendWXMessage(wxmsg);
 
 
-                var nextGroup = colShare.flowSteps[curFlowPos].person.map(function(x){
-                  return placerholderToUser( colShare.fromPerson[0].userid, x );
-                });
-                //info to next Person via WX
-                var wxmsg = {
-                 "touser": nextGroup.map(function(x){ return x.userid }).join('|'),
-                 "touserName": nextGroup.map(function(x){ return x.name }).join('|'),
-                 "msgtype": "text",
-                 "text": {
-                   "content":
-                   util.format('流程%d %s (%s-%s)需处理, 本组成员：(%s), 前置签署：%s。<a href="%s">点此查看</a>',
-                      colShare.shareID,
-                      msg,
-                      colShare.flowName,
-                      colShare.fromPerson[0].name,
-                      nextGroup.map(function(x){ return x.name }).join(','),
-                      prevPerson.map(function(x){return x.depart+'-'+x.name}).join(','),
-                      overAllPath  // if we need segmented path:   pathName.join('-'),
-                    )
-                 },
-                 "safe":"0",
-                  date : new Date(),
-                  role : 'shareMsg',
-                  privateShareID:shareID
-                };
+                        res.send( util.format( '流程%d %s (%s-%s)已结束，系统将通知相关人员知悉',
+                                    colShare.shareID,
+                                    msg,
+                                    colShare.flowName,
+                                    colShare.fromPerson[0].name ) );
 
-                _.delay(function  () {
-                  sendWXMessage(wxmsg);
-                }, 3000);
+                      }
 
 
-                col.update( {_id: colShare._id }, { $push: { toPerson: nextGroup }, $set:selPosObj, $inc:{curFlowPos:1} }, {w:1}, function(){
-                  res.send( util.format( '流程%d(%s-%s)已转交给下一经办人：\n%s',
-                          colShare.shareID,
-                          colShare.flowName,
-                          colShare.fromPerson[0].name,
-                          nextPerson.depart+'-'+nextPerson.name ) );
-                });
+                      col.update({role:'share', shareID:shareID }, updateObj, function  () {
 
-                // col.update({role:'share', shareID:shareID }, {$set: selPosObj } ) ;
+                      });
 
 
-              }
+                    } else {
 
-            // col.findOne({role:'flow', name:flowName }, function(err, colFlow){});
+                      //info to all person about the status
+                      var wxmsg = {
+                       "touser": _.flatten(colShare.toPerson.concat(colShare.fromPerson)).map(function(v){return v.userid}).join('|'),
+                       "touserName": _.flatten(colShare.toPerson.concat(colShare.fromPerson)).map(function(v){return v.name}).join('|'),
+                       "msgtype": "text",
+                       "text": {
+                         "content":
+                         util.format('流程%d %s (%s-%s)已由 %s 签署,此流程已转交给下一经办人：%s <a href="%s">点此查看</a>',
+                            colShare.shareID,
+                            msg,
+                            colShare.flowName,
+                            colShare.fromPerson[0].name,
+                            curPerson.depart+'-'+curPerson.name,
+                            nextPerson.name,
+                            overAllPath  // if we need segmented path:   pathName.join('-'),
+                          )
+                       },
+                       "safe":"0",
+                        date : new Date(),
+                        role : 'shareMsg',
+                        shareID:shareID
+                      };
+
+                      sendWXMessage(wxmsg);
+
+
+                      var nextGroup = colShare.flowSteps[curFlowPos].person.map(function(x){
+                        return placerholderToUser( colShare.fromPerson[0].userid, x );
+                      });
+                      //info to next Person via WX
+                      var wxmsg = {
+                       "touser": nextGroup.map(function(x){ return x.userid }).join('|'),
+                       "touserName": nextGroup.map(function(x){ return x.name }).join('|'),
+                       "msgtype": "text",
+                       "text": {
+                         "content":
+                         util.format('流程%d %s (%s-%s)需处理, 本组成员：(%s), 前置签署：%s。<a href="%s">点此查看</a>',
+                            colShare.shareID,
+                            msg,
+                            colShare.flowName,
+                            colShare.fromPerson[0].name,
+                            nextGroup.map(function(x){ return x.name }).join(','),
+                            prevPerson.map(function(x){return x.depart+'-'+x.name}).join(','),
+                            overAllPath  // if we need segmented path:   pathName.join('-'),
+                          )
+                       },
+                       "safe":"0",
+                        date : new Date(),
+                        role : 'shareMsg',
+                        privateShareID:shareID
+                      };
+
+                      _.delay(function  () {
+                        sendWXMessage(wxmsg);
+                      }, 3000);
+
+
+                      col.update( {_id: colShare._id }, { $push: { toPerson: nextGroup }, $set:selPosObj, $inc:{curFlowPos:1} }, {w:1}, function(){
+                        res.send( util.format( '流程%d(%s-%s)已转交给下一经办人：\n%s',
+                                colShare.shareID,
+                                colShare.flowName,
+                                colShare.fromPerson[0].name,
+                                nextPerson.depart+'-'+nextPerson.name ) );
+                      });
+
+                      // col.update({role:'share', shareID:shareID }, {$set: selPosObj } ) ;
+
+
+                    }
+
+                  // col.findOne({role:'flow', name:flowName }, function(err, colFlow){});
 
 
 
 
 
 
-      }
+            }
 
 
-    } );
-  }
+          } );
+        }
+
+
+
+
+
+  } 
 
 
 
@@ -2938,7 +3047,7 @@ function getSignIndex (shareID, fileKey, signID, callback) {
 
 app.post("/saveSign", function (req, res) {
   var data =  req.body.data;
-  var signID =  req.body.signID;
+  var signID =  req.body.signID+'';
   var fileKey =  req.body.fileKey;
   var shareID =  safeEval(req.body.shareID);
   var hisID =  req.body.hisID;
@@ -3038,7 +3147,7 @@ app.post("/saveSign", function (req, res) {
 
 
 app.post("/getSignHistory", function (req, res) {
-  var signID =  req.body.signID;
+  var signID =  req.body.signID+'';
   var person =  req.body.person;
 
 
@@ -3423,7 +3532,7 @@ function genPDF ( filename, shareID,  realname, cb ) {
 	console.log(wget);
 	var child = exec(wget, function(err, stdout, stderr) {
 
-		console.log( err, stdout, stderr );
+		// console.log( err, stdout, stderr );
 		if(err || (stdout+stderr).indexOf('200 OK')<0 ) return cb?cb('无法获取原始文件'):'';
 
 		var tempPDF = IMAGE_UPFOLDER + (+new Date()+Math.random().toString().slice(2,5)) +'.pdf';
@@ -3436,7 +3545,7 @@ function genPDF ( filename, shareID,  realname, cb ) {
 		cmd = './mergepdf.py -i '+ tempFile +' -m '+tempPDF+' -o '+ IMAGE_UPFOLDER+realname +' ';
 		console.log(cmd);
 		exec(cmd, function (error, stdout, stderr) {
-			console.log(error,stdout, stderr);
+			// console.log(error,stdout, stderr);
 			if(error){
 				cb('合并PDF文件错误');
 			}

@@ -1,5 +1,26 @@
 
 
+// to make postJSON request, not use $post since it's become all string!
+// http://stackoverflow.com/questions/22236555/accessing-json-string-parsed-by-nodes-express-bodyparser
+function $post (url, data, callback) {
+  if (arguments.length == 2) { // if only two arguments were supplied
+    if ( $.type(data)=='function' ) {
+      callback = data; 
+      data = {};
+    }
+  }
+
+  return $.ajax({
+    url: url,
+    type: "POST",
+    crossDomain: true,
+    data: JSON.stringify(data),
+    contentType : 'application/json',
+    // dataType: "json", // response type
+    success:callback
+  });
+}
+
 
 function searchToObject(search) {
   return search.substring(1).split("&").reduce(function(result, value) {
@@ -42,7 +63,7 @@ if( !wxUserInfo ){
    wxUserInfo = JSON.parse(wxUserInfo);
 
     if(signID && wxUserInfo.UserId) {
-        $.post(host+'/getSignStatus', {shareID:shareID, fileKey:fileKey, signID:signID, t: Math.random() }, function  (ret) {
+        $post(host+'/getSignStatus', {shareID:shareID, fileKey:fileKey, signID:signID, t: Math.random() }, function  (ret) {
             if(ret==0) {
                 $('.drawerMenu').show();
                 initSignPad();
@@ -174,7 +195,7 @@ function initSignPad(){
             data.signPerson = wxUserInfo.UserId;
             data.curFlowPos = curFlowPos;
 
-            $.post( host+ '/saveSign', data , function(ret){
+            $post( host+ '/saveSign', data , function(ret){
 
                 // return console.log(ret);
                 if(!ret){
@@ -247,7 +268,7 @@ function initSignPad(){
         if(window.historyData){
             displayHistory(window.historyData);
         } else {
-            $.post( host+ '/getSignHistory', {signID:signID, person: wxUserInfo.UserId }, function(data){
+            $post( host+ '/getSignHistory', {signID:signID, person: wxUserInfo.UserId }, function(data){
                 window.historyData = data;
                 displayHistory(data);
             });

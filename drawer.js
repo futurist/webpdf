@@ -3430,21 +3430,24 @@ function restoreSignature (pageIndex, selectedID) {
       } else {
 
         if(!v.isFlow){
-
-          img.html('<a href="javascript:;"><span>    </span></a>').autoFontSize();
+          
+          if(v.signPerson == rootPerson.userid){
+            img.html('<a href="javascript:;"><span>    </span></a>').autoFontSize();
+          } else {
+            return img.remove();
+          }
 
         } else {
 
           if( !isSign || isSigned || isFinished ){
-              img.remove();
+            return img.remove();
           } else if(!v.sign) {
             img.html('<a href="javascript:;"><span>点此签名</span></a>').autoFontSize();
           } else {
-            img.remove();
+            return img.remove();
           }
 
         }
-
 
       }
 

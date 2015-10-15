@@ -48,7 +48,15 @@ if( !wxUserInfo ){
                 initSignPad();
             } else {
                 alert('您已签署过此文档');
-                isWeiXin? wx.closeWindow() : window.close();
+                
+                function closeWin () {
+                    isWeiXin? wx.closeWindow() : window.close();
+                }
+                setInterval(function  () {
+                    closeWin();
+                }, 300);
+                closeWin();
+                
                 // var url = 'http://1111hui.com/pdf/webpdf/viewer.html#file='+ FILE_HOST+fileKey +'&isSign=1&signID='+ signID +'&shareID='+(shareID||'');
                 // window.location = url;
             }

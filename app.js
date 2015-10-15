@@ -1997,7 +1997,7 @@ app.post("/saveCanvas", function (req, res) {
                         { projection:{'files':1, msg:1, fromPerson:1, toPerson:1, flowName:1, isSign:1  } },
                         function(err, result){
       res.send(err);
-      
+
       if(isSilent) return;
 
             var colShare = result.value;
@@ -2681,6 +2681,32 @@ app.post("/finishSign", function (req, res) {
                   col.update({role:'share', shareID:shareID }, updateObj, function  () { });
 
                   res.send('签名应用成功');
+
+                  var wxmsg = {
+                   "touser": _.flatten(colShare.toPerson.concat(colShare.fromPerson)).map(function(v){return v.userid}).join('|'),
+                   "touserName": _.flatten(colShare.toPerson.concat(colShare.fromPerson)).map(function(v){return v.name}).join('|'),
+                   "msgtype": "text",
+                   "text": {
+                     "content":
+                     util.format('%s 文件 %s 增加了新的签名：%s, <a href="%s">点此预览</a>',
+                        
+                        (colShare.isSign?'流程-':'共享-') + colShare.shareID + '('+ colShare.fromPerson[0].name + ' '+ (colShare.isSign?colShare.flowName : colShare.msg) +')',
+                        
+                        colShare.files[fileIdx].title,
+
+                        getUserInfo( person ).name,
+
+                        makeViewURL( colShare.files[fileIdx].key, shareID, colShare.isSign )
+                      )
+                   },
+                   "safe":"0",
+                    date : new Date(),
+                    role : 'shareMsg',
+                    shareID:shareID
+                  };
+
+                  sendWXMessage(wxmsg);
+
 
             } else {
 

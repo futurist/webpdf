@@ -3709,7 +3709,7 @@ function showSign(){
   $('.signPad').show().css({width:w, height:h, left:$(window).width()/2-w/2, top:$(window).height()/2-h/2 });
   var offset = getRealOffset($('.signPad') );
   $('.signPadHandler').show().css({left: offset.left+offset.width, top: offset.top+offset.height });
-  HandTool.handTool.activate();
+  HandTool.handTool&& HandTool.handTool.activate();
   new Draggable( $('.signPad').get(0) , optionsDrag);
   new Draggable( $('.signPadHandler').get(0) , optionsResize);
 }
@@ -3737,7 +3737,7 @@ function drawSign () {
     savedSignData = savedSignData.sort(function(a,b){return (a.order||999)-(b.order||999) });
 
     $('.signPad, .signPadHandler').hide();
-    HandTool.handTool.deactivate();
+    HandTool.handTool&& HandTool.handTool.deactivate();
     restoreSignature( curPage-1, data._id );
 
     if(!isTemplate){
@@ -3847,7 +3847,7 @@ function setStage (stat) {
     $('.botmenu').hide();
     $('.signImg').show();
     $('.signPad, .signPadHandler').hide();
-    HandTool.handTool.deactivate();
+    HandTool.handTool && HandTool.handTool.deactivate();
     $('#viewerContainer').css({overflow:'auto'});
     $('#inputViewer').css('z-index', '99999999999');
     $('#drawViewer').hide();
@@ -4051,260 +4051,6 @@ var SelectivityLocale = {
 };
 
 
-
-$(function initPage () {
-
-  makeColorPicker();
-  makeTemplatePicker();
-  setStage('viewer');
-
-  if(isSign){
-    $('.btnShowStep').css('display', 'table-cell');
-  }
-  if(isTemplate){
-    $('body').addClass('template');
-  	$('.maintool .btnPrint').hide();
-  	$('.maintool .btnFinish').css({display:'table-cell'});
-  }
-
-
-  $post(host+'/getCompanyTree', {company:'lianrun'}, function(data){
-    if(!data) return;
-    data=JSON.parse(data);
-
-    var opData = sortCompanyNode(data);
-    //console.log(opData);
-    companyNode = opData;
-
-
-    var html = '', prevID = 0;
-    opData.forEach(function(v){
-      if(v.parentid>=0){
-        var option = v.parentid>0 ? '</optgroup>' : '';
-        option += '<optgroup label="'+ v.name +'">';
-        html += (option);
-        prevID = v.parentid;
-      } else {
-        var option = '<option value="'+ v.userid +'" data-info="'+ JSON.stringify(v) +'">'+ v.name +'</option>';
-        html += (option);
-      }
-    });
-
-    html+='</optgroup>';
-
-    $('select.selStuff').append( html );
-
-    function matcher (item, term) {
-
-          var result = null;
-          if (item.text.indexOf(term) > -1 || item.id&&item.id.indexOf(term)>-1 ) {
-              result = item;
-          } else if (item.children) {
-              var matchingChildren = item.children.map(function(child) {
-                  return matcher(child, term);
-              }).filter(function(child) {
-                  return !!child;
-              });
-              if (matchingChildren.length) {
-                  result = { id: item.id, text: item.text, children: matchingChildren };
-              }
-          }
-          return result;
-      }
-
-    $('.selStuff').selectivity({
-      allowClear: true,
-      language: "zh-CN",
-      multiple:true,
-      placeholder:'选择流程人..',
-      matcher:matcher,
-      positionDropdown: function  ($dropEl, $selEl) {
-        $dropEl.css({top:'auto'});
-      }
-    });
-
-    $('.selStuff').on(clickE, '.selectivity-multiple-selected-item', function (e) {
-    	var id = $('.selStuff').data('id');
-    	if(!id) return;
-    	var targetEl = $('[data-id="'+ id +'"]');
-      var v = savedSignData[ targetEl.data('idx') ];
-
-    	var itemID = $(this).data('item-id');
-    	$(targetEl).data('main-person', itemID );
-      v.mainPerson = itemID;
-
-    	$('.selStuff').selectivity('close');
-    });
-
-
-
-    $('.selStuff').on("change", function (e) {
-      var id = $('.selStuff').data('id');
-      if(!id || !e.value) return;
-      var targetEl = $('[data-id="'+ id +'"]');
-      e.value = e.value.filter(function(v){ return v!=''});
-      var val = e.value.join('|');
-
-      var idx = targetEl.data('idx');
-      var v = savedSignData[idx];
-
-      if(val){
-        $(targetEl).data('person', val );
-        if(v) v.person = val;
-      }else{
-        $(targetEl).removeAttr('data-person' );
-        if(v) delete v.person;
-      }
-
-      if( e.value.indexOf(targetEl.data('main-person'))==-1 ){
-      	targetEl.removeAttr('data-main-person');
-        if(v) delete v.mainPerson;
-      }
-
-    });
-
-    $('.selStuff').on("selectivity-open", function (e) {
-
-      var val = $('.selStuff').selectivity('val');
-      $('.selectivity-result-item').removeClass('highlight');
-      $('.selectivity-result-item[data-item-id="' + val + '"]').addClass('highlight');
-
-    });
-
-
-  });
-
-
-
-  function quitCanvas (){
-    confirm('确认不保存退出吗？',
-      function(ok){
-        console.log(ok);
-        if(ok) {restoreCanvas(true);setStage('viewer');}
-    });
-  }
-
-
-
-
-  $('#mainContainer').on(downE, function(e){
-    if( $(e.target).closest('.selectivity-single-select').length ) return;
-    hideSelStuff();
-    $('.signImg.active').click();
-  });
-
-  $('#viewerContainer').on('resize scroll', function(e){
-    $('.select2DIV').hide();
-  });
-
-  $('.button').on(downE, function  (e) {
-    e.stopPropagation();
-    var self = this;
-    $(this).parent().children().removeClass('active');
-
-    $(this).addClass('active');
-    setTimeout(function(){ $(self).removeClass('active'); }, 200);
-
-    var evt = /touch/.test(e.type) ? e.touches[0] : e;
-    eval( $(evt.target).data('onclick') );
-    if( !$(this).hasClass('btnColorCon') ) setTimeout(function(){ $('.colorCon').hide(); }, 200);
-
-  } );
-
-  var startDist = 0;
-  var touchEvent = new $.TouchEvent({
-      targetSelector: '#viewer',
-      startCallback: function(e){
-        var _this = this;
-        startDist = 0;
-        setTimeout(function(){
-          if(_this.touches>1) startDist = _this.moveDist;
-          else startDist = 0;
-        }, 50);
-      },
-      endCallback: function(e){
-        var _this = this;
-        var changeDist = 0;
-        if(startDist && _this.touches && _this.changedTouches ){
-          changeDist = (  _this.moveDist - startDist );
-          var scale= 1 + changeDist/ $(window).width()*2;
-          window.curScale = PDFViewerApplication.pdfViewer.currentScale;
-          //debug(window.curScale, scale)
-          if(changeDist && scale) PDFViewerApplication.setScale( window.curScale*scale , false);
-        }
-
-      },
-      moveCallback: function(e){
-        var _this = this;
-      }
-    });
-
-  if(!window.isSign) $('.btnSign').hide();
-  // if(window.isTemplate) $('.btnSign').css('display', 'table-cell');
-  $('.btnSign').css('display', 'table-cell');
-
-  $post( host + '/getSavedSign', { file:curFile, shareID:shareID }, function(data){
-    if(!data) return alert('获取签名信息错误');
-    savedSignData = data.signIDS;
-
-    if(data.curID){
-    	window.curSignData = savedSignData.filter(function(v){ return v._id == data.curID }).shift() || {};
-    }
-
-  } );
-
-  function getCanvasData(){
-    $post( host + '/getCanvas', { file:curFile, shareID:shareID }, function(canvasData){
-      if(canvasData){
-        canvasData = canvasData.replace(/([^-])transform:/g, '$1-webkit-transform:');
-        savedCanvasData = JSON.parse( canvasData );
-      }
-    } );
-  }
-
-
-  if(window.shareID){
-
-
-    $post( host + '/getShareData', { shareID:shareID, file:curFile.replace(FILE_HOST,'') }, function(data){
-      if(data)   window.shareData = data;
-      else return;
-
-      savedInputData = data.files[0].inputData;
-
-      if( shareID ){
-
-        var canvasData = data.files[0].drawData.replace(/([^-])transform:/g, '$1-webkit-transform:');
-        savedCanvasData = JSON.parse( canvasData );
-
-      } else {
-
-        getCanvasData();
-
-      }
-
-
-
-      window.isFinished = data.isFinish;
-      if(data.isSign){
-        data.selectRange.forEach(function  (v) {
-          userPlacerholder[v.placeholder] = v.userid;
-        });
-      }
-    } );
-
-
-    $('.btnMessage').css({display: 'table-cell' });
-
-  } else {
-    getCanvasData();
-  }
-
-});
-
-
-
-
 var TemplateField = {
 	'姓名':{demo:"[姓名]", callback: function(){
 		return rootPerson.name;
@@ -4469,4 +4215,253 @@ function confirm (msg) {
 
 
 
+$(function initPage () {
+
+  makeColorPicker();
+  makeTemplatePicker();
+  setStage('viewer');
+
+  if(isSign){
+    $('.btnShowStep').css('display', 'table-cell');
+  }
+  if(isTemplate){
+    $('body').addClass('template');
+    $('.maintool .btnPrint').hide();
+    $('.maintool .btnFinish').css({display:'table-cell'});
+  }
+
+
+  $post(host+'/getCompanyTree', {company:'lianrun'}, function(data){
+    if(!data) return;
+    data=JSON.parse(data);
+
+    var opData = sortCompanyNode(data);
+    //console.log(opData);
+    companyNode = opData;
+
+
+    var html = '', prevID = 0;
+    opData.forEach(function(v){
+      if(v.parentid>=0){
+        var option = v.parentid>0 ? '</optgroup>' : '';
+        option += '<optgroup label="'+ v.name +'">';
+        html += (option);
+        prevID = v.parentid;
+      } else {
+        var option = '<option value="'+ v.userid +'" data-info="'+ JSON.stringify(v) +'">'+ v.name +'</option>';
+        html += (option);
+      }
+    });
+
+    html+='</optgroup>';
+
+    $('select.selStuff').append( html );
+
+    function matcher (item, term) {
+
+          var result = null;
+          if (item.text.indexOf(term) > -1 || item.id&&item.id.indexOf(term)>-1 ) {
+              result = item;
+          } else if (item.children) {
+              var matchingChildren = item.children.map(function(child) {
+                  return matcher(child, term);
+              }).filter(function(child) {
+                  return !!child;
+              });
+              if (matchingChildren.length) {
+                  result = { id: item.id, text: item.text, children: matchingChildren };
+              }
+          }
+          return result;
+      }
+
+    $('.selStuff').selectivity({
+      allowClear: true,
+      language: "zh-CN",
+      multiple:true,
+      placeholder:'选择流程人..',
+      matcher:matcher,
+      positionDropdown: function  ($dropEl, $selEl) {
+        $dropEl.css({top:'auto'});
+      }
+    });
+
+    $('.selStuff').on(clickE, '.selectivity-multiple-selected-item', function (e) {
+      var id = $('.selStuff').data('id');
+      if(!id) return;
+      var targetEl = $('[data-id="'+ id +'"]');
+      var v = savedSignData[ targetEl.data('idx') ];
+
+      var itemID = $(this).data('item-id');
+      $(targetEl).data('main-person', itemID );
+      v.mainPerson = itemID;
+
+      $('.selStuff').selectivity('close');
+    });
+
+
+
+    $('.selStuff').on("change", function (e) {
+      var id = $('.selStuff').data('id');
+      if(!id || !e.value) return;
+      var targetEl = $('[data-id="'+ id +'"]');
+      e.value = e.value.filter(function(v){ return v!=''});
+      var val = e.value.join('|');
+
+      var idx = targetEl.data('idx');
+      var v = savedSignData[idx];
+
+      if(val){
+        $(targetEl).data('person', val );
+        if(v) v.person = val;
+      }else{
+        $(targetEl).removeAttr('data-person' );
+        if(v) delete v.person;
+      }
+
+      if( e.value.indexOf(targetEl.data('main-person'))==-1 ){
+        targetEl.removeAttr('data-main-person');
+        if(v) delete v.mainPerson;
+      }
+
+    });
+
+    $('.selStuff').on("selectivity-open", function (e) {
+
+      var val = $('.selStuff').selectivity('val');
+      $('.selectivity-result-item').removeClass('highlight');
+      $('.selectivity-result-item[data-item-id="' + val + '"]').addClass('highlight');
+
+    });
+
+
+  });
+
+
+
+  function quitCanvas (){
+    confirm('确认不保存退出吗？',
+      function(ok){
+        console.log(ok);
+        if(ok) {restoreCanvas(true);setStage('viewer');}
+    });
+  }
+
+
+
+
+  $('#mainContainer').on(downE, function(e){
+    if( $(e.target).closest('.selectivity-single-select').length ) return;
+    hideSelStuff();
+    $('.signImg.active').click();
+  });
+
+  $('#viewerContainer').on('resize scroll', function(e){
+    $('.select2DIV').hide();
+  });
+
+  $('.button').on(downE, function  (e) {
+    e.stopPropagation();
+    var self = this;
+    $(this).parent().children().removeClass('active');
+
+    $(this).addClass('active');
+    setTimeout(function(){ $(self).removeClass('active'); }, 200);
+
+    var evt = /touch/.test(e.type) ? e.touches[0] : e;
+    eval( $(evt.target).data('onclick') );
+    if( !$(this).hasClass('btnColorCon') ) setTimeout(function(){ $('.colorCon').hide(); }, 200);
+
+  } );
+
+  var startDist = 0;
+  var touchEvent = new $.TouchEvent({
+      targetSelector: '#viewer',
+      startCallback: function(e){
+        var _this = this;
+        startDist = 0;
+        setTimeout(function(){
+          if(_this.touches>1) startDist = _this.moveDist;
+          else startDist = 0;
+        }, 50);
+      },
+      endCallback: function(e){
+        var _this = this;
+        var changeDist = 0;
+        if(startDist && _this.touches && _this.changedTouches ){
+          changeDist = (  _this.moveDist - startDist );
+          var scale= 1 + changeDist/ $(window).width()*2;
+          window.curScale = PDFViewerApplication.pdfViewer.currentScale;
+          //debug(window.curScale, scale)
+          if(changeDist && scale) PDFViewerApplication.setScale( window.curScale*scale , false);
+        }
+
+      },
+      moveCallback: function(e){
+        var _this = this;
+      }
+    });
+
+  if(!window.isSign) $('.btnSign').hide();
+  // if(window.isTemplate) $('.btnSign').css('display', 'table-cell');
+  $('.btnSign').css('display', 'table-cell');
+
+  $post( host + '/getSavedSign', { file:curFile, shareID:shareID }, function(data){
+    if(!data) return alert('获取签名信息错误');
+    savedSignData = data.signIDS;
+
+    if(data.curID){
+      window.curSignData = savedSignData.filter(function(v){ return v._id == data.curID }).shift() || {};
+    }
+
+  } );
+
+  function getCanvasData(){
+    $post( host + '/getCanvas', { file:curFile, shareID:shareID }, function(canvasData){
+      if(canvasData){
+        canvasData = canvasData.replace(/([^-])transform:/g, '$1-webkit-transform:');
+        savedCanvasData = JSON.parse( canvasData );
+      }
+    } );
+  }
+
+
+  if(window.shareID){
+
+
+    $post( host + '/getShareData', { shareID:shareID, file:curFile.replace(FILE_HOST,'') }, function(data){
+      if(data)   window.shareData = data;
+      else return;
+
+      savedInputData = data.files[0].inputData;
+
+      if( shareID ){
+
+        var canvasData = data.files[0].drawData.replace(/([^-])transform:/g, '$1-webkit-transform:');
+        savedCanvasData = JSON.parse( canvasData );
+
+      } else {
+
+        getCanvasData();
+
+      }
+
+
+
+      window.isFinished = data.isFinish;
+      if(data.isSign){
+        data.selectRange.forEach(function  (v) {
+          userPlacerholder[v.placeholder] = v.userid;
+        });
+      }
+    } );
+
+
+    $('.btnMessage').css({display: 'table-cell' });
+
+  } else {
+    getCanvasData();
+  }
+
+});
 

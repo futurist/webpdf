@@ -34,42 +34,89 @@ See https://github.com/adobe-type-tools/cmap-resources
     <link rel="stylesheet" href="viewer.css"/>
     <link rel="stylesheet" href="js/dialog.css"/>
 
-    <script src="compatibility.js"></script>
-    <script src="/js/moment.js"></script>
+    <!-- This snippet is used in production (included from viewer.html) -->
+    <link rel="resource" type="application/l10n" href="locale/locale.properties"/>
 
-<!-- weinre.cmd -->
-<!-- <script src="http://192.168.1.135:8080/target/target-script-min.js#anonymous"></script>
- -->
-
-<script type="text/javascript" src="http://res.wx.qq.com/open/js/jweixin-1.0.0.js"></script>
+    <link href="css/font-awesome.min.css" rel="stylesheet" />
+    <link href="js/selectivity-full.css" rel="stylesheet" />
 
 
-<!-- This snippet is used in production (included from viewer.html) -->
-<link rel="resource" type="application/l10n" href="locale/locale.properties"/>
-<script src="l10n.js"></script>
-<script src="pdf.js"></script>
 
-
+    <script type="text/javascript" src="/js/basket.full.min.js"></script>
 
     <script src="/js/cookies.js"></script>
+    <!-- load fonts -->
+    <script type="text/javascript" src="js/glyphicon.js"></script>
 
-    <script src="debugger.js"></script>
-    <script src="viewer.js"></script>
 
+    <!--
+    -->
+    <script src="compatibility.js"></script>
+    <script src="l10n.js"></script>
     <script src="js/zepto.js"></script>
-<script src="js/dialog.build.js"></script>
-
-<!-- load fonts -->
-<script type="text/javascript" src="js/glyphicon.js"></script>
-
+    <script src="/js/moment.js"></script>
+    <script type="text/javascript" src="http://res.wx.qq.com/open/js/jweixin-1.0.0.js"></script>
+    <script src="js/dialog.build.js"></script>
     <script src="victor.js"></script>
     <script src="path.js"></script>
-    <script src="drawer.js?t=5675674"></script>
-<script type="text/javascript" src="draggable.js"></script>
+    <script type="text/javascript" src="draggable.js"></script>
+    <!--script src="js/selectivity-full.js"></script-->
 
-<link href="css/font-awesome.min.css" rel="stylesheet" />
-<link href="js/selectivity-full.css" rel="stylesheet" />
-<script src="js/selectivity-full.js"></script>
+
+    <!-- weinre.cmd -->
+    <!-- <script src="http://192.168.1.135:8080/target/target-script-min.js#anonymous"></script>
+     -->
+
+    <!--
+    <script src="pdf.combined.js"></script>
+    <script src="viewer.js"></script>
+    <script src="drawer.js?t=5675674"></script>
+    -->
+
+<script type="text/javascript">
+
+PATHNAME = window.location.href.split('?').shift().split('#').shift();
+BASKETVER = '1.2';
+// basket.clear()
+
+// if( window.localStorage['basket-ver-viewer.html'] != BASKETVER ) alert(basket.clear());
+
+// if( !ISNW && typeof basket.get('js/ws.js')!=='object') alert('首次运行，确定后将进行缓存');
+
+basket.require(
+
+// { url: 'compatibility.js' },
+// { url: 'l10n.js' },
+// { url: 'js/zepto.js' },
+// { url: 'js/moment.js' },
+// { url: 'http://res.wx.qq.com/open/js/jweixin-1.0.0.js' },
+// { url: 'js/dialog.build.js' },
+// { url: 'victor.js' },
+// { url: 'path.js' },
+// { url: 'draggable.js' },
+
+{ url: 'js/selectivity-full.js' },
+
+{ url: 'pdf.combined.js' }
+
+).then(function() {
+
+  basket.require(
+
+  { url: 'viewer.js' },
+  { url: 'drawer.js' }
+
+  ).then(function() {
+
+    window.localStorage['basket-ver-viewer.html'] = BASKETVER;
+
+  })
+
+
+});
+
+</script>
+
 
   </head>
 

@@ -1981,6 +1981,9 @@ app.post("/removeFolder", function (req, res) {
 });
 
 app.post("/saveCanvas", function (req, res) {
+  var pdfWidth = req.body.pdfWidth;
+  var pdfHeight = req.body.pdfHeight;
+  var totalPage = req.body.totalPage;
   var data = req.body.data;
   var file = req.body.file;
   var personName = req.body.personName;
@@ -1993,7 +1996,7 @@ app.post("/saveCanvas", function (req, res) {
       res.send(err);
     } );
   } else{
-    col.findOneAndUpdate({role:'share', shareID:shareID, 'files.key':filename }, { $set: { 'files.$.drawData':data }  },
+    col.findOneAndUpdate({role:'share', shareID:shareID, 'files.key':filename }, { $set: { 'files.$.drawData':data, totalPage:totalPage, pdfWidth:pdfWidth, pdfHeight:pdfHeight }  },
                         { projection:{'files':1, msg:1, fromPerson:1, toPerson:1, flowName:1, isSign:1  } },
                         function(err, result){
       res.send(err);
@@ -2121,8 +2124,9 @@ app.post("/getSavedSign", function (req, res) {
 
 
     // common function to generate SignData
-    function getSignData(err, docs, fromUserId, curID){
-      if(err||!docs) { return res.send({curID:null, signIDS: []}); }
+    function getSignData(err, docs, fromUserId, curID, totalPage, pdfWidth, pdfHeight){
+
+      if(err||!docs) { return res.send({curID:null, totalPage:totalPage,pdfWidth:pdfWidth,pdfHeight:pdfHeight, signIDS: []}); }
       var ids = docs.filter(function(v){ return v.signData } ).map(function  (v) {
         return new ObjectID( v.signData );
       });
@@ -2147,7 +2151,7 @@ app.post("/getSavedSign", function (req, res) {
 
         });
 
-        res.send({curID:curID, signIDS: docs});
+        res.send({curID:curID, totalPage:totalPage,pdfWidth:pdfWidth, pdfHeight:pdfHeight, signIDS: docs});
 
       });
     }
@@ -2166,7 +2170,7 @@ app.post("/getSavedSign", function (req, res) {
         });
       }
       
-      getSignData(err, doc.signIDS , null, null );
+      getSignData(err, doc.signIDS , null, null, doc.totalPage, doc.pdfWidth, doc.pdfHeight );
     });
 
 
@@ -2198,9 +2202,9 @@ app.post("/getSavedSign", function (req, res) {
                   return !v.isFlow || (v.isFlow && v.order<= curFlowPos+1 );
                 });
 
-                getSignData(err, file.signIDS , doc.fromPerson.shift().userid, curID );
+                getSignData(err, file.signIDS , doc.fromPerson.shift().userid, curID, file.totalPage, file.pdfWidth, file.pdfHeight );
               }
-              else res.send( {curID:null, signIDS: [] } );
+              else res.send( {curID:null, totalPage:file.totalPage,pdfWidth:file.pdfWidth,pdfHeight:file.pdfHeight, signIDS: [] } );
 
           } );
 
@@ -2213,7 +2217,7 @@ app.post("/getSavedSign", function (req, res) {
         var signIDS = result.signIDS;
         if(!signIDS ) return res.send('');
 
-        getSignData(err, signIDS, person );
+        getSignData(err, signIDS, person, result.totalPage, result.pdfWidth, result.pdfHeight );
 
       });
 
@@ -2416,6 +2420,9 @@ app.post("/getShareMsg", function (req, res) {
 // Save sign info into upfile, signIDS array, with no ShareID
 app.post("/drawSign", function (req, res) {
 
+  var pdfWidth =  req.body.pdfWidth;
+  var pdfHeight =  req.body.pdfHeight;
+  var totalPage =  req.body.totalPage;
   var data =  req.body.data;
   var shareID =  safeEval(req.body.shareID);
   var signPerson = data.signPerson;
@@ -2436,7 +2443,7 @@ app.post("/drawSign", function (req, res) {
 
   if(shareID){
 
-    col.update( { role:'share', shareID:shareID, 'files.key':file }, { $push: { 'files.$.signIDS': data } }, function(err,result){
+    col.update( { role:'share', shareID:shareID, 'files.key':file }, { $push: { 'files.$.signIDS': data }, $set:{'files.$.totalPage':totalPage,'files.$.pdfWidth':pdfWidth,'files.$.pdfHeight':pdfHeight} }, function(err,result){
       console.log(err);
       if(err || !result) return res.send('');
       res.send(result);
@@ -2444,7 +2451,7 @@ app.post("/drawSign", function (req, res) {
 
   } else {
 
-    col.update( { role:'upfile', key:file }, { $push: { signIDS: data } }, function(err,result){
+    col.update( { role:'upfile', key:file }, { $push: { signIDS: data }, $set:{totalPage:totalPage,pdfWidth:pdfWidth,pdfHeight:pdfHeight,} }, function(err,result){
       console.log(err);
       if(err || !result) return res.send('');
       res.send(result);
@@ -2479,27 +2486,28 @@ app.post("/beginSign", function (req, res) {
 });
 
 app.post("/deleteSign", function (req, res) {
-  var id =  req.body.id;
+  var signID =  req.body.signID+'';
   var person =  req.body.person;
   var file =  req.body.file;
-  var id =  req.body.id;
   var shareID = safeEval(req.body.shareID);
 
   var key = file.replace(FILE_HOST, '');
 
-  if(!id.length){
+  if(!signID.length){
     return res.send('');
   }
 
   if(shareID){
 
-    col.updateOne( { role:'share', shareID:shareID, 'files.key':key }, { $pull: { 'files.$.signIDS': {_id: id } } }  );
+    col.updateOne( { role:'share', shareID:shareID, 'files.key':key }, { $pull: { 'files.$.signIDS': {_id: signID } } }, function(err, ret){
+      
+    }  );
     res.send('OK');
 
   } else {
 
     // http://stackoverflow.com/questions/19435123/using-pull-in-mongodb-to-remove-a-deeply-embedded-object
-    col.updateOne({ role:'upfile', key:key, person:person }, { $pull: { 'signIDS': {_id: id } } }  );
+    col.updateOne({ role:'upfile', key:key, person:person }, { $pull: { 'signIDS': {_id: signID } } }  );
     res.send('OK');
 
   }
@@ -2934,6 +2942,9 @@ app.post("/finishSign", function (req, res) {
 
 
 app.post("/saveSignFlow", function (req, res) {
+  var pdfWidth =  req.body.pdfWidth;
+  var pdfHeight =  req.body.pdfHeight;
+  var totalPage =  req.body.totalPage;
   var signIDS =  req.body.signIDS;
   var key =  req.body.key;
   var pageWidth =  req.body.pageWidth;
@@ -2948,7 +2959,7 @@ app.post("/saveSignFlow", function (req, res) {
     return (a.order||999)-(b.order||999);
   });
 
-  col.findOneAndUpdate( {role:'upfile', key:key}, {$set: { signIDS: signIDS, flowSteps:selectRange, templateImage:null } }, {projection:{title:1, key:1}},  function(err, result){
+  col.findOneAndUpdate( {role:'upfile', key:key}, {$set: { totalPage:totalPage, pdfWidth:pdfWidth, pdfHeight:pdfHeight, signIDS: signIDS, flowSteps:selectRange, templateImage:null } }, {projection:{title:1, key:1}},  function(err, result){
     // console.log(err, result);
     if(err||!result) return res.send('');
 

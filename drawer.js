@@ -681,6 +681,9 @@ document.addEventListener('textlayerrendered', function (e) {
 window.curStage = 'remark';
 window.pdfViewer = null;
 
+window.PDF_READY = false;
+window.CANVAS_READY = false;
+
 var PageObj = (function(){
   function Page (drawerLayer) {
     this.context = drawerLayer;
@@ -740,13 +743,12 @@ function init (context, pageNum) {
 
   // save empty canvas data to let signImg to show
   // console.log( pageNum, PDFViewerApplication.pagesCount, pdfViewer.pdfDocument.numPages, savedCanvasData.length );
-  if(pageNum== PDFViewerApplication.pagesCount && !savedCanvasData.length) {
+  if(pageNum== PDFViewerApplication.pagesCount && window.CANVAS_READY && !savedCanvasData.length) {
 
-    saveCanvas(1);
+    window.PDF_READY = true;
 
   }
   
-
 }
 
 
@@ -1841,7 +1843,12 @@ var svgns = "http://www.w3.org/2000/svg";
           case 46:  //delete key : Delete the shape
             if(isInput) break;
             if(curStage=='sign'){
-            	deleteSign();
+              
+              var el = $('.signImg.active');
+              if(!el.length) break;
+            	if( el.find('img').length ) deleteSign();
+              else deleteSignAll();
+
             }
             if(curStage!='remark') break;
             var el = $('[data-hl]');
@@ -3315,7 +3322,7 @@ function saveCanvas (isSilent) {
       savedCanvasData = saveObj;
 
       setTimeout(function(){
-        $post( host + '/saveCanvas', { file:curFile, isSilent:isSilent, shareID:shareID, personName:rootPerson.name, data: JSON.stringify(saveObj) } );
+        $post( host + '/saveCanvas', { file:curFile, isSilent:isSilent, shareID:shareID, personName:rootPerson.name, pdfWidth:window.viewBox[2], pdfHeight:window.viewBox[3], totalPage:PDFViewerApplication.pagesCount, data: JSON.stringify(saveObj) } );
       },0);
 
     }
@@ -3742,7 +3749,7 @@ function drawSign () {
 
     if(!isTemplate){
 
-      $post(host+'/drawSign', { data: data, shareID:shareID } , function(data){
+      $post(host+'/drawSign', { data: data, shareID:shareID, pdfWidth:window.viewBox[2], pdfHeight:window.viewBox[3], totalPage: PDFViewerApplication.pagesCount } , function(data){
         console.log('sign id', data);
 
       });
@@ -3860,7 +3867,7 @@ function setStage (stat) {
 			   showCanvas();
          $('#inputViewer').find('.textCon').remove();
   			/** Disable Mouse Scrolling when in remark mode **/
-        // $('#viewerContainer').css({overflow:'hidden'});
+        if(!isMobile) $('#viewerContainer').css({overflow:'hidden'});
         // $('#inputViewer').hide();
   			svgHistory.update('force');
 			break;
@@ -4002,7 +4009,7 @@ function finishTemplate (){
 
 	updateSignIDS();
 
-	$post(host+'/saveSignFlow', {key: curFile.replace(FILE_HOST, ''), signIDS:savedSignData, pageWidth:$('.page').width(), pageHeight: $('#viewerContainer').prop('scrollHeight') }, function(ret){
+	$post(host+'/saveSignFlow', {key: curFile.replace(FILE_HOST, ''),  pdfWidth:window.viewBox[2], pdfHeight:window.viewBox[3], totalPage:PDFViewerApplication.pagesCount, signIDS:savedSignData, pageWidth:$('.page').width(), pageHeight: $('#viewerContainer').prop('scrollHeight') }, function(ret){
 		alert('流程保存成功');
 	});
 }
@@ -4418,9 +4425,13 @@ $(function initPage () {
 
   function getCanvasData(){
     $post( host + '/getCanvas', { file:curFile, shareID:shareID }, function(canvasData){
+
       if(canvasData){
         canvasData = canvasData.replace(/([^-])transform:/g, '$1-webkit-transform:');
         savedCanvasData = JSON.parse( canvasData );
+
+        CANVAS_READY = true;
+
       }
     } );
   }
@@ -4437,8 +4448,12 @@ $(function initPage () {
 
       if( shareID ){
 
-        var canvasData = data.files[0].drawData.replace(/([^-])transform:/g, '$1-webkit-transform:');
-        savedCanvasData = JSON.parse( canvasData );
+        if(data.files[0].drawData){
+          var canvasData = data.files[0].drawData.replace(/([^-])transform:/g, '$1-webkit-transform:');
+          savedCanvasData = JSON.parse( canvasData );
+        }
+
+        CANVAS_READY = true;
 
       } else {
 

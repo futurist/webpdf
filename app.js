@@ -110,7 +110,9 @@ futurist.array_remove_item = function(array, item) {
   return tmp !== -1 ? futurist.array_remove(array, tmp) : array;
 };
 
-
+function NewID () {
+  return +new Date()+Math.random().toString().slice(2,5)+'_';
+}
 
 function qiniu_getUpToken() {
 	var responseBody =
@@ -757,7 +759,7 @@ app.post("/generatePDFAtPrinter", function (req, res) {
   var CONVERT_TIMEOUT = 2*60*1000 ;
   var data = req.body;
   data.task = 'generatePDF';
-  data.msgid = +new Date()+Math.random().toString().slice(2,5);
+  data.msgid = +new Date()+Math.random().toString().slice(2,5)+'_';
   wsSendPrinter(data, null, res);
   // will wait for job done WS Message from printer client app. check ws message: type=printerMsg
 
@@ -790,7 +792,7 @@ app.post("/printPDF", function (req, res) {
 	// req data: {server, printer, fileKey, shareID, person }
   var data = req.body;
   data.task = 'printPDF';
-  data.msgid = +new Date()+Math.random().toString().slice(2,5);
+  data.msgid = +new Date()+Math.random().toString().slice(2,5)+'_';
   wsSendPrinter(data, data.server, res);
 
 });
@@ -1193,7 +1195,7 @@ app.post("/rotateFile", function (req, res) {
     							oldFile.key = newName;
     							oldFile.fname = newName;
     							oldFile.title += '('+dirName+')';
-				        	oldFile.hash = ret.hash? ret.hash : +new Date()+Math.random().toString().slice(2,5);
+				        	oldFile.hash = ret.hash? ret.hash : +new Date()+Math.random().toString().slice(2,5)+'_';
 				        	ret = oldFile;
 				        	console.log('ret:', ret)
 			        	}
@@ -1612,7 +1614,7 @@ app.post("/applyTemplate", function (req, res) {
       type:info.type,
       drawData:info.drawData,
       signIDS:info.signIDS,
-      hash: +new Date()+Math.random().toString().slice(2,5)+'',
+      hash: +new Date()+Math.random().toString().slice(2,5)+'_'+'',
       order:maxOrder
     };
 
@@ -1720,7 +1722,7 @@ app.post("/applyTemplate2", function (req, res) {
   			drawData:doc.drawData,
   			signIDS: signIDS || doc.signIDS,
   			inputData:doc.inputData|| {} ,
-  			hash: +new Date()+Math.random().toString().slice(2,5)+'',
+  			hash: +new Date()+Math.random().toString().slice(2,5)+'_'+'',
   			order:0
   		};
 
@@ -2437,7 +2439,7 @@ app.post("/drawSign", function (req, res) {
   data.scale = safeEval(data.scale);
   data.role = 'sign';
   data.date = new Date();
-  data._id =  _id || +new Date()+Math.random().toString().slice(2,5);
+  data._id =  _id || +new Date()+Math.random().toString().slice(2,5)+'_';
   delete data.file;
   // delete data.signPerson;
 
@@ -3563,7 +3565,7 @@ function _logErr () {
 
 function genPDF ( filename, shareID,  realname, cb ) {
 
-	var tempFile = IMAGE_UPFOLDER + (+new Date()+Math.random().toString().slice(2,5)) +'.pdf';
+	var tempFile = IMAGE_UPFOLDER + (+new Date()+Math.random().toString().slice(2,5)+'_') +'.pdf';
 
 	var wget = 'rm -r '+ IMAGE_UPFOLDER+realname+ '; wget --restrict-file-names=nocontrol -P ' + IMAGE_UPFOLDER + ' -O '+ tempFile +' -N "' + FILE_HOST+filename +'" ';
 	console.log(wget);
@@ -3572,7 +3574,7 @@ function genPDF ( filename, shareID,  realname, cb ) {
 		// console.log( err, stdout, stderr );
 		if(err || (stdout+stderr).indexOf('200 OK')<0 ) return cb?cb('无法获取原始文件'):'';
 
-		var tempPDF = IMAGE_UPFOLDER + (+new Date()+Math.random().toString().slice(2,5)) +'.pdf';
+		var tempPDF = IMAGE_UPFOLDER + (+new Date()+Math.random().toString().slice(2,5)+'_') +'.pdf';
 		var cmd = 'phantomjs --config=client/config client/render.js "file='+ FILE_HOST+filename +'&shareID='+ shareID +'" '+ tempPDF;
 		console.log(cmd);
 

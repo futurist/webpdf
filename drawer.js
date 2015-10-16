@@ -320,6 +320,7 @@ window.addEventListener('scalechange', function scalechange(evt) {
 
 document.addEventListener('textlayerrendered', function (e) {  //textlayerrendered, pagerendered
   var pageIndex = e.detail.pageNumber - 1;
+  console.log('textlayerrendered', pageIndex);
 
   $('#drawViewer, #inputViewer').width( $('#viewer').width() );
 
@@ -434,7 +435,7 @@ function RERenderDrawerLayer(pageIndex){
 	$('[data-hl]').attr('data-hl',null);
 
 	var oldShapes = $('svg.canvas .shape').toArray();
-	var oldShapeIDs = oldShapes.map( function(v){ return $(v).data('id'); } );
+	var oldShapeIDs = oldShapes.map( function(v){ return $(v).data('id')+''; } );
 	oldShapes.forEach(function(v){
 	  rotateShape(v, rotClock? 90:-90 );
 	});
@@ -743,7 +744,7 @@ function init (context, pageNum) {
 
   // save empty canvas data to let signImg to show
   // console.log( pageNum, PDFViewerApplication.pagesCount, pdfViewer.pdfDocument.numPages, savedCanvasData.length );
-  if(pageNum== PDFViewerApplication.pagesCount && window.CANVAS_READY && !savedCanvasData.length) {
+  if(pageNum== PDFViewerApplication.pagesCount) {
 
     window.PDF_READY = true;
 
@@ -819,7 +820,7 @@ var svgns = "http://www.w3.org/2000/svg";
 
     // generate new ID for the element
     function NewID () {
-      return +new Date()+Math.random();
+      return +new Date()+Math.random().toString().slice(2,5)+'_';
     }
 
     function capitalize(s)
@@ -1145,7 +1146,7 @@ var svgns = "http://www.w3.org/2000/svg";
           else
             offset.top += 32;
 
-          $('.selStuff').data('id', $(targetEl).data('id') );
+          $('.selStuff').data('id', $(targetEl).data('id')+'' );
 
           var trans = getTranslateXY(targetEl);
           offset.left -= trans[0]*curScale;
@@ -1902,7 +1903,6 @@ var svgns = "http://www.w3.org/2000/svg";
 
 }
 
-
   var svgHistory = new function(html) {
     var self = this;
     $('.selrect').hide();
@@ -1993,7 +1993,7 @@ var svgns = "http://www.w3.org/2000/svg";
 
       if(!path){
         path = makeShape("path", { "class":'shape line', fill:"rgba(255,255,255,0.001)" });
-        curShapeID = +new Date+Math.random();
+        curShapeID = NewID();
         curContext.querySelector('svg.canvas').appendChild( path );
         path.setAttribute("data-id", curShapeID );
       }
@@ -2046,7 +2046,7 @@ var svgns = "http://www.w3.org/2000/svg";
       if(!options) options = ToolSet['rect'];
       if(!path){
         path = makeShape("rect", { "class":'shape rect', fill:"rgba(255,255,255,0.001)" });
-        curShapeID = +new Date+Math.random();
+        curShapeID = NewID();
         curContext.querySelector('svg.canvas').appendChild( path );
         path.setAttribute("data-id", curShapeID );
       }
@@ -2086,7 +2086,7 @@ var svgns = "http://www.w3.org/2000/svg";
 
       if(!path){
         path = makeShape("rect", { "class":'shape textrect', fill:"rgba(255,255,255,0.001)" });
-        curShapeID = +new Date+Math.random();
+        curShapeID = NewID();
         curContext.querySelector('svg.canvas').appendChild( path );
         path.setAttribute("data-id", curShapeID );
       }
@@ -2121,7 +2121,7 @@ var svgns = "http://www.w3.org/2000/svg";
       console.log(options);
       if(!path){
         path = makeShape("text", { "class":'shape text' });
-        curShapeID = +new Date+Math.random();
+        curShapeID = NewID();
         curContext.querySelector('svg.canvas').appendChild( path );
         path.setAttribute("data-id", curShapeID );
       }
@@ -2282,7 +2282,7 @@ var svgns = "http://www.w3.org/2000/svg";
      var offset2 = { left:offset.left+offset.width, top:offset.top+offset.height } ;
 
      $('.handler')
-      .data('targetId', $(targetEl).data('id') )
+      .data('targetId', $(targetEl).data('id')+'' )
       .css(offset2);
 
      var style =  $(targetEl).find('.text').get(0).style;
@@ -2325,7 +2325,7 @@ var svgns = "http://www.w3.org/2000/svg";
 
       if(!path){
         path = $('<div class="textWrap"><textarea spellcheck="false" class="pre text textholder"></textarea></div>');
-        curShapeID = +new Date+Math.random();
+        curShapeID = NewID();
         $('.textCon', curContext).append( path );
         path.attr("data-id", curShapeID );
       }
@@ -2414,7 +2414,7 @@ var svgns = "http://www.w3.org/2000/svg";
 
       if(!path){
         path = makeShape("ellipse", { "class":'shape circle', fill:"rgba(255,255,255,0.001)" });
-        curShapeID = +new Date+Math.random();
+        curShapeID = NewID();
         curContext.querySelector('svg.canvas').appendChild( path );
         path.setAttribute("data-id", curShapeID );
       }
@@ -2505,7 +2505,7 @@ var svgns = "http://www.w3.org/2000/svg";
 
             if(!path){
               path = makeShape("path", { "class":'shape curve', fill:"rgba(255,255,255,0.001)" });
-              curShapeID = +new Date+Math.random();
+              curShapeID = NewID();
               curContext.querySelector('svg.canvas').appendChild( path );
               path.setAttribute("data-id", curShapeID );
               path.setAttribute("data-path", JSON.stringify( rPath ) );
@@ -2839,7 +2839,6 @@ function enableSelection(node){
 }
 
 
-
 (function ($) {
 $.fn.disableSelection = function () {
     return this.each(function () {
@@ -3114,7 +3113,9 @@ function restoreCanvas (isRender) {
   $('#drawViewer .page').each(function(){
     var page = $(this).data('page-number');
     var pageIndex = page-1;
+
     if(savedCanvasData[page-1]){
+
     	$(this).html( savedCanvasData[pageIndex] );
     }
     else{
@@ -3144,7 +3145,9 @@ function copyDrawerLayerData(pageIndex){
     var text = $(v).clone();
     text.find('.bbox').remove();
     text.prependTo(con);
-    if(!isTemplate) $('#pageContainer'+page).find('.textWrap[data-template]').show().html('');
+    if(!isTemplate){
+      $('#inputLayer'+page).find('.textWrap[data-template]').remove();
+    }
   });
 
 
@@ -3159,6 +3162,7 @@ function copyDrawerLayerData(pageIndex){
 $(window).on('resize', function  () {
    $('#drawViewer, #inputViewer').width( $('#viewer').width() );
 });
+
 
 function copyInputLayerData(pageIndex){
 
@@ -3176,8 +3180,9 @@ function copyInputLayerData(pageIndex){
 
     var textCon = $('[data-template]', drawCon).toArray();
     textCon.forEach(function(v,i) {
+
       var offset = $(v).offset();
-      var id = $(v).data('id');
+      var id = $(v).data('id')+''+'';
       var person = $(v).data('person');
 
       var text = $('[data-input-id="'+id+'"]');
@@ -3197,15 +3202,14 @@ function copyInputLayerData(pageIndex){
       t = savedInputData[id] || t;
       setInputTextValue(id, t);
 
-
       function saveInputData() {
         var val =  $(this).val();
-        var id = $(this).parent().data('input-id');
+        var id = $(this).parent().data('input-id')+'';
         if( savedInputData[id]==val ) return;
         savedInputData[id] = val;
         var inter1;
         function saveInterval(){
-          $post(host+'/saveInputData', { shareID:window.shareID, file:curFile, value:val, textID: id }, function(data){
+          $post(host+'/saveInputData', { shareID:window.shareID, file:curFile, value:val, textID: id.replace('.', '\uff0e') }, function(data){
 
             if(data!='OK'){
               clearTimeout(inter1);
@@ -3635,7 +3639,7 @@ function deleteSignAll(el){
 
   var img = $(el);
   if(!img.length) img = $('.signImg.active');
-  var id = img.data('id');
+  var id = img.data('id')+'';
   img.remove();
   $post(host+'/deleteSign', { person:rootPerson.userid, file:curFile, id:id, shareID:shareID} );
   setStage('viewer');
@@ -3647,7 +3651,7 @@ function deleteSign(el){
   var img = $(el);
   if(!img.length) img = $('.signImg.active');
   if(isTemplate) {
-  	  var id = img.data('id');
+  	  var id = img.data('id')+'';
 
 
   	  img.remove();
@@ -3658,7 +3662,7 @@ function deleteSign(el){
 
 	} else {
 
-		$post(host+'/deleteSignOnly', { signID:img.data('id'), person:rootPerson.userid, file:curFile, shareID:shareID  } );
+		$post(host+'/deleteSignOnly', { signID:img.data('id')+'', person:rootPerson.userid, file:curFile, shareID:shareID  } );
 		img.find('img').remove();
 		img.html('<span>点此签名</span>').autoFontSize();
 		// img.click();
@@ -3674,7 +3678,7 @@ function finishSign (signID) {
 
   var el = $('.signImg.active');
   if(!signID){
-    signID = el.data('id');
+    signID = el.data('id')+'';
   }
   var isFlow = el.hasClass('isFlow');
 
@@ -3737,7 +3741,7 @@ function drawSign () {
     var hashtop = viewBox[3] + offset.top/window.curScale - 30;
 
     var urlhash = 'page='+page+'&zoom='+ scaleValue +','+ ~~hashleft+','+ ~~hashtop;
-    var data = { signPerson: rootPerson.userid, file:window.curFile, page:page, scale:window.curScale, pos: pos, urlhash: urlhash, isMobile:isMobile, role:'sign', _id: +new Date()+Math.random().toString().slice(2,5), isFlow: isTemplate?true:false };
+    var data = { signPerson: rootPerson.userid, file:window.curFile, page:page, scale:window.curScale, pos: pos, urlhash: urlhash, isMobile:isMobile, role:'sign', _id: +new Date()+Math.random().toString().slice(2,5)+'_', isFlow: isTemplate?true:false };
 
     savedSignData.push(data);
 
@@ -3798,7 +3802,7 @@ function drawSign () {
 
 function beginSign(el){
   if(!el) el = $('.signImg.active');
-  var signID = $(el).data('id');
+  var signID = $(el).data('id')+'';
 	var idx = $(el).data('idx');
   var fileKey = curFile.replace(FILE_HOST, '');
 
@@ -3952,7 +3956,7 @@ function updateSignIDS (){
 
 	var signIDS = savedSignData;
 	$('.signImg').map(function(){
-		var id = $(this).data('id');
+		var id = $(this).data('id')+'';
 		var person = $(this).data('person');
 		var mainPerson = $(this).data('main-person');
     var order = $(this).data('order');
@@ -4079,7 +4083,7 @@ var TemplateField = {
 	}},
 	'列表':{demo:"[列表:部门1,部门2]", callback: function(a, el){
 		a=a[0].split(/[,，]/);
-		var id = $(el).data('id');
+		var id = $(el).data('id')+'';
 		var inputCon = $('[data-input-id="'+id+'"]');
 		var textarea = inputCon.find('textarea');
 
@@ -4294,7 +4298,7 @@ $(function initPage () {
     });
 
     $('.selStuff').on(clickE, '.selectivity-multiple-selected-item', function (e) {
-      var id = $('.selStuff').data('id');
+      var id = $('.selStuff').data('id')+'';
       if(!id) return;
       var targetEl = $('[data-id="'+ id +'"]');
       var v = savedSignData[ targetEl.data('idx') ];
@@ -4309,7 +4313,7 @@ $(function initPage () {
 
 
     $('.selStuff').on("change", function (e) {
-      var id = $('.selStuff').data('id');
+      var id = $('.selStuff').data('id')+'';
       if(!id || !e.value) return;
       var targetEl = $('[data-id="'+ id +'"]');
       e.value = e.value.filter(function(v){ return v!=''});
@@ -4414,6 +4418,7 @@ $(function initPage () {
   $('.btnSign').css('display', 'table-cell');
 
   $post( host + '/getSavedSign', { file:curFile, shareID:shareID }, function(data){
+
     if(!data) return alert('获取签名信息错误');
     savedSignData = data.signIDS;
 
@@ -4431,7 +4436,7 @@ $(function initPage () {
         savedCanvasData = JSON.parse( canvasData );
 
         CANVAS_READY = true;
-
+        if(PDF_READY) restoreCanvas();
       }
     } );
   }
@@ -4454,6 +4459,7 @@ $(function initPage () {
         }
 
         CANVAS_READY = true;
+        if(PDF_READY) restoreCanvas();
 
       } else {
 

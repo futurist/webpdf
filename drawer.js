@@ -34,7 +34,7 @@ function toggleDevTools (){
 function $post (url, data, callback) {
   if (arguments.length == 2) { // if only two arguments were supplied
     if ( $.type(data)=='function' ) {
-      callback = data; 
+      callback = data;
       data = {};
     }
   }
@@ -749,7 +749,7 @@ function init (context, pageNum) {
     window.PDF_READY = true;
 
   }
-  
+
 }
 
 
@@ -1844,7 +1844,7 @@ var svgns = "http://www.w3.org/2000/svg";
           case 46:  //delete key : Delete the shape
             if(isInput) break;
             if(curStage=='sign'){
-              
+
               var el = $('.signImg.active');
               if(!el.length) break;
             	if( el.find('img').length ) deleteSign();
@@ -3138,17 +3138,25 @@ function copyDrawerLayerData(pageIndex){
     $(v).clone().insertAfter(p);
   });
 
-  var textCon = $('.textCon', drawCon).toArray();
-  textCon.forEach(function(v,i){
-    var page = $(v).parent().data('page-number');
-	var con = $('#inputLayer'+page+'');
-    var text = $(v).clone();
-    text.find('.bbox').remove();
-    text.prependTo(con);
-    if(!isTemplate){
-      $('#inputLayer'+page).find('.textWrap[data-template]').remove();
-    }
-  });
+
+      var textCon = $('.textCon', drawCon).toArray();
+      textCon.forEach(function(v,i){
+        var page = $(v).parent().data('page-number');
+      var con = $('#inputLayer'+page+'');
+        var text = $(v).clone();
+        text.find('.bbox').remove();
+        text.prependTo(con);
+
+        if(!isTemplate){
+          $('#inputLayer'+page).find('.textWrap[data-template]').remove();
+        }else{
+          // $('#inputLayer'+page).find('.textCon').hide();
+        }
+
+      });
+
+
+
 
 
   if(curStage=='remark'){
@@ -3446,7 +3454,7 @@ function getSignData (page) {
 
 
 function restoreSignature (pageIndex, selectedID) {
-  
+
   var page = pageIndex+1;
   $('#inputLayer'+page).find('.signImg').remove();
 
@@ -3539,7 +3547,7 @@ function restoreSignature (pageIndex, selectedID) {
            return;
         }
       }
-    
+
       if( !v.isFlow ){
           var signPerson = $(this).data('signPerson');
           if( signPerson && signPerson!= rootPerson.userid ){
@@ -3810,7 +3818,7 @@ function beginSign(el){
   var isFlow = $(el).hasClass('isFlow');
 
 	var url = 'http://1111hui.com/pdf/webpdf/signpad.html#fileKey='+ fileKey +'&shareID='+ (shareID||'') +'&idx='+ idx +'&signID='+signID
-            +'&curFlowPos='+(shareData&&shareData.curFlowPos||'')+'&hash='+(+new Date());
+            +'&curFlowPos='+(shareData&&shareData.curFlowPos)+'&hash='+(+new Date());
 
   //return alert(curSignData.realMainPerson.userid);
   var isValidPerson = isFlow
@@ -3883,6 +3891,7 @@ function setStage (stat) {
 		      $('#mainMenu').show();
           $('.textLayer').show();
 		      // $('.canvasWrapper').show();
+
 			break;
     case 'sign':
       resetState();
@@ -4418,6 +4427,10 @@ $(function initPage () {
   $('.btnSign').css('display', 'table-cell');
 
   $post( host + '/getSavedSign', { file:curFile, shareID:shareID }, function(data){
+
+    if(!PDFView.url){
+      if(!isMobile) setTimeout(function(){ window.location.reload() }, 100);
+    }
 
     if(!data) return alert('获取签名信息错误');
     savedSignData = data.signIDS;

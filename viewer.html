@@ -60,7 +60,7 @@ See https://github.com/adobe-type-tools/cmap-resources
     <script src="victor.js"></script>
     <script src="path.js"></script>
     <script type="text/javascript" src="draggable.js"></script>
-    <!--script src="js/selectivity-full.js"></script-->
+    <script src="js/selectivity-full.js"></script>
 
 
     <!-- weinre.cmd -->
@@ -68,20 +68,23 @@ See https://github.com/adobe-type-tools/cmap-resources
      -->
 
     <!--
-    <script src="pdf.combined.js"></script>
+    -->
+    <script src="pdf.js"></script>
     <script src="viewer.js"></script>
     <script src="drawer.js?t=5675674"></script>
-    -->
 
 <script type="text/javascript">
 
 PATHNAME = window.location.href.split('?').shift().split('#').shift();
 BASKETVER = '1.2';
+
 // basket.clear()
 
 // if( window.localStorage['basket-ver-viewer.html'] != BASKETVER ) alert(basket.clear());
 
 // if( !ISNW && typeof basket.get('js/ws.js')!=='object') alert('首次运行，确定后将进行缓存');
+
+/***
 
 basket.require(
 
@@ -104,7 +107,7 @@ basket.require(
   basket.require(
 
   { url: 'viewer.js' },
-  { url: 'drawer.js', unique:'2ssfssdfsdfsdfsdfssdsdfsdfsdfsdfsdfsdf=fsdssdf', expire:0, skipCache:0 }
+  { url: 'drawer.js', unique:'=fsdsdfsdfssdf', expire:0, skipCache:0 }
 
   ).then(function() {
 
@@ -114,6 +117,8 @@ basket.require(
 
 
 });
+
+***/
 
 </script>
 

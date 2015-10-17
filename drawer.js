@@ -436,7 +436,7 @@ function RERenderDrawerLayer(pageIndex){
 	$('[data-hl]').attr('data-hl',null);
 
 	var oldShapes = $('svg.canvas .shape').toArray();
-	var oldShapeIDs = oldShapes.map( function(v){ return $(v).data('id')+''; } );
+	var oldShapeIDs = oldShapes.map( function(v){ return $(v).data('id'); } );
 	oldShapes.forEach(function(v){
 	  rotateShape(v, rotClock? 90:-90 );
 	});
@@ -1147,7 +1147,7 @@ var svgns = "http://www.w3.org/2000/svg";
           else
             offset.top += 32;
 
-          $('.selStuff').data('id', $(targetEl).data('id')+'' );
+          $('.selStuff').data('id', $(targetEl).data('id') );
 
           var trans = getTranslateXY(targetEl);
           offset.left -= trans[0]*curScale;
@@ -2283,7 +2283,7 @@ var svgns = "http://www.w3.org/2000/svg";
      var offset2 = { left:offset.left+offset.width, top:offset.top+offset.height } ;
 
      $('.handler')
-      .data('targetId', $(targetEl).data('id')+'' )
+      .data('targetId', $(targetEl).data('id') )
       .css(offset2);
 
      var style =  $(targetEl).find('.text').get(0).style;
@@ -3145,7 +3145,7 @@ function copyDrawerLayerData(pageIndex){
         var page = $(v).parent().data('page-number');
       var con = $('#inputLayer'+page+'');
         var text = $(v).clone();
-        text.find('.bbox').remove();
+        if(!isTemplate) text.find('.bbox').remove();
         text.prependTo(con);
 
         if(!isTemplate){
@@ -3191,7 +3191,7 @@ function copyInputLayerData(pageIndex){
     textCon.forEach(function(v,i) {
 
       var offset = $(v).offset();
-      var id = $(v).data('id')+''+'';
+      var id = $(v).data('id')+'';
       var person = $(v).data('person');
 
       var text = $('[data-input-id="'+id+'"]');
@@ -3540,7 +3540,7 @@ function restoreSignature (pageIndex, selectedID) {
 
       var evt = /touch/.test(e.type) ? e.touches[0] : e;
 
-      if( v.isSigned ) return;
+      if( v.isSigned || img.hasClass('isSigned') ) return;
 
       if( v.isFlow ) {
         if( window.isSigned || window.isFinished || v.isSigned ){
@@ -3648,7 +3648,7 @@ function deleteSignAll(el){
 
   var img = $(el);
   if(!img.length) img = $('.signImg.active');
-  var id = img.data('id')+'';
+  var id = img.data('id');
   img.remove();
   savedSignData = $.grep(savedSignData, function(v){ return v._id!=id });
 
@@ -3664,7 +3664,7 @@ function deleteSign(el){
   var img = $(el);
   if(!img.length) img = $('.signImg.active');
   if(isTemplate) {
-  	  var id = img.data('id')+'';
+  	  var id = img.data('id');
 
 
   	  img.remove();
@@ -3675,7 +3675,7 @@ function deleteSign(el){
 
 	} else {
 
-		$post(host+'/deleteSignOnly', { signID:img.data('id')+'', person:rootPerson.userid, file:curFile, shareID:shareID  } );
+		$post(host+'/deleteSignOnly', { signID:img.data('id'), person:rootPerson.userid, file:curFile, shareID:shareID  } );
 		img.find('img').remove();
 		img.html('<span>点此签名</span>').autoFontSize();
 		// img.click();
@@ -3691,8 +3691,10 @@ function finishSign (signID) {
 
   var el = $('.signImg.active');
   if(!signID){
-    signID = el.data('id')+'';
+    signID = el.data('id');
   }
+  if(!signID) return;
+
   var isFlow = el.hasClass('isFlow');
 
   $post(host+'/finishSign', { shareID:window.shareID,  fileKey: curFile.replace(FILE_HOST, ''),  signID:signID, person:rootPerson.userid }, function(data){
@@ -3816,7 +3818,7 @@ function drawSign () {
 
 function beginSign(el){
   if(!el) el = $('.signImg.active');
-  var signID = $(el).data('id')+'';
+  var signID = $(el).data('id');
 	var idx = $(el).data('idx');
   var fileKey = curFile.replace(FILE_HOST, '');
 
@@ -3972,7 +3974,7 @@ function updateSignIDS (){
 
 	var signIDS = savedSignData;
 	$('.signImg').map(function(){
-		var id = $(this).data('id')+'';
+		var id = $(this).data('id');
 		var person = $(this).data('person');
 		var mainPerson = $(this).data('main-person');
     var order = $(this).data('order');
@@ -4099,7 +4101,7 @@ var TemplateField = {
 	}},
 	'列表':{demo:"[列表:部门1,部门2]", callback: function(a, el){
 		a=a[0].split(/[,，]/);
-		var id = $(el).data('id')+'';
+		var id = $(el).data('id');
 		var inputCon = $('[data-input-id="'+id+'"]');
 		var textarea = inputCon.find('textarea');
 
@@ -4315,7 +4317,7 @@ $(function initPage () {
     });
 
     $('.selStuff').on(clickE, '.selectivity-multiple-selected-item', function (e) {
-      var id = $('.selStuff').data('id')+'';
+      var id = $('.selStuff').data('id');
       if(!id) return;
       var targetEl = $('[data-id="'+ id +'"]');
       var v = savedSignData[ targetEl.data('idx') ];
@@ -4330,7 +4332,7 @@ $(function initPage () {
 
 
     $('.selStuff').on("change", function (e) {
-      var id = $('.selStuff').data('id')+'';
+      var id = $('.selStuff').data('id');
       if(!id || !e.value) return;
       var targetEl = $('[data-id="'+ id +'"]');
       e.value = e.value.filter(function(v){ return v!=''});

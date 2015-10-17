@@ -2897,6 +2897,12 @@ app.post("/finishSign", function (req, res) {
                 } else {
 
 
+
+                	var nextGroup = colShare.flowSteps[curFlowPos].person.map(function(x){
+                	  return placerholderToUser( colShare.fromPerson[0].userid, x );
+                	});
+
+
                     col.updateOne( condition, { $push: { toPerson: nextGroup }, $set:selPosObj, $inc:{curFlowPos:1} }, {w:1}, function(err, ret) {
 
                     	if(err||ret.result.nModified==0) return res.send('签名应用错误，请重新打开页面再试');
@@ -2927,9 +2933,6 @@ app.post("/finishSign", function (req, res) {
 	                      sendWXMessage(wxmsg);
 
 
-	                      var nextGroup = colShare.flowSteps[curFlowPos].person.map(function(x){
-	                        return placerholderToUser( colShare.fromPerson[0].userid, x );
-	                      });
 	                      //info to next Person via WX
 	                      var wxmsg = {
 	                       "touser": nextGroup.map(function(x){ return x.userid }).join('|'),
@@ -3031,6 +3034,7 @@ app.post("/saveSignFlow", function (req, res) {
 	    qiniu_uploadFile( 'uploads/'+ filename +'.jpg', token +'/'+ filename +'.jpg', function(ret) {
 
 	        col.updateOne( {role:'upfile', key:key}, {$set: { templateImage: ret.key } }, function(err, result){
+	        	console.log(err, result);
 	        });
 
 	    } );
@@ -3165,7 +3169,6 @@ app.post("/saveSign", function (req, res) {
             var key1 = 'files.'+ fileIdx +'.signIDS.'+signIdx+'.signData';
             var setObj = {};
             setObj[key1] =  new ObjectID(id);
-            setObj[key2] =  person;
 
             var condition = {role:'share', shareID:shareID, 'files.key':fileKey };
 

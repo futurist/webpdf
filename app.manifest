@@ -1,0 +1,37 @@
+CACHE MANIFEST
+#VERSION 1.511111111
+CACHE:
+pdf.js
+pdf.worker.js
+http://1111hui.com/pdf/webpdf/js/dialog.css
+http://1111hui.com/pdf/webpdf/css/font-awesome.min.css
+http://1111hui.com/pdf/webpdf/js/selectivity-full.css
+http://1111hui.com/js/basket.full.min.js
+http://1111hui.com/pdf/webpdf/viewer.css
+http://1111hui.com/js/cookies.js
+http://1111hui.com/pdf/webpdf/js/glyphicon.js
+http://1111hui.com/pdf/webpdf/compatibility.js
+http://1111hui.com/pdf/webpdf/l10n.js
+http://1111hui.com/pdf/webpdf/js/zepto.js
+http://1111hui.com/js/moment.js
+http://res.wx.qq.com/open/js/jweixin-1.0.0.js
+http://1111hui.com/pdf/webpdf/js/dialog.build.js
+http://1111hui.com/pdf/webpdf/victor.js
+http://1111hui.com/pdf/webpdf/path.js
+http://1111hui.com/pdf/webpdf/draggable.js
+http://1111hui.com/pdf/webpdf/js/selectivity-full.js
+http://1111hui.com/pdf/webpdf/viewer.js
+http://1111hui.com/pdf/webpdf/images/texture.png
+http://1111hui.com/pdf/webpdf/images/toolbarButton-viewThumbnail.png
+http://1111hui.com/pdf/webpdf/images/toolbarButton-viewOutline.png
+http://1111hui.com/pdf/webpdf/images/toolbarButton-viewAttachments.png
+http://1111hui.com/pdf/webpdf/images/loading-icon.gif
+http://1111hui.com/pdf/webpdf/locale/locale.properties
+
+http://1111hui.com/pdf/webpdf/viewer.html
+http://1111hui.com/pdf/webpdf/drawer.js?t=5675674
+
+
+NETWORK:
+*
+

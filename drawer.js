@@ -99,6 +99,7 @@ var rootPerson = {};
 
 if(window.navigator.userAgent == "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_4) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/42.0.2311.152 Safari/537.36"
   || window.navigator.userAgent == "Mozilla/5.0 (Windows NT 5.1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/45.0.2454.99 Safari/537.36"
+  || window.navigator.userAgent == "Mozilla/5.0 (Windows NT 5.1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/33.0.1750.117 Safari/537.36"
   ) DEBUG=1;
 
 if(DEBUG) rootPerson = {userid: 'yangjiming', name:"杨吉明", depart:"行政", isAdmin:true };
@@ -3649,7 +3650,11 @@ function deleteSignAll(el){
   if(!img.length) img = $('.signImg.active');
   var id = img.data('id')+'';
   img.remove();
-  $post(host+'/deleteSign', { person:rootPerson.userid, file:curFile, id:id, shareID:shareID} );
+  savedSignData = $.grep(savedSignData, function(v){ return v._id!=id });
+
+  $post(host+'/deleteSign', { person:rootPerson.userid, file:curFile, signID:id, shareID:shareID}, function (ret) {
+    if(!ret) alert("删除签名出错");
+  } );
   setStage('viewer');
 
 }
@@ -3693,6 +3698,7 @@ function finishSign (signID) {
   $post(host+'/finishSign', { shareID:window.shareID,  fileKey: curFile.replace(FILE_HOST, ''),  signID:signID, person:rootPerson.userid }, function(data){
 
     if(data) alert(data, isFlow?'确定并关闭':'确定', function(){
+      $('[data-id="'+ signID +'"]').addClass('isSigned');
       if(isFlow){
         isWeiXin? wx.closeWindow() : window.close();
       }
@@ -4198,13 +4204,14 @@ function chooseTemplate(){
     }
 })(window.Zepto||window.jQuery);
 
-
+window.oldAlert = window.alert;
 function alert (msg) {
   var args =Array.prototype.slice.call(arguments);
   args.splice(1,0,null);
   confirm.apply( this, args );
 }
 
+window.oldConfirm = window.confirm;
 function confirm (msg) {
 
   var arglen = arguments.length;
@@ -4429,7 +4436,7 @@ $(function initPage () {
   $post( host + '/getSavedSign', { file:curFile, shareID:shareID }, function(data){
 
     if(!PDFView.url){
-      if(!isMobile) setTimeout(function(){ window.location.reload() }, 100);
+      //if(!isMobile) setTimeout(function(){ window.location.reload() }, 100);
     }
 
     if(!data) return alert('获取签名信息错误');
@@ -4454,6 +4461,8 @@ $(function initPage () {
     } );
   }
 
+var appCache = window.applicationCache;
+// appCache.onnoupdate=function(res){ setTimeout(function(){alert(1111)}, 1000)}
 
   if(window.shareID){
 

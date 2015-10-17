@@ -3822,9 +3822,10 @@ function beginSign(el){
 
   var signPerson = $(el).data('sign-person');
   var isFlow = $(el).hasClass('isFlow');
+  var color = savedSignData[idx].color||'';
 
 	var url = 'http://1111hui.com/pdf/webpdf/signpad.html#fileKey='+ fileKey +'&shareID='+ (shareID||'') +'&idx='+ idx +'&signID='+signID
-            +'&curFlowPos='+(shareData&&shareData.curFlowPos)+'&hash='+(+new Date());
+            +'&curFlowPos='+(shareData&&shareData.curFlowPos)+'&color='+ color +'&hash='+(+new Date());
 
   //return alert(curSignData.realMainPerson.userid);
   var isValidPerson = isFlow
@@ -3885,7 +3886,7 @@ function setStage (stat) {
 			   showCanvas();
          $('#inputViewer').find('.textCon').remove();
   			/** Disable Mouse Scrolling when in remark mode **/
-        if(!isMobile) $('#viewerContainer').css({overflow:'hidden'});
+        if(isMobile) $('#viewerContainer').css({overflow:'hidden'});
         // $('#inputViewer').hide();
   			svgHistory.update('force');
 			break;

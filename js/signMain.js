@@ -5,7 +5,7 @@
 function $post (url, data, callback) {
   if (arguments.length == 2) { // if only two arguments were supplied
     if ( $.type(data)=='function' ) {
-      callback = data; 
+      callback = data;
       data = {};
     }
   }
@@ -38,6 +38,7 @@ var fileKey = urlObj.fileKey;
 var shareID = urlObj.shareID;
 var hash = urlObj.hash;
 var curFlowPos = urlObj.curFlowPos;
+var color = urlObj.color;
 
 
 
@@ -69,7 +70,7 @@ if( !wxUserInfo ){
                 initSignPad();
             } else {
                 alert('您已签署过此文档');
-                
+
                 function closeWin () {
                     isWeiXin? wx.closeWindow() : window.close();
                 }
@@ -77,7 +78,7 @@ if( !wxUserInfo ){
                     closeWin();
                 }, 300);
                 closeWin();
-                
+
                 // var url = 'http://1111hui.com/pdf/webpdf/viewer.html#file='+ FILE_HOST+fileKey +'&isSign=1&signID='+ signID +'&shareID='+(shareID||'');
                 // window.location = url;
             }
@@ -158,7 +159,12 @@ function initSignPad(){
 
     if(!wxUserInfo.UserId) return alert('无法获取身份信息');
 
-    signPAD = new SignaturePad(signCanvas);
+    signPAD = new SignaturePad(signCanvas, {
+        minWidth: 0.5,
+        maxWidth: 2.5,
+        penColor: color||"rgb(0, 0, 0)"
+    });
+
     signPAD.onBegin = function(e){
         window.signHisID = '';
     }

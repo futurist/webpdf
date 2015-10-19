@@ -17,7 +17,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  SOFTWARE. */
 
- 
+
 function eve(el, type){
     el= ('jquery' in el)? el.get(0) : el ;  //(typeof el['jquery']!='undefined')
     if(typeof type=='undefined') type='click';
@@ -465,27 +465,27 @@ function getCurvePoints(points, tension, numOfSeg, close) {
 
 (function(window,undefined){
   '$:nomunge'; // Used by YUI compressor.
-  
+
   var $ = window.jQuery || window.Cowboy || ( window.Cowboy = {} ),
-    
+
     // Internal method reference.
     jq_throttle;
-  
+
   // Method: jQuery.throttle
   // Usage:
-  // 
+  //
   // > var throttled = jQuery.throttle( delay, [ no_trailing, ] callback );
-  // > 
+  // >
   // > jQuery('selector').bind( 'someevent', throttled );
   // > jQuery('selector').unbind( 'someevent', throttled );
-  // 
+  //
   // This also works in jQuery 1.4+:
-  // 
+  //
   // > jQuery('selector').bind( 'someevent', jQuery.throttle( delay, [ no_trailing, ] callback ) );
   // > jQuery('selector').unbind( 'someevent', callback );
-  // 
+  //
   // Arguments:
-  // 
+  //
   //  delay - (Number) A zero-or-greater delay in milliseconds. For event
   //    callbacks, values around 100 or 250 (or even higher) are most useful.
   //  no_trailing - (Boolean) Optional, defaults to false. If no_trailing is
@@ -497,18 +497,18 @@ function getCurvePoints(points, tension, numOfSeg, close) {
   //  callback - (Function) A function to be executed after delay milliseconds.
   //    The `this` context and all arguments are passed through, as-is, to
   //    `callback` when the throttled-function is executed.
-  // 
+  //
   // Returns:
-  // 
+  //
   //  (Function) A new, throttled, function.
-  
+
   $.throttle = jq_throttle = function( delay, no_trailing, callback, debounce_mode ) {
 
     var timeout_id,
-      
+
       // Keep track of the last time `callback` was executed.
       last_exec = 0;
-    
+
     // `no_trailing` defaults to falsy.
     if ( typeof no_trailing !== 'boolean' ) {
       debounce_mode = callback;
@@ -520,32 +520,32 @@ function getCurvePoints(points, tension, numOfSeg, close) {
       var that = this,
         elapsed = +new Date() - last_exec,
         args = arguments;
-      
+
       // Execute `callback` and update the `last_exec` timestamp.
       function exec() {
         last_exec = +new Date();
         callback.apply( that, args );
       };
-      
+
       // If `debounce_mode` is true (at_begin) this is used to clear the flag
       // to allow future `callback` executions.
       function clear() {
         timeout_id = undefined;
       };
-      
+
       if ( debounce_mode && !timeout_id ) {
         // Since `wrapper` is being called for the first time and
         // `debounce_mode` is true (at_begin), execute `callback`.
         exec();
       }
-      
+
       // Clear any existing timeout.
       timeout_id && clearTimeout( timeout_id );
-      
+
       if ( debounce_mode === undefined && elapsed > delay ) {
 
         exec();
-        
+
       } else if ( no_trailing !== true ) {
 
         timeout_id = setTimeout( debounce_mode ? clear : exec, debounce_mode === undefined ? delay - elapsed : delay );
@@ -555,27 +555,27 @@ function getCurvePoints(points, tension, numOfSeg, close) {
     if ( $.guid ) {
       wrapper.guid = callback.guid = callback.guid || $.guid++;
     }
-    
+
     // Return the wrapper function.
     return wrapper;
   };
-  
+
   // Method: jQuery.debounce
 
   // Usage:
-  // 
+  //
   // > var debounced = jQuery.debounce( delay, [ at_begin, ] callback );
-  // > 
+  // >
   // > jQuery('selector').bind( 'someevent', debounced );
   // > jQuery('selector').unbind( 'someevent', debounced );
-  // 
+  //
   // This also works in jQuery 1.4+:
-  // 
+  //
   // > jQuery('selector').bind( 'someevent', jQuery.debounce( delay, [ at_begin, ] callback ) );
   // > jQuery('selector').unbind( 'someevent', callback );
-  // 
+  //
   // Arguments:
-  // 
+  //
   //  delay - (Number) A zero-or-greater delay in milliseconds. For event
   //    callbacks, values around 100 or 250 (or even higher) are most useful.
   //  at_begin - (Boolean) Optional, defaults to false. If at_begin is false or
@@ -587,17 +587,17 @@ function getCurvePoints(points, tension, numOfSeg, close) {
   //  callback - (Function) A function to be executed after delay milliseconds.
   //    The `this` context and all arguments are passed through, as-is, to
   //    `callback` when the debounced-function is executed.
-  // 
+  //
   // Returns:
-  // 
+  //
   //  (Function) A new, debounced, function.
-  
+
   $.debounce = function( delay, at_begin, callback ) {
     return callback === undefined
       ? jq_throttle( delay, at_begin, false )
       : jq_throttle( delay, callback, at_begin !== false );
   };
-  
+
 })(this);
 
 
@@ -621,13 +621,13 @@ function getCurvePoints(points, tension, numOfSeg, close) {
                 return p;
             }
         }
-        
+
         // Default to transform also
         return 'transform';
     }
-    
+
     var _propsObj = null;
-    
+
     var proxied = $.fn.css;
     $.fn.css = function (arg, val)
     {
@@ -648,7 +648,7 @@ function getCurvePoints(points, tension, numOfSeg, close) {
                 _propsObj = {}
             }
         }
-        
+
         // Find the correct browser specific property and setup the mapping using
         // $.props which is used internally by jQuery.attr() when setting CSS
         // properties via either the css(name, value) or css(properties) method.
@@ -672,7 +672,7 @@ function getCurvePoints(points, tension, numOfSeg, close) {
         {
             _propsObj['transform'] = getTransformProperty(this.get(0));
         }
-        
+
         // We force the property mapping here because jQuery.attr() does
         // property mapping with jQuery.props when setting a CSS property,
         // but curCSS() does *not* do property mapping when *getting* a
@@ -687,7 +687,7 @@ function getCurvePoints(points, tension, numOfSeg, close) {
             if (arg == 'transform')
             {
                 arg = _propsObj['transform'];
-                
+
                 // User wants to GET the transform CSS, and in jQuery 1.4.3
                 // calls to css() for transforms return a matrix rather than
                 // the actual string specified by the user... avoid that
@@ -710,7 +710,7 @@ function getCurvePoints(points, tension, numOfSeg, close) {
                 delete arg['transform'];
             }
         }
-        
+
         return proxied.apply(this, arguments);
     };
 })(Zepto||jQuery);
@@ -786,7 +786,7 @@ function getCurvePoints(points, tension, numOfSeg, close) {
     _this.moveY2 = 0;
     _this.endX2 = 0;
     _this.endY2 = 0;
-    
+
     _this.startDist = 0;
     _this.endDist = 0;
     _this.moveDist = 0;
@@ -815,7 +815,8 @@ function getCurvePoints(points, tension, numOfSeg, close) {
     },
     touchListener: function(event) {
       var _this = this;
-      if (_this.targetSelector && _this.getChildrenAndSelf($(_this.targetSelector)).indexOf(event.target) === -1) { // 处理事件委托
+      //if(event.touches.length<2) return;
+      if (_this.targetSelector && !$(_this.targetSelector).find(event.target).length ) { // 处理事件委托
         return false;
       }
       switch (event.type) { // 根据触摸过程中的不同事件类型，做不同的处理
@@ -862,7 +863,7 @@ function getCurvePoints(points, tension, numOfSeg, close) {
           // 取得当前坐标
           _this.moveX = event.touches[0].clientX;
           _this.moveY = event.touches[0].clientY;
-          
+
           _this.touches = event.touches.length;
 
           if(_this.touches>1){

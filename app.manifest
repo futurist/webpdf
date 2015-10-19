@@ -1,5 +1,5 @@
 CACHE MANIFEST
-#VERSION 1.51111111111
+#VERSION 1.51111111111111111111111
 CACHE:
 pdf.js
 pdf.worker.js
@@ -29,7 +29,7 @@ http://1111hui.com/pdf/webpdf/images/loading-icon.gif
 http://1111hui.com/pdf/webpdf/locale/locale.properties
 
 http://1111hui.com/pdf/webpdf/viewer.html
-http://1111hui.com/pdf/webpdf/drawer.js?t=5675674
+http://1111hui.com/pdf/webpdf/drawer.js
 
 
 NETWORK:

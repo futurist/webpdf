@@ -821,7 +821,7 @@ var svgns = "http://www.w3.org/2000/svg";
 
     // generate new ID for the element
     function NewID () {
-      return +new Date()+Math.random().toString().slice(2,5)+'_';
+      return +new Date()+Math.random().toString().slice(2,5)+'_1';
     }
 
     function capitalize(s)
@@ -1817,29 +1817,7 @@ var svgns = "http://www.w3.org/2000/svg";
 
       if (cmd === 0) { // no control key pressed at all.
 
-      	if(isTemplate && !isInput) {
-
-            var order =evt.keyCode-48;
-            if(order<0||order>15) return;
-
-            var img = $('.signImg.active');
-      			if(img.length){
-
-                img.find('span').html(order);
-                img.data('order', order);
-                var id= ~~ img.data('idx');
-                savedSignData[id].order = order;
-                savedSignData = savedSignData.sort(function(a,b){return (a.order||999)-(b.order||999) });
-            }
-
-            var inputText = $('.textWrap[data-hl]');
-            if(inputText.length){
-              inputText.data('person', order);
-            }
-
-	       }
-
-        //console.log(evt, evt.keyCode);
+        // console.log(evt, evt.keyCode);
         switch (evt.keyCode) {
           case 8:  //backspace key : Delete the shape
           case 46:  //delete key : Delete the shape
@@ -1867,8 +1845,33 @@ var svgns = "http://www.w3.org/2000/svg";
             break;
           case 123: //F12 Key
             toggleDevTools();
+            handled = true;
             break;
         }
+
+        if(isTemplate && !isInput && !handled) {
+
+            var order =evt.keyCode-48;
+            if(order<0||order>15) return;
+
+            var img = $('.signImg.active');
+            if(img.length){
+
+                img.find('span').html(order);
+                img.data('order', order);
+                var id= ~~ img.data('idx');
+                savedSignData[id].order = order;
+                savedSignData = savedSignData.sort(function(a,b){return (a.order||999)-(b.order||999) });
+            }
+
+            var inputText = $('.textWrap[data-hl]');
+            if(inputText.length){
+              inputText.data('person', order);
+            }
+
+         }
+
+
       }
 
     if (cmd === 1 || cmd === 8) {
@@ -3558,10 +3561,14 @@ function restoreSignature (pageIndex, selectedID) {
       }
 
       if(shareID){
-        var emptyList = $('.userInputText textarea').not('[readonly]').filter(function  (v) {
-          return $(this).parent().data('person') && $(this).val()=='';
+        var allInput = $('.userInputText textarea').not('[readonly]');
+        var allInputUser = allInput.filter(function  (v) {
+          return $(this).parent().data('person');
         });
-        if(emptyList.length) return alert('填写完整信息后才可签署');
+        var inputList = allInputUser.filter(function  (v) {
+          return $(this).val()!=='';
+        });
+        if( allInputUser.length && !inputList.length ) return alert('表格至少要填一项');
       }
 
 
@@ -3757,7 +3764,7 @@ function drawSign () {
     var hashtop = viewBox[3] + offset.top/window.curScale - 30;
 
     var urlhash = 'page='+page+'&zoom='+ scaleValue +','+ ~~hashleft+','+ ~~hashtop;
-    var data = { signPerson: rootPerson.userid, file:window.curFile, page:page, scale:window.curScale, pos: pos, urlhash: urlhash, isMobile:isMobile, role:'sign', _id: +new Date()+Math.random().toString().slice(2,5)+'_', isFlow: isTemplate?true:false };
+    var data = { signPerson: rootPerson.userid, file:window.curFile, page:page, scale:window.curScale, pos: pos, urlhash: urlhash, isMobile:isMobile, role:'sign', _id: +new Date()+Math.random().toString().slice(2,5)+'_1', isFlow: isTemplate?true:false };
 
     savedSignData.push(data);
 
@@ -4031,7 +4038,7 @@ function finishTemplate (){
 
 	updateSignIDS();
 
-	$post(host+'/saveSignFlow', {key: curFile.replace(FILE_HOST, ''),  pdfWidth:window.viewBox[2], pdfHeight:window.viewBox[3], totalPage:PDFViewerApplication.pagesCount, signIDS:savedSignData, pageWidth:$('.page').width(), pageHeight: $('#viewerContainer').prop('scrollHeight') }, function(ret){
+	$post(host+'/saveSignFlow', {key: curFile.replace(FILE_HOST, ''),  pdfWidth:window.viewBox[2], pdfHeight:window.viewBox[3], totalPage:PDFViewerApplication.pagesCount, signIDS:savedSignData, pageWidth:$('.page').width()/curScale, pageHeight: $('#viewerContainer').prop('scrollHeight')/curScale }, function(ret){
 		alert('流程保存成功');
 	});
 }
@@ -4406,7 +4413,8 @@ $(function initPage () {
 
   var startDist = 0;
   var touchEvent = new $.TouchEvent({
-      targetSelector: '#viewer',
+      debug: true,
+      targetSelector: $('#viewerContainer'),
       startCallback: function(e){
         var _this = this;
         startDist = 0;
@@ -4421,6 +4429,7 @@ $(function initPage () {
         if(startDist && _this.touches && _this.changedTouches ){
           changeDist = (  _this.moveDist - startDist );
           var scale= 1 + changeDist/ $(window).width()*2;
+
           window.curScale = PDFViewerApplication.pdfViewer.currentScale;
           //debug(window.curScale, scale)
           if(changeDist && scale) PDFViewerApplication.setScale( window.curScale*scale , false);

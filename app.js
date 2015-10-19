@@ -229,6 +229,11 @@ var JOBS = {};  // store printer jobs same format as WSMSG
 var WSMSG = {}; // store client persistent message
 var WSCLIENT = {};
 wss.on('connection', function connection(ws) {
+
+  // https://github.com/websockets/ws/issues/361
+  // https://github.com/websockets/ws/issues/117
+  //console.log(_.keys(ws._sender));
+
   ws.on('close', function incoming(code, message) {
     //console.log("WS close: ", code, message);
 
@@ -242,6 +247,9 @@ wss.on('connection', function connection(ws) {
     //     var idx = WSCLIENT.indexOf(v);
     //     if(idx>-1) WSCLIENT.splice( idx , 1  );
     //   });
+  });
+  ws.on('ping', function incoming(data) {
+    //console.log(data.toString());
   });
   ws.on('message', function incoming(data) {
     // Client side data format:
@@ -259,8 +267,11 @@ wss.on('connection', function connection(ws) {
 
       // msg format: { clientName:clientName, clientRole:'printer', clientOrder:1 }
       var suffix = (msg.from? ':'+msg.from: '');
-      console.log( 'client up', msg.clientName+suffix );
-      WSCLIENT[msg.clientName+suffix] = _.extend( msg, {ws:ws, timeStamp:+new Date()} );
+      var clientFullName = msg.clientName+suffix;
+      if(WSCLIENT[clientFullName]) return;
+
+      console.log( 'client up', clientFullName );
+      WSCLIENT[clientFullName] = _.extend( msg, {ws:ws, timeStamp:+new Date()} );
 
       if(msg.clientRole == 'printer') {
 
@@ -293,7 +304,9 @@ wss.on('connection', function connection(ws) {
 
 
   });
-  console.log('new client connected', _.keys(ws.connection)) ;
+
+  // https://github.com/websockets/ws/issues/338
+  console.log('ws new client connected',  ws._socket.remoteAddress, ws._socket.remotePort ) ;
   ws.send('connected');
 });
 
@@ -1799,8 +1812,9 @@ app.post("/applyTemplate2", function (req, res) {
 
 
 app.post("/getTemplateFiles", function (req, res) {
-
-  col.find( { role:'upfile', isTemplate:true, status:{$ne:-1} } , {limit:2000,fields:{drawData:0,inputData:0,signIDS:0} } ).sort({title:1,date:-1}).toArray(function(err, docs){
+  // find signIDS.length > 0
+  // http://stackoverflow.com/questions/7811163/how-to-query-for-documents-where-array-size-is-greater-than-one-1-in-mongodb/15224544#15224544
+  col.find( { role:'upfile', isTemplate:true, status:{$ne:-1}, 'signIDS.1':{$exists:true} } , {limit:2000,fields:{drawData:0,inputData:0,signIDS:0} } ).sort({title:1,date:-1}).toArray(function(err, docs){
     if(err) {
       return res.send('error');
     }
@@ -2076,7 +2090,7 @@ app.post("/saveInputData", function (req, res) {
   }
   if(!shareID){
     var obj = {};
-    obj['inputData.'+textID.replace('.', '\uff0e')] = value;
+    obj['inputData.'+textID.replace(/\./g, '\uff0e')] = value;
     col.update({role:'upfile', 'key':filename }, { $set: obj  }, function(err, result){
     	return res.send("OK");
     });
@@ -2084,7 +2098,7 @@ app.post("/saveInputData", function (req, res) {
   	// have to replace keys that contains dot(.) in keyname,
   	// http://stackoverflow.com/questions/12397118/mongodb-dot-in-key-name
     var obj = {};
-    obj['files.$.inputData.'+textID.replace('.', '\uff0e')] = value;
+    obj['files.$.inputData.'+textID.replace(/\./g, '\uff0e')] = value;
     col.update({ role:'share', shareID:shareID, 'files.key':filename }, { $set: obj  }, function(err, result){
     	return res.send("OK");
     });
@@ -2107,7 +2121,7 @@ app.post("/getInputData", function (req, res) {
     	//convert unicode Dot into [dot]
     	var data = {};
     	_.each(result.inputData, function(v,k){
-    		data[k.replace('\uff0e', '.')] = v;
+    		data[k.replace(/\uff0e/g, '.')] = v;
     	});
     	return res.json( data );
     });
@@ -2117,7 +2131,7 @@ app.post("/getInputData", function (req, res) {
     	//convert unicode Dot into [dot]
     	var data = {};
     	_.each( result.files[0].inputData , function(v,k){
-    		data[k.replace('\uff0e', '.')] = v;
+    		data[k.replace(/\uff0e/g, '.')] = v;
     	});
     	return res.json( data );
     });
@@ -2314,7 +2328,7 @@ app.post("/getShareData", function (req, res) {
 
           var data = {};
           _.each(item.files[0].inputData, function(v,k){
-            data[k.replace('\uff0e', '.')] = v;
+            data[k.replace(/\uff0e/g, '.')] = v;
           });
           item.files[0].inputData = data;
 
@@ -3007,6 +3021,7 @@ app.post("/saveSignFlow", function (req, res) {
   var pageWidth =  req.body.pageWidth;
   var pageHeight =  req.body.pageHeight;
 
+  /*
   var selectRange = signIDS.map(function(v){
     var obj = _.pick(v, '_id', 'person', 'mainPerson', 'order' );
     obj.person = obj.person.split('|').filter(function(v){ return v!='' });
@@ -3015,8 +3030,9 @@ app.post("/saveSignFlow", function (req, res) {
   }).sort(function(a,b){
     return (a.order||999)-(b.order||999);
   });
+  */
 
-  col.findOneAndUpdate( {role:'upfile', key:key}, {$set: { totalPage:totalPage, pdfWidth:pdfWidth, pdfHeight:pdfHeight, signIDS: signIDS, flowSteps:selectRange, templateImage:null } }, {projection:{title:1, key:1}},  function(err, result){
+  col.findOneAndUpdate( {role:'upfile', key:key}, {$set: { totalPage:totalPage, pdfWidth:pdfWidth, pdfHeight:pdfHeight, signIDS: signIDS, flowSteps:[], templateImage:null } }, {projection:{title:1, key:1}},  function(err, result){
     console.log(err, result);
     if(err||!result) return res.send('');
 
@@ -3033,8 +3049,8 @@ app.post("/saveSignFlow", function (req, res) {
 
 	    qiniu_uploadFile( 'uploads/'+ filename +'.jpg', token +'/'+ filename +'.jpg', function(ret) {
 
-	        col.updateOne( {role:'upfile', key:key}, {$set: { templateImage: ret.key } }, function(err, result){
-	        	console.log(err, result);
+	        col.updateOne( {role:'upfile', key:key}, {$set: { templateImage: ret.key } }, function(err, ret){
+	        	console.log(err, ret.result);
 	        });
 
 	    } );
@@ -4019,10 +4035,27 @@ function updateCompanyTree () {
   });
 }
 
+
+app.post("/getStuffList", function (req, res) {
+  col.findOne({role:'stuff'}, function(err, ret){
+    res.send(ret.stuffList);
+  } );
+});
+
+app.post("/updateOneStuff", function (req, res) {
+  var data = req.body;
+  col.updateOne({role:'stuff', 'stuffList.userid':data.userid}, {$set:{'stuffList.$': data}}, function(err, ret){
+    if(err||ret.result.nModified==0) return res.end();
+    res.send('OK');
+  } );
+});
+
+
 app.get("/updateCompanyTree", function (req, res) {
   updateCompanyTree();
   res.send('OK');
 });
+
 
 app.post("/getCompanyTree", function (req, res) {
   var data = req.body;

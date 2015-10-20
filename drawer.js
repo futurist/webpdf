@@ -3543,7 +3543,7 @@ function restoreSignature (pageIndex, selectedID) {
 
       var evt = /touch/.test(e.type) ? e.touches[0] : e;
 
-      if( v.isSigned || img.hasClass('isSigned') ) return;
+      if( window.signID!=v._id && ( v.isSigned || img.hasClass('isSigned') ) ) return;
 
       if( v.isFlow ) {
         if( window.isSigned || window.isFinished || v.isSigned ){
@@ -3601,7 +3601,7 @@ function restoreSignature (pageIndex, selectedID) {
           if(isTemplate){
               showSelect2(img, evt.clientY);
         	   $('.btnCommon, .btnDelete').css('display', 'table-cell');
-        	   $('.maintool .btnFinish').css('display', 'table-cell');
+        	   if(!v.isSigned) $('.maintool .btnFinish').css('display', 'table-cell');
           } else {
             if( $(this).find('img').size() ){
               $('.btnCommon, .btnSigned').css('display', 'table-cell');
@@ -3612,6 +3612,7 @@ function restoreSignature (pageIndex, selectedID) {
           }
         }
 
+        if( $(this).hasClass('isSigned') ) $('.btnSignComplete').hide();
 
 
       }
@@ -3626,6 +3627,13 @@ function restoreSignature (pageIndex, selectedID) {
       var view = $('#viewerContainer');
       view.scrollTop(off.top+view.scrollTop() -$(window).height()/2+off.height/2);
       view.scrollLeft(off.left+view.scrollLeft() -$(window).width()/2+off.width/2);
+
+      if( window.signID &&!v.isSigned ){
+        finishSign(v._id);
+      	v.isSigned = true;
+      }
+      return;
+
       setTimeout(function  () {
 
         window.confirm('签名已应用，确认完成签名？', function(ok){
@@ -3778,6 +3786,7 @@ function drawSign () {
 
       $post(host+'/drawSign', { data: data, shareID:shareID, pdfWidth:window.viewBox[2], pdfHeight:window.viewBox[3], totalPage: PDFViewerApplication.pagesCount } , function(data){
         console.log('sign id', data);
+        if(data)beginSign();
 
       });
 

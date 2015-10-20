@@ -2212,7 +2212,7 @@ app.post("/getSavedSign", function (req, res) {
 
 
   } else {
-    // col.find({role:'sign', shareID:shareID, file:file, signData:{$ne:null} }, {sort:{signData:1}}).toArray(function(err, docs){
+    // col.find({role:'sign', shareID:shareID, file:file, signData:{$exists:true} }, {sort:{signData:1}}).toArray(function(err, docs){
     // col.find({role:'sign', shareID:shareID, file:file }, { }).toArray(function(err, docs){
 
     // For role:'sign', if it's no shareID, then it's template, else it's RealSignData
@@ -2702,7 +2702,7 @@ app.post("/finishSign", function (req, res) {
 
   if(!shareID){
 
-        var condition = { role:'upfile', key:fileKey, 'signIDS':{$elemMatch:{'_id':signID, signData:{$ne:null} } }  };
+        var condition = { role:'upfile', key:fileKey, 'signIDS':{$elemMatch:{'_id':signID, signData:{$exists:true} } }  };
 
         col.updateOne( condition , { $set:{ 'signIDS.$.isSigned': true } }, function (err, ret) {
           if(err || ret.matchedCount==0 ) return res.send('签名应用错误');
@@ -2724,7 +2724,6 @@ app.post("/finishSign", function (req, res) {
           var signIdx = indexVal.signIdx;
 
           col.findOne({shareID:shareID, role:'share'}, function(err, colShare) {
-
             var signImg = colShare.files[fileIdx].signIDS[signIdx];
             signImg = safeEvalObj(signImg);
 
@@ -2736,38 +2735,40 @@ app.post("/finishSign", function (req, res) {
                   var updateObj = { $set: selPosObj };
 
                   var condition = {role:'share', shareID:shareID };
-                  condition['files.'+fileIdx+'.signIDS.'+signIdx+'.signData'] = {$ne:null};
+                  condition['files.'+fileIdx+'.signIDS.'+signIdx+'.signData'] = {$exists:true};
 
                   col.updateOne( condition, updateObj, function  (err, ret) {
+
                   	if(err|| ret.result.nModified==0) return res.send('签名应用错误');
                   	res.send('签名应用成功');
+
+                    var wxmsg = {
+                     "touser": _.flatten(colShare.toPerson.concat(colShare.fromPerson)).map(function(v){return v.userid}).join('|'),
+                     "touserName": _.flatten(colShare.toPerson.concat(colShare.fromPerson)).map(function(v){return v.name}).join('|'),
+                     "msgtype": "text",
+                     "text": {
+                       "content":
+                       util.format('%s 文件 %s 增加了新的签名：%s, <a href="%s">查看文件</a>',
+
+                          (colShare.isSign?'流程-':'共享-') + colShare.shareID + '('+ colShare.fromPerson[0].name + ' '+ (colShare.isSign?colShare.flowName : colShare.msg) +')',
+
+                          colShare.files[fileIdx].title,
+
+                          getUserInfo( person ).name,
+
+                          makeViewURL( colShare.files[fileIdx].key, shareID, colShare.isSign )
+                        )
+                     },
+                     "safe":"0",
+                      date : new Date(),
+                      role : 'shareMsg',
+                      shareID:shareID
+                    };
+
+                    sendWXMessage(wxmsg);
+
                   });
 
-
-                  var wxmsg = {
-                   "touser": _.flatten(colShare.toPerson.concat(colShare.fromPerson)).map(function(v){return v.userid}).join('|'),
-                   "touserName": _.flatten(colShare.toPerson.concat(colShare.fromPerson)).map(function(v){return v.name}).join('|'),
-                   "msgtype": "text",
-                   "text": {
-                     "content":
-                     util.format('%s 文件 %s 增加了新的签名：%s, <a href="%s">查看文件</a>',
-
-                        (colShare.isSign?'流程-':'共享-') + colShare.shareID + '('+ colShare.fromPerson[0].name + ' '+ (colShare.isSign?colShare.flowName : colShare.msg) +')',
-
-                        colShare.files[fileIdx].title,
-
-                        getUserInfo( person ).name,
-
-                        makeViewURL( colShare.files[fileIdx].key, shareID, colShare.isSign )
-                      )
-                   },
-                   "safe":"0",
-                    date : new Date(),
-                    role : 'shareMsg',
-                    shareID:shareID
-                  };
-
-                  sendWXMessage(wxmsg);
 
 
             } else {
@@ -2798,7 +2799,7 @@ app.post("/finishSign", function (req, res) {
 
                   var condition = {role:'share', shareID:shareID };
                   condition[ 'files.'+fileIdx+'.signIDS.'+signIdx+'.isSigned' ] = {$ne:true};
-                  condition[ 'files.'+fileIdx+'.signIDS.'+signIdx+'.signData' ] = {$ne:null};
+                  condition[ 'files.'+fileIdx+'.signIDS.'+signIdx+'.signData' ] = {$exists:true};
 
 
                   var prevPerson = colShare.selectRange.slice(0,curFlowPos);

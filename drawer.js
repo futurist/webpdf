@@ -78,6 +78,12 @@ if(window.signPos){
   window.location.href = window.location.href.split('&').slice(0,-1).join('&');
 }
 
+if(isMobile && shareID && isSign){
+  MIN_SCALE = 1;
+  MAX_SCALE = 3.0;
+  DEFAULT_SCALE_VALUE = 'page-actual';
+}
+
 var host = "http://1111hui.com:88";
 
 FILE_HOST = 'http://7xkeim.com1.z0.glb.clouddn.com/';
@@ -3552,6 +3558,9 @@ function restoreSignature (pageIndex, selectedID) {
         }
       }
 
+
+      
+
       if( !v.isFlow ){
           var signPerson = $(this).data('signPerson');
           if( signPerson && signPerson!= rootPerson.userid ){
@@ -3560,7 +3569,7 @@ function restoreSignature (pageIndex, selectedID) {
           }
       }
 
-      if(shareID){
+      if(shareID && v.isFlow){
         var allInput = $('.userInputText textarea').not('[readonly]');
         var allInputUser = allInput.filter(function  (v) {
           return $(this).parent().data('person');
@@ -3568,11 +3577,14 @@ function restoreSignature (pageIndex, selectedID) {
         var inputList = allInputUser.filter(function  (v) {
           return $(this).val()!=='';
         });
-        if( allInputUser.length && !inputList.length ) return alert('表格至少要填一项');
+        if( allInputUser.length && !inputList.length ){
+          $(this).addClass('active');
+          return alert('表格至少要填一项');
+        }
       }
 
 
-      if($(this).hasClass('active')){
+      if(0 && $(this).hasClass('active')){
 
         setStage('viewer');
         $(this).removeClass('active');
@@ -3647,7 +3659,8 @@ function restoreSignature (pageIndex, selectedID) {
 
     } else if ( v._id == selectedID ){
 
-      img.click();
+      //img.click();
+      $(img).addClass('active');
 
     }
 
@@ -3772,7 +3785,7 @@ function drawSign () {
     var hashtop = viewBox[3] + offset.top/window.curScale - 30;
 
     var urlhash = 'page='+page+'&zoom='+ scaleValue +','+ ~~hashleft+','+ ~~hashtop;
-    var data = { signPerson: rootPerson.userid, file:window.curFile, page:page, scale:window.curScale, pos: pos, urlhash: urlhash, isMobile:isMobile, role:'sign', _id: +new Date()+Math.random().toString().slice(2,5)+'_1', isFlow: isTemplate?true:false };
+    var data = { signPerson: rootPerson.userid, file:window.curFile, page:page, scale:window.curScale, pos: pos, urlhash: urlhash, isMobile:isMobile, role:'sign', _id: +new Date()+Math.random().toString().slice(2,5)+'_1', isFlow: isTemplate?true:false, color:rootPerson.color };
 
     savedSignData.push(data);
 
@@ -3785,7 +3798,8 @@ function drawSign () {
     if(!isTemplate){
 
       $post(host+'/drawSign', { data: data, shareID:shareID, pdfWidth:window.viewBox[2], pdfHeight:window.viewBox[3], totalPage: PDFViewerApplication.pagesCount } , function(data){
-        console.log('sign id', data);
+        //console.log('sign id', data);
+        $('.signImg[data-id="'+data._id+'"]').addClass('active');
         if(data)beginSign();
 
       });
@@ -3851,6 +3865,7 @@ function beginSign(el){
                       : signPerson === rootPerson.userid;
 
   if (isWeiXin && isValidPerson ) {
+    // el.find('a').attr('href', url).find('span').html('      ');
     window.location = url;
   } else {
     $post(host+'/signInWeiXin', {url:url, shareID:shareID, fileKey:fileKey, isFlow:isFlow, signPerson:signPerson, person: rootPerson.userid }, function(data){
@@ -4404,6 +4419,14 @@ $(function initPage () {
 
   $('#viewerContainer').on('resize scroll', function(e){
     $('.select2DIV').hide();
+  });
+
+  $('#viewerContainer').on('click', function(e){
+  	return;
+    if( $(e.target).hasClass('active') && $(e.target).hasClass('signImg') ){
+      $('.signImg.active').removeClass('active');
+      setStage('viewer');
+    }
   });
 
   $('.button').on(downE, function  (e) {

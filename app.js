@@ -3513,7 +3513,7 @@ function insertShareData (data, res, showTab){
                         data.selectRange.map(function(v){
                           return v.depart? ''+v.depart+'-'+v.name+'' : '【'+v.name+'】' }).join('；'),
                         data.msg ? '，附言：\n'+data.msg : '',
-                        '<a href="'+ treeUrl +'">查看共享</a>'
+                        '<a href="'+ treeUrl +'">查看文件</a>'
                       );
                   }
                   var msg = {

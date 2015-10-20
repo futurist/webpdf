@@ -221,9 +221,10 @@ var SignaturePad = (function (document) {
 
         points.push(point);
 
-        if (points.length > 2) {
+        if (points.length > 1) {
             // To reduce the initial lag make it work with 3 points
             // by copying the first point to the beginning.
+            if (points.length === 2) points.unshift(points[0]);
             if (points.length === 3) points.unshift(points[0]);
 
             tmp = this._calculateCurveControlPoints(points[0], points[1], points[2]);

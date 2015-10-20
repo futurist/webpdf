@@ -1106,6 +1106,10 @@ body.showStep .userInputText[data-person="9"]:after
 }
 
 
+.userInputText textarea:focus{
+  color: #fff!important;
+  background: #424242!important;
+}
 
 body.template .page .signImg span{
     border-bottom: 2px solid #616161;
@@ -1203,7 +1207,7 @@ div.selectivity-dropdown{
 <div id="signMenu" class="botmenu noselect">
 
   <div class="maintool">
-    <a href="javascript:;" class="btnCommon button" data-onclick="setStage('viewer')">返回主菜单</a>
+    <a href="javascript:;" class="btnCommon button btnSignReturn" data-onclick="setStage('viewer')">返回主菜单</a>
     <a href="javascript:;" class="btnSigned button btnDelete" data-onclick="deleteSign()">删除签名</a>
     <a href="javascript:;" class="btnSigned button btnSignComplete" data-onclick="finishSign()">完成签名</a>
     <a href="javascript:;" class="btnNotSigned button btnSign NotFlowOnly" data-onclick="deleteSignAll()">删除</a>

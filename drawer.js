@@ -3559,7 +3559,7 @@ function restoreSignature (pageIndex, selectedID) {
       }
 
 
-      
+
 
       if( !v.isFlow ){
           var signPerson = $(this).data('signPerson');
@@ -3643,6 +3643,7 @@ function restoreSignature (pageIndex, selectedID) {
       if( window.signID &&!v.isSigned ){
         finishSign(v._id);
       	v.isSigned = true;
+      	$('.userInputText textarea').prop('readonly', true);
       }
       return;
 
@@ -4473,9 +4474,9 @@ $(function initPage () {
       }
     });
 
-  if(!window.isSign) $('.btnSign').hide();
+  if( window.isSign) $('.btnSign').hide();
+  else $('.btnSign').css('display', 'table-cell');
   // if(window.isTemplate) $('.btnSign').css('display', 'table-cell');
-  $('.btnSign').css('display', 'table-cell');
 
   $post( host + '/getSavedSign', { file:curFile, shareID:shareID }, function(data){
 

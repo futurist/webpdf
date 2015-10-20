@@ -908,8 +908,9 @@ app.get("/uploadWXImage", function (req, res) {
   var mediaID = req.query.mediaID;
   var person = req.query.person;
   var path = req.query.path;
-  var shareID = req.query.shareID;
-    console.log(path);
+  var shareName = req.query.shareName;
+  var shareID = safeEval( req.query.shareID );
+  var isInMsg = safeEval(req.query.isInMsg);
 
   api.getMedia(mediaID, function(err, buffer, httpRes){
     if(err) {console.log(err); return res.send('');}
@@ -930,6 +931,7 @@ app.get("/uploadWXImage", function (req, res) {
 
           srcRet.role = 'upfile';
           srcRet.person = person;
+          srcRet.isInMsg = isInMsg;
           srcRet.client = '';
           srcRet.title = fileName.split('/').pop();
           srcRet.path = path || '/';
@@ -938,9 +940,47 @@ app.get("/uploadWXImage", function (req, res) {
             srcRet.role = 'share';
           }
 
-        upfileFunc(srcRet, function(srcRet2){
-            res.send(srcRet2);
-            wsBroadcast(srcRet2);
+        upfileFunc(srcRet, function(ret){
+            res.send(ret);
+            wsBroadcast(ret);
+
+            if(isInMsg){
+
+              col.findOne(
+                {role:'share', shareID:shareID, 'files.key': ret.key }, { fields: {'files': { $elemMatch:{ files: { key: ret.key } } }, toPerson:1, fromPerson:1, msg:1  }   },  function(err, data){
+
+
+                  //get segmented path, Target Path segment and A link
+                 var overAllPath = util.format('<a href="%s#path=%s&shareID=%d&openMessage=1">%s</a>', TREE_URL, ret.key, shareID, shareName ) ;
+
+
+
+                  var msg = {
+                   "touser": data.toPerson.concat(data.fromPerson).map(function(v){return v.userid}).join('|'),
+                   "touserName": data.toPerson.concat(data.fromPerson).map(function(v){return v.name}).join('|'),
+                   "msgtype": "news",
+                   "news": {
+                     "articles":[
+                     {
+                      "title": util.format('%s 在%s 上传了图片',
+                        data.fromPerson.shift().name,
+                        shareName  // if we need segmented path:   pathName.join('-'),
+                      ),
+                      "description": "查看消息记录",
+                      "url": util.format('%s#path=%s&shareID=%d&openMessage=1', TREE_URL, ret.key, shareID ),
+                     "picurl": FILE_HOST+ret.key
+                   }
+                   ] },
+                   "safe":"0",
+                    date : new Date(),
+                    role : 'shareMsg',
+                    shareID:shareID
+                  };
+
+                  sendWXMessage(msg);
+
+              });
+            }
         });
       });
 
@@ -1013,6 +1053,7 @@ function upfileFunc (data, callback) {
   var fname = data.fname;
   var maxOrder = 0;
 
+
   if( data.shareID ) {
 
       data.shareID = safeEval( data.shareID );
@@ -1056,6 +1097,7 @@ function upfileFunc (data, callback) {
 
 app.post("/upfile", function (req, res) {
   var data = req.body;
+  console.log(data)
 
   function upFun (ret) {
     res.send( JSON.stringify(ret) );
@@ -2219,11 +2261,11 @@ app.post("/getSavedSign", function (req, res) {
 
     if(shareID){
 
-        col.findOne( {role:'share', shareID:shareID, 'files.key':filename },  { },  function(err, doc){
+        col.findOne( {role:'share', shareID:shareID, 'files.key':filename },  {  },  function(err, doc){
           	//return console.log(err, doc);
           	if(err ||!doc) return res.send('');
 
-            var file = doc.files.shift();
+            var file = doc.files.filter(function(v){ return v.key == filename }).shift();
           	if(!file) return res.send('');
 
               var curFlowPos = doc.curFlowPos||0;

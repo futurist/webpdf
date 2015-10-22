@@ -8,6 +8,9 @@
 *   LINE 3588:  this.drawView.reset();
 *
 * change: all window.location.search to window.location.hash
+
+* LINE 7331: window.addEventListener('resize', function webViewerResize(evt) {
+  + if(isMobile && curStage=='remark') return;
 */
 
 
@@ -1244,7 +1247,7 @@ var svgns = "http://www.w3.org/2000/svg";
         return;
       }
 
-      if( $('.textarea').size() && !isHandler && !$(targetEl).hasClass('editing') ) {
+      if( $('.textarea').size() && !isHandler && !$(targetEl).hasClass('textarea') ) {
         onTextBlur();
       }
 
@@ -4413,7 +4416,7 @@ $(function initPage () {
 
 
   $('#mainContainer').on(downE, function(e){
-    if( $(e.target).closest('.selectivity-single-select').length ) return;
+    if( curStage=='remark' || $(e.target).closest('.selectivity-single-select').length ) return;
     hideSelStuff();
     $('.signImg.active').click();
   });

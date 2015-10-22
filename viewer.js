@@ -7329,6 +7329,7 @@ window.addEventListener('updateviewarea', function (evt) {
 }, true);
 
 window.addEventListener('resize', function webViewerResize(evt) {
+  if(isMobile && curStage=='remark') return;
   if (PDFViewerApplication.initialized &&
       (document.getElementById('pageAutoOption').selected ||
        /* Note: the scale is constant for |pageActualOption|. */

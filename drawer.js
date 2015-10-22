@@ -11,6 +11,10 @@
 
 * LINE 7331: window.addEventListener('resize', function webViewerResize(evt) {
   + if(isMobile && curStage=='remark') return;
+
+* LINE 49:   
+  //var DEFAULT_SCALE_VALUE = 'auto';  //'page-actual';
+
 */
 
 
@@ -3926,7 +3930,7 @@ function setStage (stat) {
     $('.signPad, .signPadHandler').hide();
     HandTool.handTool && HandTool.handTool.deactivate();
     $('#viewerContainer').css({overflow:'auto'});
-    $('#inputViewer').css('z-index', '99999999999');
+    $('#inputViewer').css('z-index', '99999999');
     $('#drawViewer').hide();
   }
 
@@ -4437,6 +4441,23 @@ $(function initPage () {
 
   $('#viewerContainer').on('resize scroll', function(e){
     $('.select2DIV').hide();
+  });
+
+  $('.searchBtn').on(downE, function(e){
+    if(!pdfViewer || !pdfViewer.findController ) return;
+    pdfViewer.findController.findBar.toggle();
+    $(this).toggleClass('toggle');
+    if(pdfViewer.findController.findBar.opened){
+      $('#findHighlightAll').prop('checked', true);
+      pdfViewer.findController.findBar.dispatchEvent('highlightallchange');
+    }
+    
+  });
+
+
+  $('#closeFindBar').on('click', function(e){
+    if(!pdfViewer || !pdfViewer.findController ) return;
+    pdfViewer.findController.findBar.close();
   });
 
   $('#viewerContainer').on('click', function(e){

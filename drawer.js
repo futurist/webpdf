@@ -81,10 +81,14 @@ if(window.signPos){
   window.location.href = window.location.href.split('&').slice(0,-1).join('&');
 }
 
+
+
+var DEFAULT_SCALE_VALUE = 'auto';
+
 if(isMobile && shareID && isSign){
   MIN_SCALE = 1;
   MAX_SCALE = 3.0;
-  DEFAULT_SCALE_VALUE = 'page-actual';
+  //DEFAULT_SCALE_VALUE = 'page-actual';
 }
 
 var host = "http://1111hui.com:88";
@@ -153,7 +157,8 @@ function initWX() {
         initWX();
       }else{
         alert('获取微信接口错误');
-        wx.closeWindow();
+        setInterval(function  () {closeWin(); }, 300);
+        closeWin();
       }
 			return;
 		}
@@ -165,7 +170,8 @@ function initWX() {
 		});
 		wx.error(function(res){
 			alert('身份验证失败');
-			wx.closeWindow();
+			setInterval(function  () {closeWin(); }, 300);
+        closeWin();
 		});
 
 	});
@@ -3646,7 +3652,7 @@ function restoreSignature (pageIndex, selectedID) {
       if( window.signID &&!v.isSigned ){
         finishSign(v._id);
       	v.isSigned = true;
-      	$('.userInputText textarea').prop('readonly', true);
+      	
       }
       return;
 
@@ -3719,6 +3725,10 @@ function deleteSign(el){
 
 }
 
+function closeWin () {
+  isWeiXin? wx.closeWindow() : window.close();
+}
+
 function finishSign (signID) {
 
   var el = $('.signImg.active');
@@ -3733,8 +3743,12 @@ function finishSign (signID) {
 
     if(data) alert(data, isFlow?'确定并关闭':'确定', function(){
       $('[data-id="'+ signID +'"]').addClass('isSigned');
+      $('.userInputText textarea').prop('readonly', true);
+
+                
       if(isFlow){
-        isWeiXin? wx.closeWindow() : window.close();
+        setInterval(function  () {closeWin(); }, 300);
+        closeWin();
       }
 
     });

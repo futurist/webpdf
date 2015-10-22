@@ -46,7 +46,7 @@ var mozL10n = document.mozL10n || document.webL10n;
 
 
 var CSS_UNITS = 96.0 / 72.0;
-var DEFAULT_SCALE_VALUE = 'auto';  //'page-actual';
+//var DEFAULT_SCALE_VALUE = 'auto';  //'page-actual';
 var DEFAULT_SCALE = 1.0;
 var UNKNOWN_SCALE = 0;
 var MAX_AUTO_SCALE = 1.25;
@@ -7329,7 +7329,7 @@ window.addEventListener('updateviewarea', function (evt) {
 }, true);
 
 window.addEventListener('resize', function webViewerResize(evt) {
-  if(isMobile && curStage=='remark') return;
+  if(  isMobile && (isSign || curStage=='remark') ) return;
   if (PDFViewerApplication.initialized &&
       (document.getElementById('pageAutoOption').selected ||
        /* Note: the scale is constant for |pageActualOption|. */

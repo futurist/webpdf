@@ -101,7 +101,10 @@ FILE_HOST = 'http://7xkeim.com1.z0.glb.clouddn.com/';
 TREE_URL = "http://1111hui.com/pdf/client/tree.html";
 VIEWER_URL = "http://1111hui.com/pdf/webpdf/viewer.html";
 
-var wxOAuthUrl = 'https://open.weixin.qq.com/connect/oauth2/authorize?appid=wx59d46493c123d365&redirect_uri=http%3A%2F%2F1111hui.com%2F/pdf/getUserID.php&response_type=code&scope=snsapi_base&state='+ encodeURIComponent( window.location.href.replace('#','{@@@}') ) +'#wechat_redirect';
+var WX_JUMP_URL = encodeURIComponent( window.location.href.replace('#','{@@@}') );
+localStorage.setItem( 'WX_JUMP_URL', WX_JUMP_URL );
+
+var wxOAuthUrl = 'https://open.weixin.qq.com/connect/oauth2/authorize?appid=wx59d46493c123d365&redirect_uri=http%3A%2F%2F1111hui.com%2F/pdf/getUserID.php&response_type=code&scope=snsapi_base&state=#wechat_redirect';
 
 
 var isAndroid = /(android)/i.test(navigator.userAgent);
@@ -423,7 +426,7 @@ function RERenderDrawerLayer(pageIndex){
 
 
 	//change direction
-	if(curRotation == oldRotation) return;
+	// if(curRotation == oldRotation) return;
 
 	//svg translation with rotation
 
@@ -813,7 +816,7 @@ var svgns = "http://www.w3.org/2000/svg";
       curve:{
         "stroke-width": 2,
         "stroke":"#f00",
-        "autoClose":2,
+        "autoClose":0,
         "arrow":0,
       },
       line:{
@@ -3531,7 +3534,7 @@ function restoreSignature (pageIndex, selectedID) {
 
           if( !isSign || isSigned || isFinished ){
             return img.remove();
-          } else if(!v.sign) {
+          } else if(!v.sign && v.mainPerson) {
             img.html('<a href="javascript:;"><span>点此签名</span></a>').autoFontSize();
           } else {
             return img.remove();

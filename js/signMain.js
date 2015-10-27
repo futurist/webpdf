@@ -50,7 +50,7 @@ var isMobile = isAndroid||isWeiXin||isiOS;
 
 var wxUserInfo={};
 
-var WX_JUMP_URL = encodeURIComponent( window.location.href.replace('#','{@@@}') );
+var WX_JUMP_URL =  window.location.href.replace('http://1111hui.com/pdf/','') ;
 localStorage.setItem( 'WX_JUMP_URL', WX_JUMP_URL );
 
 var wxOAuthUrl = 'https://open.weixin.qq.com/connect/oauth2/authorize?appid=wx59d46493c123d365&redirect_uri=http%3A%2F%2F1111hui.com%2F/pdf/getUserID.php&response_type=code&scope=snsapi_base&state=#wechat_redirect';
@@ -114,11 +114,10 @@ $('.m-signature-pad--footer').width( $('.m-signature-pad--body').height()-40 );
 // Adjust canvas coordinate space taking into account pixel ratio,
 // to make it look crisp on mobile devices.
 // This also causes canvas to be cleared.
-function resizeCanvas() {
+function resizeCanvas(e) {
 
 	windowRatio = $(window).width()/$(window).height();
 	var $pad = $('#signature-pad').removeAttr('style');
-    if(signPAD) signPAD.clear();
 
     if( windowRatio<1 ){
 
@@ -135,6 +134,7 @@ function resizeCanvas() {
         $('body').removeClass().addClass('landscape');
     }
 
+    if(signPAD) signPAD.clear();
 
     // When zoomed out to less than 100%, for some very strange reason,
     // some browsers report devicePixelRatio as less than 1
@@ -146,13 +146,16 @@ function resizeCanvas() {
 
 	setTimeout(function  () {
 
+        if(signPAD) signPAD.clear();
         $(window).scrollTop(999999999);
 
 	}, 30);
 
 }
 
-window.onresize = resizeCanvas;
+var supportsOrientationChange = "onorientationchange" in window, orientationEvent = supportsOrientationChange ? "orientationchange" : "resize";
+window.addEventListener(orientationEvent, resizeCanvas, false);
+//window.onresize = resizeCanvas;
 resizeCanvas();
 
 
@@ -183,6 +186,7 @@ function initSignPad(){
         } else {
             $('.drawerMenu').hide();
             //saveButton.setAttribute('disabled', 'disabled');
+            window.removeEventListener(orientationEvent, resizeCanvas, false);
 
             if(windowRatio<1){
             	var canvas = document.createElement("canvas");

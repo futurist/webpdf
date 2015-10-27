@@ -1,5 +1,5 @@
 CACHE MANIFEST
-#VERSION 1.5111111111111111111111111111111111jkk3453434df23534567678asfsdfghdsfgddfsdf3454sdfsd
+#VERSION z1.5111111111111111111111111111111111jkk3453434df23534567678asfsdfghdsfgddfsdf3454sdfsdsdfwers
 CACHE:
 pdf.js
 pdf.worker.js
@@ -14,7 +14,7 @@ http://1111hui.com/pdf/webpdf/compatibility.js
 http://1111hui.com/pdf/webpdf/l10n.js
 http://1111hui.com/pdf/webpdf/js/zepto.js
 http://1111hui.com/js/moment.js
-http://res.wx.qq.com/open/js/jweixin-1.0.0.js
+http://res.wx.qq.com/open/js/jweixin-1.1.0.js
 http://1111hui.com/pdf/webpdf/js/dialog.build.js
 http://1111hui.com/pdf/webpdf/victor.js
 http://1111hui.com/pdf/webpdf/path.js

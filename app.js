@@ -469,7 +469,9 @@ app.use(flash());
 
 var DOWNLOAD_DIR = './downloads/';
 
-
+app.get("/listStuff", function (req, res) {
+  res.render( 'views/listStuff.hbs' );
+});
 app.get("/listClient", function (req, res) {
   var clients = [];
 
@@ -560,7 +562,7 @@ app.post("/getFinger", function (req, res) {
 
 
 app.post("/exitApp", function (req, res) {
-  if(!req.cookies.finger) return;
+  if(!req.cookies.finger) return res.send('');
 	console.log('logout', req.cookies.finger);
   col.updateMany( { finger:req.cookies.finger, role:'finger' }, { $set:{status:-1} } );
   req.cookies.finger = null;
@@ -977,7 +979,9 @@ app.get("/uploadWXImage", function (req, res) {
                     shareID:shareID
                   };
 
-                  sendWXMessage(msg);
+                  msg.appRole = 'chat';
+
+                  sendWXMessage(msg, person);
 
               });
             }
@@ -1011,7 +1015,7 @@ app.post("/getJSConfig", function (req, res) {
   var rkey = 'wx:js:ticket:'+ encodeURIComponent(url);
   var param = {
     debug:false,
-    jsApiList: ["onMenuShareTimeline","onMenuShareAppMessage","onMenuShareQQ","onMenuShareWeibo","onMenuShareQZone","startRecord","stopRecord","onVoiceRecordEnd","playVoice","pauseVoice","stopVoice","onVoicePlayEnd","uploadVoice","downloadVoice","chooseImage","previewImage","uploadImage","downloadImage","translateVoice","getNetworkType","hideOptionMenu","showOptionMenu","hideMenuItems","showMenuItems","hideAllNonBaseMenuItem","showAllNonBaseMenuItem","closeWindow","scanQRCode"],
+    jsApiList: ["onMenuShareTimeline","onMenuShareAppMessage","onMenuShareQQ","onMenuShareWeibo","onMenuShareQZone","startRecord","stopRecord","onVoiceRecordEnd","playVoice","pauseVoice","stopVoice","onVoicePlayEnd","uploadVoice","downloadVoice","chooseImage","previewImage","uploadImage","downloadImage","translateVoice","getNetworkType","hideOptionMenu","showOptionMenu","hideMenuItems","showMenuItems","hideAllNonBaseMenuItem","showAllNonBaseMenuItem","closeWindow","scanQRCode",'openEnterpriseChat'],
 
     // jsApiList: ["onMenuShareTimeline","onMenuShareAppMessage","onMenuShareQQ","onMenuShareWeibo","onMenuShareQZone","startRecord","stopRecord","onVoiceRecordEnd","playVoice","pauseVoice","stopVoice","onVoicePlayEnd","uploadVoice","downloadVoice","chooseImage","previewImage","uploadImage","downloadImage","translateVoice","getNetworkType","openLocation","getLocation","hideOptionMenu","showOptionMenu","hideMenuItems","showMenuItems","hideAllNonBaseMenuItem","showAllNonBaseMenuItem","closeWindow","scanQRCode"],
 
@@ -1127,7 +1131,7 @@ app.post("/upfile", function (req, res) {
            "articles":[
            {
             "title": util.format('%s 在%s 上传了图片',
-              data.fromPerson.shift().name,
+              data.fromPerson[0].name,
               ret.shareName  // if we need segmented path:   pathName.join('-'),
             ),
             "description": "查看消息记录",
@@ -1141,7 +1145,7 @@ app.post("/upfile", function (req, res) {
           shareID:shareID
         };
 
-        sendWXMessage(msg);
+        sendWXMessage(msg, data.fromPerson[0].userid);
 
     });
   }
@@ -1176,11 +1180,28 @@ app.post("/updateHost", function (req, res) {
   var person = req.body.person;
   var hostname = req.body.hostname.toLowerCase();
   var ip = req.body.ip;
-  col.update({role:'stuff', 'stuffList.userid': person }, { $set:{ role:'stuff', 'stuffList.$.userid': person, 'stuffList.$.client': hostname,  'stuffList.$.ip': ip } }, {upsert:1}, function(err, ret){
+  var finger = req.body.finger;
+  col.update({role:'stuff', 'stuffList.userid': person }, { $set:{ role:'stuff', 'stuffList.$.userid': person, 'stuffList.$.client': hostname,  'stuffList.$.ip': ip,  'stuffList.$.finger': finger } }, {upsert:1}, function(err, ret){
     if(err) {
       console.log('ERROR update host:', person, hostname);
       return res.send('');
     }
+
+    STUFF_LIST && STUFF_LIST.some(function  (v) {
+      if(v.userid==person){
+        v.client = hostname;
+        v.ip = ip;
+        return true;
+      }
+    });
+
+    COMPANY_TREE && COMPANY_TREE.some(function  (v) {
+      if(v.userid==person){
+        v.client = hostname;
+        v.ip = ip;
+        return true;
+      }
+    });
 
     console.log('updated host:', person, hostname, ip);
     res.send('OK');
@@ -1352,7 +1373,7 @@ app.post("/exitMember", function (req, res) {
               shareID:shareID
             };
 
-            sendWXMessage(wxmsg);
+            sendWXMessage(wxmsg, person);
 
 
 
@@ -1414,6 +1435,7 @@ app.post("/addMember", function (req, res) {
 app.post("/markFinish", function (req, res) {
 
     var data = req.body;
+    var person = data.person;
     var personName = data.personName;
     var shareID = safeEval(data.shareID) ;
     var path = safeEval(data.path) ;
@@ -1448,7 +1470,7 @@ app.post("/markFinish", function (req, res) {
             shareID:shareID
           };
 
-          sendWXMessage(wxmsg);
+          sendWXMessage(wxmsg, person);
 
     });
 
@@ -1521,6 +1543,7 @@ app.post("/signInWeiXin", function (req, res) {
                         { fields:{ flowName:1, msg:1, fromPerson:1, toPerson:1, isSign:1, curFlowPos:1, flowSteps:1, 'files.$':1 } },
 
                         function(err, result){
+
 
           if(err || !result) return res.send('');
 
@@ -1856,7 +1879,7 @@ app.post("/applyTemplate2", function (req, res) {
 app.post("/getTemplateFiles", function (req, res) {
   // find signIDS.length > 0
   // http://stackoverflow.com/questions/7811163/how-to-query-for-documents-where-array-size-is-greater-than-one-1-in-mongodb/15224544#15224544
-  col.find( { role:'upfile', isTemplate:true, status:{$ne:-1}, 'signIDS.1':{$exists:true} } , {limit:2000,fields:{drawData:0,inputData:0,signIDS:0} } ).sort({title:1,date:-1}).toArray(function(err, docs){
+  col.find( { role:'upfile', isTemplate:true, status:{$ne:-1}, 'signIDS.0':{$exists:true} } , {limit:2000,fields:{drawData:0,inputData:0,signIDS:0} } ).sort({title:1,date:-1}).toArray(function(err, docs){
     if(err) {
       return res.send('error');
     }
@@ -1943,7 +1966,7 @@ app.get("/downloadFile2/:name", function (req, res) {
 
       } else {
 
-        exec('rm -f "'+ IMAGE_UPFOLDER+rename +'"; mv '+IMAGE_UPFOLDER+realname+' "'+IMAGE_UPFOLDER+rename+'"', function(){
+        exec('rm -f "'+ IMAGE_UPFOLDER+rename +'"; pdftk "'+IMAGE_UPFOLDER+realname+'" update_info client/pdfinfo.txt output "'+IMAGE_UPFOLDER+rename+'"', function(){
           res.download(IMAGE_UPFOLDER+rename);
         });
 
@@ -2056,6 +2079,7 @@ app.post("/saveCanvas", function (req, res) {
   var totalPage = req.body.totalPage;
   var data = req.body.data;
   var file = req.body.file;
+  var person = req.body.person;
   var personName = req.body.personName;
   var isSilent = req.body.isSilent;
   var shareID = parseInt( req.body.shareID );
@@ -2112,7 +2136,7 @@ app.post("/saveCanvas", function (req, res) {
                 shareID:shareID
               };
 
-              sendWXMessage(wxmsg);
+              sendWXMessage(wxmsg, person);
 
     } );
   }
@@ -2226,7 +2250,9 @@ app.post("/getSavedSign", function (req, res) {
           	v.signPersonName = user.name;
           }
 
-          v.color = user? user.color : getUserInfo(v.signPerson).color ;
+          if(!user) user = getUserInfo(v.signPerson||v.mainPerson);
+
+          if(user) v.color = user.color;
 
         });
 
@@ -2792,7 +2818,7 @@ app.post("/finishSign", function (req, res) {
                        "content":
                        util.format('%s 文件 %s 增加了新的签名：%s, <a href="%s">查看文件</a>',
 
-                          (colShare.isSign?'流程-':'共享-') + colShare.shareID + '('+ colShare.fromPerson[0].name + ' '+ (colShare.isSign?colShare.flowName : colShare.msg) +')',
+                          (colShare.isSign?'流程':'共享') + colShare.shareID + '('+ colShare.fromPerson[0].name + ' '+ (colShare.isSign?colShare.flowName : colShare.msg) +')',
 
                           colShare.files[fileIdx].title,
 
@@ -2807,7 +2833,7 @@ app.post("/finishSign", function (req, res) {
                       shareID:shareID
                     };
 
-                    sendWXMessage(wxmsg);
+                    sendWXMessage(wxmsg, person);
 
                   });
 
@@ -2828,7 +2854,7 @@ app.post("/finishSign", function (req, res) {
                   var fileKey = file.key;
                   var flowName = colShare.flowName;
                   var msg = colShare.msg;
-                  var title = getSubStr( '流程-'+shareID+flowName+ (msg), 50);
+                  var title = getSubStr( '流程'+shareID+flowName+ (msg), 50);
                   var overAllPath = util.format('%s#file=%s&shareID=%d&isSign=1', VIEWER_URL, FILE_HOST+ encodeURIComponent(fileKey), shareID ) ;
 
 
@@ -3172,7 +3198,7 @@ function getSignIndex (shareID, fileKey, signID, callback) {
 
                 } else {
                   this.files.some(function(v,i){
-                    return v.signIDS.some(function(sign,sid){
+                    return v.signIDS && v.signIDS.some(function(sign,sid){
                       if(sign._id==signID){
                         fileIdx = i;
                         signIdx = sid;
@@ -3317,20 +3343,21 @@ app.post("/getSignHistory", function (req, res) {
 
 });
 
-
-app.post("/sendShareMsg", function (req, res) {
+function SendShareMsg(req, res) {
   var person = req.body.person;
   var text = req.body.text;
   var shareID = parseInt(req.body.shareID);
-  var hash = req.body.hash;
   var path = req.body.path;
+  var hash = req.body.hash;
   var fileName = req.body.fileName;
   var fileKey = req.body.fileKey;
 
   if(path) path = path.slice(1);
+  else path = [];
+
   var fileHash = path.pop();
 
-  col.findOne( { role:'share', shareID:shareID }, {}, function(err, data) {
+  col.findOne( { role:'share', shareID:shareID }, { fields:{files:0} }, function(err, data) {
       if(err||!data) {
         return res.send('');	//error
       }
@@ -3344,24 +3371,34 @@ app.post("/sendShareMsg", function (req, res) {
         return res.send('');	//没有此组权限
       }
 
-      //get segmented path, Target Path segment and A link
-      var pathName = [];
-      path.forEach(function(v,i){
-        var a = '/'+path.slice(0,i+1).join('/')+'/';
-        pathName.push( util.format('<a href="%s#path=%s&shareID=%d">%s</a>', TREE_URL, encodeURIComponent(a), shareID, v) );
-      });
-      if(fileHash) {
-        var a =  '/'+path.join('/')+'/' + fileHash;
-        pathName.push( util.format('<a href="%s#path=%s&shareID=%d">%s</a>', TREE_URL, encodeURIComponent(fileKey), shareID, fileName) );
-     }
 
-     // get OverAllink
-      var a = '/'+path.join('/')+'/';
+      if(path.length){
+        //get segmented path, Target Path segment and A link
+        var pathName = [];
+        path.forEach(function(v,i){
+          var a = '/'+path.slice(0,i+1).join('/')+'/';
+          pathName.push( util.format('<a href="%s#path=%s&shareID=%d">%s</a>', TREE_URL, encodeURIComponent(a), shareID, v) );
+        });
+        if(fileHash) {
+          var a =  '/'+path.join('/')+'/' + fileHash;
+          pathName.push( util.format('<a href="%s#path=%s&shareID=%d">%s</a>', TREE_URL, encodeURIComponent(fileKey), shareID, fileName) );
+       }
+
+       // get OverAllink
+        var a = '/'+path.join('/')+'/';
+        var link = a;
+        if(fileName && fileKey ){
+          link = a+fileKey;
+          a = a +fileName;
+        }
+    } else {
+
+      var a= (data.isSign?'流程':'共享')+data.shareID+ (data.msg?'['+data.msg+']':'' ) + '('+data.toPerson.map(function(v){return v.name}).join(',')+')' ;
+      a='/'+a+'/';
       var link = a;
-      if(fileName && fileKey ){
-      	link = a+fileKey;
-      	a = a +fileName;
-      }
+    }
+
+
      var overAllPath = util.format('<a href="%s#path=%s&shareID=%d&openMessage=1">%s</a>', TREE_URL, encodeURIComponent(link), shareID, a ) ;
 
       var msg = {
@@ -3382,7 +3419,9 @@ app.post("/sendShareMsg", function (req, res) {
         shareID:shareID
       };
       if(hash) msg.hash = hash;
-      sendWXMessage(msg);
+
+      msg.appRole = 'chat';
+      sendWXMessage(msg, person);
 
       res.send( msg );
 
@@ -3392,7 +3431,8 @@ app.post("/sendShareMsg", function (req, res) {
 
 
 
-});
+}
+app.post("/sendShareMsg", SendShareMsg);
 
 
 app.post("/getAllShareID", function (req, res) {
@@ -3458,7 +3498,7 @@ app.post("/shareFile", function (req, res) {
                       v.title
                        )
                   }).join(','),
-                  colShare.fromPerson.shift().name,
+                  data.fromPerson[0].name,
                   data.msg? ', 附言：'+data.msg : '',
                   overAllPath  // if we need segmented path:   pathName.join('-'),
                 )
@@ -3469,7 +3509,7 @@ app.post("/shareFile", function (req, res) {
               shareID:shareID
             };
 
-            sendWXMessage(wxmsg);
+            sendWXMessage(wxmsg, data.fromPerson[0].userid);
 
 
         } );
@@ -3520,10 +3560,10 @@ function insertShareData (data, res, showTab){
                     if( data.files.length ){
 
                       var treeUrl = TREE_URL + '#path=' + data.files[0].key +'&shareID='+ shareID;
-                      var content = util.format('%s创建了共享ID：%d(%s)，相关文档：%s，收件人：%s\n%s',
+                      var content = util.format('%s创建了/共享%d%s/，相关文档：%s，收件人：%s\n%s',
                           data.fromPerson.map(function(v){return '【'+v.depart + '-' + v.name+'】'}).join('|'),
                           shareID,
-                          data.msg,
+                          data.msg?'-'+data.msg:'',
                           // data.files.length,
                           data.files.map(function(v){return '<a href="'+ makeViewURL(v.key, shareID) +'">'+v.title+'</a>'}).join('，'),
                           data.selectRange.map(function(v){
@@ -3535,10 +3575,10 @@ function insertShareData (data, res, showTab){
                     // it's empty topic
 
                     var treeUrl = TREE_URL + '#path=&shareID='+ shareID;
-                      var content = util.format('%s创建了新话题，共享ID：%d(%s)，收件人：%s\n%s',
+                      var content = util.format('%s创建了新话题/共享%d%s/，收件人：%s\n%s',
                           data.fromPerson.map(function(v){return '【'+v.depart + '-' + v.name+'】'}).join('|'),
                           shareID,
-                          data.msg,
+                          data.msg?'-'+data.msg:'',
                           data.selectRange.map(function(v){
                             return v.depart? ''+v.depart+'-'+v.name+'' : '【'+v.name+'】' }).join('；'),
                           '<a href="'+ treeUrl +'">查看共享</a>'
@@ -3547,7 +3587,7 @@ function insertShareData (data, res, showTab){
 
                   } else {
                     var treeUrl = makeViewURL(data.files[0].key, shareID, 1);
-                    var content = util.format('流程ID：%d %s发起了流程：%s，文档：%s，经办人：%s%s\n%s',
+                    var content = util.format('/流程%d %s/发起了流程：%s，文档：%s，经办人：%s%s\n%s',
                         shareID,
                         data.fromPerson.map(function(v){return '【'+v.depart + '-' + v.name+'】'}).join('|'),
                         data.flowName,
@@ -3570,7 +3610,7 @@ function insertShareData (data, res, showTab){
                     role : 'shareMsg',
                     shareID:shareID
                   };
-                  sendWXMessage(msg);
+                  sendWXMessage(msg, data.fromPerson[0].userid);
                   res.send( data );
 
                   data.openShare = false;
@@ -3587,17 +3627,19 @@ function insertShareData (data, res, showTab){
 }
 
 
-function sendWXMessage (msg) {
+function sendWXMessage (msg, fromUser) {
 
   if(!msg.tryCount){
-    col.insert(msg);
+    var wsMsg = _.extend(msg, {fromUser: fromUser});
+    col.insert( wsMsg );
     msg.tryCount = 1;
 
     if(!msg.WXOnly){
 	    // send client message vai ws
-	    var touser = _.uniq( msg.touser.split('|') );
+	    var touser = _.uniq( msg.touser.split('|').concat(fromUser) );
+      	console.log( 'send client message vai ws', touser );
 	    touser.forEach(function sendToUserWS (v) {
-	      wsSendClient(v, msg);
+	      if(v) wsSendClient(v, wsMsg);
 	    });
     }
 
@@ -3611,12 +3653,22 @@ function sendWXMessage (msg) {
   // delete msg.toparty;
   // delete msg.totag;
 
-  api.send(msgTo, msg, function  (err, result) {
+  var wxMsg = JSON.parse(JSON.stringify(msg));
+  var sharePath = JSON.stringify(msg).replace(/<[^>]+>/g,'').match(/\/[^/]+\//);
+  sharePath = sharePath? sharePath.pop() : '';
+
+  if(sharePath && msg.shareID){
+    if(wxMsg.text) {
+      wxMsg.text.content += '\n\n<a href="http://1111hui.com/pdf/client/sharemsg.html#path='+ sharePath +'&shareID='+ msg.shareID +'">打开会话</a>';
+    }
+  }
+
+  (msg.appRole=='chat'?api2:api).send(msgTo, wxMsg, function  (err, result) {
     console.log('sendWXMessage', msg.tryCount, err, result);
     if(err){
       if(msg.tryCount++ <=5)
         setTimeout( function(){
-          sendWXMessage(msg);
+          sendWXMessage(msg, fromUser);
         },1000);
       return ('error');
     }
@@ -3684,11 +3736,11 @@ function genPDF ( filename, shareID,  realname, cb ) {
 
 	var tempFile = IMAGE_UPFOLDER + (+new Date()+Math.random().toString().slice(2,5)+'_') +'.pdf';
 
-	var wget = 'rm -r '+ IMAGE_UPFOLDER+realname+ '; wget --restrict-file-names=nocontrol -P ' + IMAGE_UPFOLDER + ' -O '+ tempFile +' -N "' + FILE_HOST+filename +'" ';
+	var wget = 'rm -r "'+ IMAGE_UPFOLDER+realname+ '"; wget --restrict-file-names=nocontrol -P "' + IMAGE_UPFOLDER + '" -O "'+ tempFile +'" -N "' + FILE_HOST+filename +'" ';
 	console.log(wget);
 	var child = exec(wget, function(err, stdout, stderr) {
 
-		// console.log( err, stdout, stderr );
+		//console.log( err, stdout, stderr );
 		if(err || (stdout+stderr).indexOf('200 OK')<0 ) return cb?cb('无法获取原始文件'):'';
 
 		var tempPDF = IMAGE_UPFOLDER + (+new Date()+Math.random().toString().slice(2,5)+'_') +'.pdf';
@@ -3698,10 +3750,14 @@ function genPDF ( filename, shareID,  realname, cb ) {
 		var child = exec(cmd, function(err, stdout, stderr) {
 
 		if(err || stdout.toString().indexOf('render page:')<0 ) return cb?cb('生成绘图数据错误'):'';
-		cmd = './mergepdf.py -i '+ tempFile +' -m '+tempPDF+' -o '+ IMAGE_UPFOLDER+realname +' ';
+
+    // pyPDF2 will not handle landscrape page of pdf, and rotate it strangely; using pdftk instead:
+    // http://stackoverflow.com/questions/501723/overlay-one-pdf-or-ps-file-on-top-of-another
+    // cmd = './mergepdf.py -i '+ tempFile +' -m '+tempPDF+' -o '+ IMAGE_UPFOLDER+realname +' ';
+    cmd = 'pdftk "'+ tempPDF +'" multibackground "'+tempFile+'" output "'+ IMAGE_UPFOLDER+realname +'" ';
 		console.log(cmd);
 		exec(cmd, function (error, stdout, stderr) {
-			// console.log(error,stdout, stderr);
+			//console.log(error,stdout, stderr);
 			if(error){
 				cb('合并PDF文件错误');
 			}
@@ -3780,11 +3836,12 @@ function runCmd (cmd, dir, callback) {
 // wx part
 /******/
 
+var WX_COMPANY_ID = 'wx59d46493c123d365';
 var config = {
   token: 'IEAT2qEzDCkT7Dj6JH',
   appid: 'lianrunent',
   encodingAESKey: 'olHrsEf4MaTpiFM1fpjbyvBJnmJNW3yFZBcSbnwYzrJ',
-  corpId: 'wx59d46493c123d365'
+  corpId: WX_COMPANY_ID
 };
 
 var wechat = require('wechat-enterprise');
@@ -3889,20 +3946,81 @@ wechat(config, wechat
 //   MsgId: '4561277396023509013',
 //   AgentID: '1' }
 
-  console.log(message);
 
-  var msg = {
-   "touser": 'yangjiming',
-   "msgtype": "text",
-   "text": {
-     "content": util.format('%s发送了留言：%s', message.FromUserName, message.Content  )
-   },
-   "safe":"0",
-    date : new Date()
-  };
-  api.send(msg.touser, msg, function  (err, result) {  });
+  // var msg = {
+  //  "touser": 'yangjiming',
+  //  "msgtype": "text",
+  //  "text": {
+  //    "content": util.format('%s发送了留言：%s', message.FromUserName, message.Content  )
+  //  },
+  //  "safe":"0",
+  //   date : new Date()
+  // };
+  // api.send(msg.touser, msg, function  (err, result) {  });
 
-  return res.reply(message);
+  //console.log(message);
+
+  var person = message.FromUserName;
+  if (person==WX_COMPANY_ID) return;
+
+  var userInfo = getUserInfo(person);
+  if(message.MsgType=='text' && message.Content && userInfo ) {
+
+    var re = /\s*@\d+\s*$|^\s*@\d+\s*/;
+    var p = message.Content.match(re);
+    var shareID = p? parseInt( p.pop().replace(/\s*@/,'') ) :'';
+    var content = message.Content.replace(re, '');
+
+    var condition = {role:'shareMsg', role : 'shareMsg', shareID:{$gt:0}, WXOnly:{$in: [null, false]} ,
+             touser: new RegExp('^'+ person +'\\||\\|'+ person +'\\||\\|'+ person +'$') };
+
+    if(shareID) condition.shareID = shareID;
+
+    col.findOne( condition , { sort: {date : -1}, limit:1, fields:{_id:0, fromUser:0} },
+      function  (err, msg) {
+
+        //console.log(condition, err, msg);
+        if(err||!msg) return;
+        if(!msg.shareID) return;
+
+        shareID = msg.shareID;
+
+        if(0 && !shareID) {
+
+        var sharePath = JSON.stringify(msg).replace(/<[^>]+>/g,'').match(/\/[^/]+\//);
+        sharePath = sharePath? sharePath.pop() : '';
+
+      var overAllPath = util.format('<a href="%s#path=%s&shareID=%d&openMessage=1">%s</a>', TREE_URL, encodeURIComponent(sharePath), msg.shareID, sharePath ) ;
+
+          msg.MsgId = message.MsgId;
+
+          msg.text.content =
+            util.format('%s 对%s 留言：%s',
+                  userInfo.name,
+                  overAllPath,
+                  content
+                );
+
+        sendWXMessage(msg, person );
+
+      } else {
+
+        var req = {body:{ person: person, shareID:shareID, text:content }};
+        var res = { send:function(){} };
+
+        SendShareMsg(req, res);
+
+      }
+
+      }  );
+
+  }
+
+  res.reply('');
+
+  return;
+
+
 
   res.reply([
   {
@@ -3957,6 +4075,25 @@ wechat(config, wechat
 var CompanyName = 'lianrun';
 var API = require('wechat-enterprise-api');
 
+var api2 = new API("wx59d46493c123d365", "5dyRsI3Wa5gS2PIOTIhJ6jISHwkN68cryFJdW_c9jWDiOn2D7XkDRYUgHUy1w3Hd", 0, function (callback) {
+
+  var rkey = 'wx:js:accessToken2';
+  redisClient.get( rkey, function (err, txt) {
+    if (err) {return callback(err);}
+    callback(null, JSON.parse(txt));
+  });
+
+}, function (token, callback) {
+
+  var rkey = 'wx:js:accessToken2';
+  redisClient.set( rkey, JSON.stringify(token), 'ex', 7200, callback);
+
+});
+
+api2.setOpts({timeout: 60000});
+
+
+
 var api = new API("wx59d46493c123d365", "5dyRsI3Wa5gS2PIOTIhJ6jISHwkN68cryFJdW_c9jWDiOn2D7XkDRYUgHUy1w3Hd", 1, function (callback) {
   // 传入一个获取全局token的方法
 
@@ -3977,6 +4114,7 @@ var api = new API("wx59d46493c123d365", "5dyRsI3Wa5gS2PIOTIhJ6jISHwkN68cryFJdW_c
 });
 
 api.setOpts({timeout: 60000});
+
 
 // get accessToken for first time to cache it.
 api.getLatestToken(function () {});

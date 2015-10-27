@@ -12,7 +12,7 @@
 * LINE 7331: window.addEventListener('resize', function webViewerResize(evt) {
   + if(isMobile && curStage=='remark') return;
 
-* LINE 49:   
+* LINE 49:
   //var DEFAULT_SCALE_VALUE = 'auto';  //'page-actual';
 
 */
@@ -101,7 +101,7 @@ FILE_HOST = 'http://7xkeim.com1.z0.glb.clouddn.com/';
 TREE_URL = "http://1111hui.com/pdf/client/tree.html";
 VIEWER_URL = "http://1111hui.com/pdf/webpdf/viewer.html";
 
-var WX_JUMP_URL = encodeURIComponent( window.location.href.replace('#','{@@@}') );
+var WX_JUMP_URL =  window.location.href.replace('http://1111hui.com/pdf/','') ;
 localStorage.setItem( 'WX_JUMP_URL', WX_JUMP_URL );
 
 var wxOAuthUrl = 'https://open.weixin.qq.com/connect/oauth2/authorize?appid=wx59d46493c123d365&redirect_uri=http%3A%2F%2F1111hui.com%2F/pdf/getUserID.php&response_type=code&scope=snsapi_base&state=#wechat_redirect';
@@ -3360,7 +3360,7 @@ function saveCanvas (isSilent) {
       savedCanvasData = saveObj;
 
       setTimeout(function(){
-        $post( host + '/saveCanvas', { file:curFile, isSilent:isSilent, shareID:shareID, personName:rootPerson.name, pdfWidth:window.viewBox[2], pdfHeight:window.viewBox[3], totalPage:PDFViewerApplication.pagesCount, data: JSON.stringify(saveObj) } );
+        $post( host + '/saveCanvas', { file:curFile, isSilent:isSilent, shareID:shareID, personName:rootPerson.name, person:rootPerson.userid, pdfWidth:window.viewBox[2], pdfHeight:window.viewBox[3], totalPage:PDFViewerApplication.pagesCount, data: JSON.stringify(saveObj) } );
       },0);
 
     }
@@ -3659,7 +3659,7 @@ function restoreSignature (pageIndex, selectedID) {
       if( window.signID &&!v.isSigned ){
         finishSign(v._id);
       	v.isSigned = true;
-      	
+
       }
       return;
 
@@ -3752,7 +3752,7 @@ function finishSign (signID) {
       $('[data-id="'+ signID +'"]').addClass('isSigned');
       $('.userInputText textarea').prop('readonly', true);
 
-                
+
       if(isFlow){
         setInterval(function  () {closeWin(); }, 300);
         closeWin();
@@ -3965,7 +3965,7 @@ function setStage (stat) {
       break;
     case 'share':
       var file = window.curFile.replace(FILE_HOST, '');
-      var toUrl = TREE_URL+'#path='+(file)+ '&openShare=1'+ (shareID ? '&shareID='+shareID :'');
+      var toUrl = TREE_URL+'#path='+(file)+ '&openMessage=3'+ (shareID ? '&shareID='+shareID :'');
       openLinkNW(toUrl);
       break;
     case 'message':
@@ -4454,7 +4454,7 @@ $(function initPage () {
       $('#findHighlightAll').prop('checked', true);
       pdfViewer.findController.findBar.dispatchEvent('highlightallchange');
     }
-    
+
   });
 
 

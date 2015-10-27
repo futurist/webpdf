@@ -153,7 +153,7 @@ var SignaturePad = (function (document) {
     };
 
     SignaturePad.prototype._strokeEnd = function (event) {
-        var canDrawCurve = this.points.length > 2,
+        var canDrawCurve = this.points.length > 0,
             point = this.points[0];
 
         if (!canDrawCurve && point) {
@@ -221,9 +221,10 @@ var SignaturePad = (function (document) {
 
         points.push(point);
 
-        if (points.length > 1) {
+        if (points.length > 0) {
             // To reduce the initial lag make it work with 3 points
             // by copying the first point to the beginning.
+            if (points.length === 1) points.unshift(points[0]);
             if (points.length === 2) points.unshift(points[0]);
             if (points.length === 3) points.unshift(points[0]);
 
@@ -382,3 +383,4 @@ var SignaturePad = (function (document) {
 return SignaturePad;
 
 }));
+

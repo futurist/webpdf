@@ -45,6 +45,8 @@ FILE_HOST = 'http://7xkeim.com1.z0.glb.clouddn.com/';
 TREE_URL = "http://1111hui.com/pdf/client/tree.html";
 VIEWER_URL = "http://1111hui.com/pdf/webpdf/viewer.html";
 IMAGE_UPFOLDER = 'uploads/' ;
+var regex_image= /(gif|jpe?g|png|bmp)$/i;
+
 
 var fileStorage = multer.diskStorage({
   destination: function (req, file, cb) {
@@ -1099,53 +1101,84 @@ function upfileFunc (data, callback) {
 
 }
 
+
+
 app.post("/upfile", function (req, res) {
   var data = req.body;
   console.log(data)
 
   function upFun (ret) {
     res.send( JSON.stringify(ret) );
-    wsSendClient(ret.person, ret);
+    //wsSendClient(ret.person, ret);
 
     // Send WX Message when it's upload images & sound files to share Folder
 
 
-    if(! ret.isInMsg) return;
+    //if(! ret.isInMsg) return;
+    if(! ret.shareID) return;
 
     var shareID = ret.shareID;
 
     col.findOne(
       {role:'share', shareID:shareID, 'files.key': ret.key }, { fields: {'files': { $elemMatch:{ files: { key: ret.key } } }, toPerson:1, fromPerson:1, msg:1  }   },  function(err, data){
 
+        if( regex_image.test(ret.key) ) {
 
-        //get segmented path, Target Path segment and A link
-       var overAllPath = util.format('<a href="%s#path=%s&shareID=%d&openMessage=1">%s</a>', TREE_URL, ret.key, shareID, ret.shareName ) ;
+          //get segmented path, Target Path segment and A link
+         var overAllPath = util.format('<a href="%s#path=%s&shareID=%d&openMessage=1">%s</a>', TREE_URL, ret.key, shareID, ret.shareName ) ;
 
+          var msg = {
+           "touser": data.toPerson.concat(data.fromPerson).map(function(v){return v.userid}).join('|'),
+           "touserName": data.toPerson.concat(data.fromPerson).map(function(v){return v.name}).join('|'),
+           "msgtype": "news",
+           "news": {
+             "articles":[
+             {
+              "title": util.format('%s 在%s 上传了图片',
+                data.fromPerson[0].name,
+                ret.shareName  // if we need segmented path:   pathName.join('-'),
+              ),
+              "description": "查看消息记录",
+              "url": util.format('%s#path=%s&shareID=%d&openMessage=1', TREE_URL, ret.key, shareID ),
+             "picurl": FILE_HOST+ret.key
+           }
+           ] },
+           "safe":"0",
+            date : new Date(),
+            role : 'shareMsg',
+            shareID:shareID
+          };
 
+          sendWXMessage(msg, data.fromPerson[0].userid);
 
-        var msg = {
-         "touser": data.toPerson.concat(data.fromPerson).map(function(v){return v.userid}).join('|'),
-         "touserName": data.toPerson.concat(data.fromPerson).map(function(v){return v.name}).join('|'),
-         "msgtype": "news",
-         "news": {
-           "articles":[
-           {
-            "title": util.format('%s 在%s 上传了图片',
+      } else {
+
+         var overAllPath = util.format('<a href="%s#path=%s&shareID=%d&openMessage=0">%s</a>', TREE_URL, ret.key, shareID, ret.shareName ) ;
+
+          var msg = {
+           "touser": data.toPerson.concat(data.fromPerson).map(function(v){return v.userid}).join('|'),
+           "touserName": data.toPerson.concat(data.fromPerson).map(function(v){return v.name}).join('|'),
+           "msgtype": "text",
+           "text": {
+             "content":
+             util.format('%s 在%s 上传了文件：%s',
               data.fromPerson[0].name,
-              ret.shareName  // if we need segmented path:   pathName.join('-'),
-            ),
-            "description": "查看消息记录",
-            "url": util.format('%s#path=%s&shareID=%d&openMessage=1', TREE_URL, ret.key, shareID ),
-           "picurl": FILE_HOST+ret.key
-         }
-         ] },
-         "safe":"0",
-          date : new Date(),
-          role : 'shareMsg',
-          shareID:shareID
-        };
+              ret.shareName,
+               util.format('<a href="%s#path=%s&shareID=%d&openMessage=0">%s</a>', TREE_URL, ret.key, shareID, ret.title )
+             )
+           },
+            "safe":"0",
+            date : new Date(),
+            role : 'shareMsg',
+            shareID:shareID
+          };
 
-        sendWXMessage(msg, data.fromPerson[0].userid);
+          sendWXMessage(msg, data.fromPerson[0].userid);
+
+      }
+
+      wsBroadcast( ret );
+
 
     });
   }
@@ -2295,7 +2328,7 @@ app.post("/getSavedSign", function (req, res) {
           	if(!file) return res.send('');
 
               var curFlowPos = doc.curFlowPos||0;
-              var curID = doc.isSign ? file.signIDS[curFlowPos]._id : null;
+              var curID = doc.isSign&&!doc.isFinish ? file.signIDS[curFlowPos]._id : null;
 
               if(file.signIDS){
 

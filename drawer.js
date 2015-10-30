@@ -460,11 +460,11 @@ function RERenderDrawerLayer(pageIndex){
 	var oldShapes = $('svg.canvas .shape').toArray();
 	var oldShapeIDs = oldShapes.map( function(v){ return $(v).data('id'); } );
 	oldShapes.forEach(function(v){
-	  rotateShape(v, rotClock? 90:-90 );
+	  //rotateShape(v, rotClock? 90:-90 );
 	});
 
 	oldShapeIDs.forEach(function  (v) {
-	  $('[data-id="'+ v +'"]').remove();
+	  //$('[data-id="'+ v +'"]').remove();
 	});
 
 
@@ -1888,7 +1888,12 @@ var svgns = "http://www.w3.org/2000/svg";
 
             var inputText = $('.textWrap[data-hl]');
             if(inputText.length){
-              inputText.data('person', order);
+              if( inputText.data('person')===undefined|| inputText.data('person')==='' || inputText.data('person')===null ){
+                inputText.data('person', order);
+              } else {
+                inputText.data('person', null);
+              }
+              
             }
 
          }

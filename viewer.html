@@ -1,5 +1,5 @@
 ﻿<!DOCTYPE html>
-<html dir="ltr" mozdisallowselectionprint moznomarginboxes manifest="app.manifest">
+<html dir="ltr" mozdisallowselectionprint moznomarginboxes manifest="">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no, maximum-scale=1, minimum-scale=1">
@@ -20,8 +20,6 @@
     <link href="js/selectivity-full.css" rel="stylesheet" />
 
 
-
-    <script type="text/javascript" src="/js/basket.full.min.js"></script>
 
     <script src="/js/cookies.js"></script>
     <!-- load fonts -->
@@ -50,57 +48,8 @@
     <!--
     -->
     <script src="pdf.js"></script>
-    <script src="drawer.js?t=5675674"></script>
+    <script src="drawer.js"></script>
     <script src="viewer.js"></script>
-
-<script type="text/javascript">
-
-PATHNAME = window.location.href.split('?').shift().split('#').shift();
-BASKETVER = '1.2';
-
-// basket.clear()
-
-// if( window.localStorage['basket-ver-viewer.html'] != BASKETVER ) alert(basket.clear());
-
-// if( !ISNW && typeof basket.get('js/ws.js')!=='object') alert('首次运行，确定后将进行缓存');
-
-/***
-
-basket.require(
-
-// { url: 'compatibility.js' },
-// { url: 'l10n.js' },
-// { url: 'js/zepto.js' },
-// { url: 'js/moment.js' },
-// { url: 'http://res.wx.qq.com/open/js/jweixin-1.0.0.js' },
-// { url: 'js/dialog.build.js' },
-// { url: 'victor.js' },
-// { url: 'path.js' },
-// { url: 'draggable.js' },
-
-{ url: 'js/selectivity-full.js' },
-
-{ url: 'pdf.combined.js' }
-
-).then(function() {
-
-  basket.require(
-
-  { url: 'viewer.js' },
-  { url: 'drawer.js', unique:'=fsdsdfsdfssdf', expire:0, skipCache:0 }
-
-  ).then(function() {
-
-    window.localStorage['basket-ver-viewer.html'] = BASKETVER;
-
-  })
-
-
-});
-
-***/
-
-</script>
 
 
   </head>

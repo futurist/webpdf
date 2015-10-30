@@ -4141,6 +4141,25 @@ var SelectivityLocale = {
 };
 
 
+var formatDate = function(format, time) {
+  var d = time ? new Date(time): new Date();
+  format = format||'';
+    var yyyy = d.getFullYear().toString();
+    format = format.replace(/yyyy/g, yyyy)
+    var mm = (d.getMonth()+1).toString();
+    format = format.replace(/mm/g, (mm[1]?mm:"0"+mm[0]));
+    var dd  = d.getDate().toString();
+    format = format.replace(/dd/g, (dd[1]?dd:"0"+dd[0]));
+    var hh = d.getHours().toString();
+    format = format.replace(/hh/g, (hh[1]?hh:"0"+hh[0]));
+    var ii = d.getMinutes().toString();
+    format = format.replace(/ii/g, (ii[1]?ii:"0"+ii[0]));
+    var ss  = d.getSeconds().toString();
+    format = format.replace(/ss/g, (ss[1]?ss:"0"+ss[0]));
+    return format;
+};
+
+
 var TemplateField = {
 	'姓名':{demo:"[姓名]", callback: function(){
 		return rootPerson.name;
@@ -4149,13 +4168,13 @@ var TemplateField = {
 		return rootPerson.depart;
 	}},
 	'年':{demo:"[年]", callback: function(){
-		return moment().format('YYYY');
+		return formatDate('yyyy');
 	}},
 	'月':{demo:"[月]", callback: function(){
-		return moment().format('MM');
+		return formatDate('mm');
 	}},
 	'日':{demo:"[日]", callback: function(){
-		return moment().format('DD');
+		return formatDate('dd');
 	}},
 	'可':{demo:"[可]", callback: function(a){
 		return a.join();

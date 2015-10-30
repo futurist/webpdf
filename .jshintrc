@@ -1,0 +1,9 @@
+{
+	"asi": true,
+	"-W032":false,
+	//"eqeqeq":false
+	"-W041": false,
+	//"evil": true,
+	"loopfunc": true
+}
+

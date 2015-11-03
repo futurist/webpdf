@@ -1,7 +1,7 @@
 
 
 // require header
-
+var crypto = require('crypto');
 var qiniu = require('qiniu');
 var moment = require('moment');
 var path = require('path');
@@ -44,6 +44,7 @@ QiniuBucket = 'bucket01';
 FILE_HOST = 'http://7xkeim.com1.z0.glb.clouddn.com/';
 TREE_URL = "http://1111hui.com/pdf/client/tree.html";
 VIEWER_URL = "http://1111hui.com/pdf/webpdf/viewer.html";
+SHARE_MSG_URL = "http://1111hui.com/pdf/client/sharemsg.html";
 IMAGE_UPFOLDER = 'uploads/' ;
 var regex_image= /(gif|jpe?g|png|bmp)$/i;
 
@@ -113,7 +114,7 @@ futurist.array_remove_item = function(array, item) {
 };
 
 function NewID () {
-  return +new Date()+Math.random().toString().slice(2,5)+'_';
+  return +new Date()+'_'+Math.random().toString().slice(2,5);
 }
 
 function qiniu_getUpToken() {
@@ -531,12 +532,85 @@ app.post("/getUpToken", function (req, res) {
 	res.send( qiniu_getUpToken() );
 });
 
+
+function updateStuffInfo (person, obj) {
+	STUFF_LIST && STUFF_LIST.some(function  (v) {
+      if(v.userid==person){
+      	_.each(obj, function  (val, key) {
+      		v[key] = val;
+      	});
+        return true;
+      }
+    });
+
+    COMPANY_TREE && COMPANY_TREE.some(function  (v) {
+      if(v.userid==person){
+        _.each(obj, function  (val, key) {
+      		v[key] = val;
+      	});
+        return true;
+      }
+    });
+}
+
+app.post("/updatePass", function (req, res) {
+  var pass = req.body.pass;
+  var person = req.body.person;
+  var md5 = crypto.createHash('md5'), md5Str = md5.update(pass).digest('hex');
+  col.updateOne({ role:'stuff', 'stuffList.userid':person }, {$set: {'stuffList.$.lockPass': md5Str} }, function(err,ret){
+  	if(err) res.end();
+  	if(!ret.result.nModified) {
+  		res.end();
+  	} else {
+
+	    updateStuffInfo( person, {lockPass: md5Str} );
+
+  		res.send(md5Str);
+  	}
+  });
+
+});
+
+app.post("/unlockScreen", function (req, res) {
+  var pass = req.body.pass;
+  var person = req.body.person;
+  var md5 = crypto.createHash('md5'), md5Str = md5.update(pass).digest('hex');
+
+  col.updateOne({ role:'stuff', 'stuffList.userid':person, 'stuffList.lockPass': md5Str }, {$set: {'stuffList.$.isLocked': false} }, function(err,ret){
+  	if(err) res.end();
+  	if(!ret.result.nModified) {
+  		res.end();
+  	} else {
+  		updateStuffInfo( person, {isLocked: false} );
+  		res.send('OK');
+  	}
+  });
+
+});
+
+app.post("/lockScreen", function (req, res) {
+  var person = req.body.person;
+
+  col.updateOne({ role:'stuff', 'stuffList.userid':person }, {$set: {'stuffList.$.isLocked': true} }, function(err,ret){
+  	if(err) res.end();
+  	if(!ret.result.nModified) {
+  		res.end();
+  	} else {
+	    updateStuffInfo( person, {isLocked: true} );
+  		res.send('OK');
+  	}
+  });
+
+});
+
+
+
 app.post("/getFinger", function (req, res) {
   var msgid = req.body.msgid;
   var reqData = getWsData(msgid);
   if(!reqData) return res.send('');
   var finger = reqData.finger;
-  var condition = {finger:finger, role:'finger', status:{$ne:-1}, date:{$gt: new Date(moment().subtract(1, 'days')) } };
+  var condition = {finger:finger, role:'finger', status:{$ne:-1}, date:{$gt: new Date(moment().subtract(14, 'days')) } };
 
   res.cookie('finger', finger);
 
@@ -708,29 +782,36 @@ app.post("/getJSTicket", function (req, res) {
 });
 
 
+function getShareName ( colShare, addSlash ) {
+  var a= (colShare.isSign?'流程':'共享')+colShare.shareID+ (colShare.msg?'['+colShare.msg+']':'' ) + '('+colShare.fromPerson.concat(colShare.toPerson).map(function(v){return v.name}).join(',')+')' ;
+  if(addSlash) a='/'+a+'/';
+  return a;
+}
+
 function imageToPDF (person, fileName, res, oldData, folder ){
 	var ext = path.extname(fileName);
 	var baseName = path.basename(fileName, ext);
-  var cmd = ' rm -f '+IMAGE_UPFOLDER+'/*.pdf; cd '+IMAGE_UPFOLDER+'; /bin/cp -f ../make.tex '+ baseName +'.tex; pdflatex "\\def\\IMG{'+ baseName + ext +'} \\input{'+ baseName +'.tex}"';
+  var imgFile = fileName.replace(IMAGE_UPFOLDER, '');
+  var cmd = ' rm -f '+IMAGE_UPFOLDER+'/*.pdf; cd '+IMAGE_UPFOLDER+'; /bin/cp -f ../make.tex '+ baseName +'.tex; pdflatex "\\def\\IMG{'+ imgFile +'} \\input{'+ baseName +'.tex}"';
     console.log(cmd);
 
   exec(cmd, function(err,stdout,stderr){
     // console.log(err, stdout);
-    if(err)  return res.send('');
+    if(err)  return res&&res.send('');
     console.log('pdf file info: ' + baseName,  err, stderr);
-    if (err||stderr) return res.send( '' );
+    if (err||stderr) return res&&res.send( '' );
 
     exec('cd '+IMAGE_UPFOLDER+'; rm -f '+baseName+'.tex *.log *.aux; ');
 
     qiniu_uploadFile(IMAGE_UPFOLDER+ baseName+ '.pdf', function(ret){
 
 
-      if(ret.error) return res.send('');
+      if(ret.error) return res&&res.send('');
 
       if(oldData){
 
-        ret.person = oldData.person;
-        ret.client = oldData.client;
+        if(oldData.person) ret.person = oldData.person;
+        if(oldData.client) ret.client = oldData.client;
         ret.title = oldData.title+'.pdf';
         ret.path = oldData.path;
         ret.srcFile = oldData.key;
@@ -744,7 +825,7 @@ function imageToPDF (person, fileName, res, oldData, folder ){
 	      console.log(ret);
 
 	      upfileFunc(ret, function(ret2){
-	        res.send(ret2);
+	        res&&res.send(ret2);
 	        wsBroadcast(ret2);
 	      });
 
@@ -769,7 +850,7 @@ function imageToPDF (person, fileName, res, oldData, folder ){
 
 		    upfileFunc(srcRet, function(srcRet2){
 		      upfileFunc(ret, function(ret2){
-		        res.send(ret2);
+		        res&&res.send(ret2);
 		        wsBroadcast(ret2);
 		      });
 		    });
@@ -908,13 +989,15 @@ app.post("/uploadPCImage", function (req, res) {
 
 });
 
-app.get("/uploadWXImage", function (req, res) {
+
+
+function uploadWXImage(req, res) {
   var mediaID = req.query.mediaID;
   var person = req.query.person;
-  var path = req.query.path;
-  var shareName = req.query.shareName;
   var shareID = safeEval( req.query.shareID );
   var isInMsg = safeEval(req.query.isInMsg);
+  var path = req.query.path;
+  var text = req.query.text;
 
   api.getMedia(mediaID, function(err, buffer, httpRes){
     if(err) {console.log(err); return res.send('');}
@@ -928,7 +1011,7 @@ app.get("/uploadWXImage", function (req, res) {
     fs.writeFile(fileName, buffer, function(err){
       console.log(err, 'image file written', fileName);
       if (err) return res.send( '' );
-      // imageToPDF(person, fileName, res, null, path);
+
 
 
       qiniu_uploadFile(fileName, function(srcRet) {
@@ -938,7 +1021,8 @@ app.get("/uploadWXImage", function (req, res) {
           srcRet.isInMsg = isInMsg;
           srcRet.client = '';
           srcRet.title = fileName.split('/').pop();
-          srcRet.path = path || '/';
+          srcRet.path = path || (isInMsg?'/消息附件/':'/');
+          if(text) srcRet.imageDesc = text;
           if(shareID){
             srcRet.shareID = shareID;
             srcRet.role = 'share';
@@ -950,12 +1034,16 @@ app.get("/uploadWXImage", function (req, res) {
 
             if(isInMsg){
 
-              col.findOne(
-                {role:'share', shareID:shareID, 'files.key': ret.key }, { fields: {'files': { $elemMatch:{ files: { key: ret.key } } }, toPerson:1, fromPerson:1, msg:1  }   },  function(err, data){
+              col.findOneAndUpdate(
+                {role:'share', shareID:shareID, 'files.key': ret.key }, { $inc:{'files.$.pdfCount':1} }, { fields: { files: { $elemMatch:{ files: { key: ret.key } } }, files:1, toPerson:1, fromPerson:1, msg:1, shareID:1  }   },  function(err, data) {
+                  data = data.value;
 
+                	var pdfCount = 1;
+                  imageToPDF(person, fileName, null, srcRet, path, pdfCount);
 
+                  var shareName = getShareName(data, true);
                   //get segmented path, Target Path segment and A link
-                 var overAllPath = util.format('<a href="%s#path=%s&shareID=%d&openMessage=1">%s</a>', TREE_URL, ret.key, shareID, shareName ) ;
+                 var overAllPath = util.format('<a href="%s#path=%s&shareID=%d&picurl=%s">%s</a>', SHARE_MSG_URL, shareName, shareID, encodeURIComponent(FILE_HOST+ret.key), shareName ) ;
 
 
 
@@ -966,18 +1054,20 @@ app.get("/uploadWXImage", function (req, res) {
                    "news": {
                      "articles":[
                      {
-                      "title": util.format('%s 在%s 上传了图片',
+                      "title": util.format('%s 在%s 上传了图片%s',
                         data.fromPerson.shift().name,
-                        shareName  // if we need segmented path:   pathName.join('-'),
+                        shareName,  // if we need segmented path:   pathName.join('-'),
+                        ''
                       ),
-                      "description": "查看消息记录",
-                      "url": util.format('%s#path=%s&shareID=%d&openMessage=1', TREE_URL, ret.key, shareID ),
+                      "description": text || "查看消息记录",
+                      "url": util.format('%s#path=%s&shareID=%d&picurl=%s' , SHARE_MSG_URL, shareName, shareID, encodeURIComponent(FILE_HOST+ret.key) ),
                      "picurl": FILE_HOST+ret.key
                    }
                    ] },
                    "safe":"0",
                     date : new Date(),
                     role : 'shareMsg',
+                    titleTrail: '，<a href="'+ makeViewURL(ret.key.replace(/\.\w+$/, '.pdf'), ret.shareID) +'">点此标注</a>',
                     shareID:shareID
                   };
 
@@ -1009,7 +1099,9 @@ app.get("/uploadWXImage", function (req, res) {
     });
 
   });
-});
+}
+
+app.get("/uploadWXImage", uploadWXImage);
 
 app.post("/getJSConfig", function (req, res) {
 
@@ -1109,23 +1201,26 @@ app.post("/upfile", function (req, res) {
 
   function upFun (ret) {
     res.send( JSON.stringify(ret) );
-    //wsSendClient(ret.person, ret);
 
     // Send WX Message when it's upload images & sound files to share Folder
 
 
     //if(! ret.isInMsg) return;
-    if(! ret.shareID) return;
+    if(! ret.shareID){
+      wsSendClient(ret.person, ret);
+      return;
+    }
 
     var shareID = ret.shareID;
 
-    col.findOne(
-      {role:'share', shareID:shareID, 'files.key': ret.key }, { fields: {'files': { $elemMatch:{ files: { key: ret.key } } }, toPerson:1, fromPerson:1, msg:1  }   },  function(err, data){
+    col.findOneAndUpdate(
+      {role:'share', shareID:shareID, 'files.key': ret.key }, {$inc:{'files.$.pdfCount':1}}, { fields: {'files': { $elemMatch:{ files: { key: ret.key } } }, toPerson:1, fromPerson:1, msg:1  }   },  function(err, data){
+        data = data.value;
 
         if( regex_image.test(ret.key) ) {
 
           //get segmented path, Target Path segment and A link
-         var overAllPath = util.format('<a href="%s#path=%s&shareID=%d&openMessage=1">%s</a>', TREE_URL, ret.key, shareID, ret.shareName ) ;
+         var overAllPath = util.format('<a href="%s#path=%s&shareID=%d&picurl=%s">%s</a>', SHARE_MSG_URL, getShareName(data, true), shareID, encodeURIComponent(FILE_HOST+ret.key) , ret.shareName ) ;
 
           var msg = {
            "touser": data.toPerson.concat(data.fromPerson).map(function(v){return v.userid}).join('|'),
@@ -1134,22 +1229,43 @@ app.post("/upfile", function (req, res) {
            "news": {
              "articles":[
              {
-              "title": util.format('%s 在%s 上传了图片',
+              "title": util.format('%s 在%s 上传了图片%s',
                 data.fromPerson[0].name,
-                ret.shareName  // if we need segmented path:   pathName.join('-'),
+                ret.shareName,  // if we need segmented path:   pathName.join('-'),
+                ''
               ),
-              "description": "查看消息记录",
-              "url": util.format('%s#path=%s&shareID=%d&openMessage=1', TREE_URL, ret.key, shareID ),
+              "description": ret.text || "查看消息记录",
+              "url": util.format('%s#path=%s&shareID=%d&picurl=%s', SHARE_MSG_URL, getShareName(data, true), shareID, encodeURIComponent(FILE_HOST+ret.key) ),
              "picurl": FILE_HOST+ret.key
            }
            ] },
            "safe":"0",
             date : new Date(),
             role : 'shareMsg',
+            titleTrail: '，<a href="'+ makeViewURL(ret.key.replace(/\.\w+$/, '.pdf'), ret.shareID) +'">点此标注</a>',
             shareID:shareID
           };
 
+          msg.appRole = 'chat';
+
           sendWXMessage(msg, data.fromPerson[0].userid);
+
+
+          // convert image to pdf directly for PC; for wx see uploadWXImage() function
+          var filename = ret.key;
+           var ext = filename.split(/\./).pop();
+
+          var baseName = moment().format('YYYYMMDDHHmmss') ;
+          var destPath = IMAGE_UPFOLDER+ baseName + '.'+ ext.toLowerCase();
+          var UPFOLDER = IMAGE_UPFOLDER+ baseName+'/';
+
+          var wget = 'mkdir '+ UPFOLDER +'; wget --restrict-file-names=nocontrol -P ' + UPFOLDER + ' -N "' + FILE_HOST+ filename +'"';
+          var child = exec(wget, function(err, stdout, stderr) {
+            console.log( err, stdout, stderr );
+            if(err) return;
+            var pdfCount = 1;
+            imageToPDF(ret.person, UPFOLDER+path.basename(filename) , null, ret, pdfCount);
+          });
 
       } else {
 
@@ -1220,21 +1336,8 @@ app.post("/updateHost", function (req, res) {
       return res.send('');
     }
 
-    STUFF_LIST && STUFF_LIST.some(function  (v) {
-      if(v.userid==person){
-        v.client = hostname;
-        v.ip = ip;
-        return true;
-      }
-    });
 
-    COMPANY_TREE && COMPANY_TREE.some(function  (v) {
-      if(v.userid==person){
-        v.client = hostname;
-        v.ip = ip;
-        return true;
-      }
-    });
+    updateStuffInfo( person, { client:hostname, ip:ip } );
 
     console.log('updated host:', person, hostname, ip);
     res.send('OK');
@@ -1490,7 +1593,7 @@ app.post("/markFinish", function (req, res) {
            "msgtype": "text",
            "text": {
              "content":
-             util.format('%s已由%s标记为：%s<a href="%s">查看共享</a>',
+             util.format('/%s/已由%s标记为：%s<a href="%s">查看共享</a>',
                 path.replace(/^\/|\/$/g,''),
                 personName,
                 isFinish?'已完成' : '未完成',
@@ -2139,7 +2242,7 @@ app.post("/saveCanvas", function (req, res) {
             var overAllPath = util.format('%s#file=%s&shareID=%d&isSign=%d', VIEWER_URL, FILE_HOST+ encodeURIComponent(fileKey), shareID, isSign?1:0 ) ;
             var content =
             colShare.isSign?
-            util.format('流程%d %s (%s-%s)标注已由%s更新，<a href="%s">查看文件</a>',
+            util.format('/流程%d %s (%s-%s)/标注已由%s更新，<a href="%s">查看文件</a>',
                     shareID,
                     msg,
                     colShare.flowName,
@@ -2147,7 +2250,7 @@ app.post("/saveCanvas", function (req, res) {
                     personName,
                     overAllPath  // if we need segmented path:   pathName.join('-'),
                   ) :
-            util.format('共享%d %s (%s)标注已由%s更新 <a href="%s">查看文件</a>',
+            util.format('/共享%d %s (%s)/标注已由%s更新 <a href="%s">查看文件</a>',
                     shareID,
                     msg,
                     colShare.fromPerson[0].name,
@@ -2513,7 +2616,24 @@ app.post("/getShareMsg", function (req, res) {
             return res.send('error');
           }
           var count = docs.length;
-          res.send( JSON.stringify(docs) );
+
+          col.find( {role:'share', shareID:{$in:shareA}}, {fields: {files:1,shareID:1, isSign:1, msg:1} }).toArray(function  (err, docs2) {
+            //console.log(err, docs2);
+            if(err){
+              return res.end();
+            }
+
+            docs2.forEach(function  (v) {
+              v.files = v.files.map(function  (f) {
+                return { path:f.path, title:f.title, key:f.key }
+              });
+            });
+
+            docs.unshift( {role:'files', docs: docs2 } );
+            res.send( JSON.stringify(docs) );
+
+          } );
+
       });
   }
 
@@ -2945,7 +3065,7 @@ app.post("/finishSign", function (req, res) {
                          "msgtype": "text",
                          "text": {
                            "content":
-                           util.format('流程%d %s (%s-%s)已由%s签署,此流程已结束并转交至：%s, <a href="%s">查看文件</a>',
+                           util.format('/流程%d %s (%s-%s)/已由%s签署,此流程已结束并转交至：%s, <a href="%s">查看文件</a>',
                               colShare.shareID,
                               msg,
                               colShare.flowName,
@@ -2978,7 +3098,7 @@ app.post("/finishSign", function (req, res) {
                          "msgtype": "text",
                          "text": {
                            "content":
-                           util.format('流程%d %s (%s-%s)已由%s签署,此流程已结束 <a href="%s">查看文件</a>',
+                           util.format('/流程%d %s (%s-%s)/已由%s签署,此流程已结束 <a href="%s">查看文件</a>',
                               colShare.shareID,
                               msg,
                               colShare.flowName,
@@ -3376,9 +3496,11 @@ app.post("/getSignHistory", function (req, res) {
 
 });
 
+
 function SendShareMsg(req, res) {
   var person = req.body.person;
   var text = req.body.text;
+  var status = req.body.status;
   var shareID = parseInt(req.body.shareID);
   var path = req.body.path;
   var hash = req.body.hash;
@@ -3404,6 +3526,10 @@ function SendShareMsg(req, res) {
         return res.send('');	//没有此组权限
       }
 
+      if(status){
+        col.updateOne( { role:'share', shareID:shareID }, { $set:{statusText:text, statusDate:new Date() } }, function(err, data) {
+        });
+      }
 
       if(path.length){
         //get segmented path, Target Path segment and A link
@@ -3426,9 +3552,7 @@ function SendShareMsg(req, res) {
         }
     } else {
 
-      var a= (data.isSign?'流程':'共享')+data.shareID+ (data.msg?'['+data.msg+']':'' ) + '('+data.toPerson.map(function(v){return v.name}).join(',')+')' ;
-      a='/'+a+'/';
-      var link = a;
+      var link = getShareName(data, true);
     }
 
 
@@ -3440,7 +3564,7 @@ function SendShareMsg(req, res) {
        "msgtype": "text",
        "text": {
          "content":
-         util.format('%s 对%s 留言：%s',
+         util.format('%s 对%s ' +  (status?'设置了状态':'留言') + '：%s',
             users[0].name,
             overAllPath,  // if we need segmented path:   pathName.join('-'),
             text
@@ -3453,6 +3577,7 @@ function SendShareMsg(req, res) {
       };
       if(hash) msg.hash = hash;
 
+      msg.status = status;
       msg.appRole = 'chat';
       sendWXMessage(msg, person);
 
@@ -3520,7 +3645,7 @@ app.post("/shareFile", function (req, res) {
              "msgtype": "text",
              "text": {
                "content":
-               util.format('%s添加了新文件：%s; 操作者：%s%s <a href="%s">查看共享</a>',
+               util.format('/%s/添加了新文件：%s; 操作者：%s%s <a href="%s">查看共享</a>',
                   shareName,
                   data.files.map(function(v){
                     return util.format('<a href="%s#file=%s&shareID=%d&isSign=%d">%s</a>',
@@ -3662,8 +3787,16 @@ function insertShareData (data, res, showTab){
 
 function sendWXMessage (msg, fromUser) {
 
+  var wxMsg = JSON.parse(JSON.stringify(msg));
+  var sharePath = JSON.stringify(msg).replace(/<[^>]+>/g,'').match(/\/[^/]+\//);
+  sharePath = sharePath? sharePath.pop() : '';
+
+  if(!msg.msgID){
+    msg.msgID = NewID();
+  }
   if(!msg.tryCount){
     var wsMsg = _.extend(msg, {fromUser: fromUser});
+    if(msg.titleTrail) wsMsg.news.articles[0].title += msg.titleTrail;
     col.insert( wsMsg );
     msg.tryCount = 1;
 
@@ -3676,6 +3809,18 @@ function sendWXMessage (msg, fromUser) {
 	    });
     }
 
+
+    if(sharePath && msg.shareID){
+      if(wxMsg.text) {
+        wxMsg.text.content += '\n\n<a href="'+ SHARE_MSG_URL +'#path='+ sharePath +'&shareID='+ msg.shareID +'&msgID='+ (msg.msgID||'') +'">打开会话</a>';
+      }
+      if(wxMsg.news) {
+        wxMsg.news.articles.forEach(function(v){
+          v.url+='&msgID='+(msg.msgID||'')
+        });
+      }
+    }
+
   }
 
   var msgTo = {};
@@ -3686,15 +3831,6 @@ function sendWXMessage (msg, fromUser) {
   // delete msg.toparty;
   // delete msg.totag;
 
-  var wxMsg = JSON.parse(JSON.stringify(msg));
-  var sharePath = JSON.stringify(msg).replace(/<[^>]+>/g,'').match(/\/[^/]+\//);
-  sharePath = sharePath? sharePath.pop() : '';
-
-  if(sharePath && msg.shareID){
-    if(wxMsg.text) {
-      wxMsg.text.content += '\n\n<a href="http://1111hui.com/pdf/client/sharemsg.html#path='+ sharePath +'&shareID='+ msg.shareID +'">打开会话</a>';
-    }
-  }
 
   (msg.appRole=='chat'?api2:api).send(msgTo, wxMsg, function  (err, result) {
     console.log('sendWXMessage', msg.tryCount, err, result);
@@ -3967,7 +4103,38 @@ wechat(config, wechat
 //   AgentID: '1' }
 
   //console.log(message);
-  return res.reply(message);
+
+
+  var person = message.FromUserName;
+  if (person==WX_COMPANY_ID) return;
+
+  var userInfo = getUserInfo(person);
+  if(message.MsgType=='image' && userInfo ) {
+
+    var shareID;
+    var condition = {role:'shareMsg', shareID:{$gt:0}, WXOnly:{$in: [null, false]} ,
+             touser: new RegExp('^'+ person +'\\||\\|'+ person +'\\||\\|'+ person +'$') };
+
+    col.findOne( condition , { sort: {date : -1}, limit:1, fields:{_id:0, fromUser:0} },
+      function  (err, msg) {
+
+        //console.log(condition, err, msg);
+        if(err||!msg) return;
+        if(!msg.shareID) return;
+
+        shareID = msg.shareID;
+
+
+        var req={query:{ mediaID: message.MediaId, person: person, shareID: shareID, isInMsg: true }};
+        var res = { send:function(){} };
+        uploadWXImage(req, res);
+
+      });
+  }
+
+
+
+  return res.reply('');
 })
 .text(function (message, req, res, next) {
 //**** message format:
@@ -4004,7 +4171,7 @@ wechat(config, wechat
     var shareID = p? parseInt( p.pop().replace(/\s*@/,'') ) :'';
     var content = message.Content.replace(re, '');
 
-    var condition = {role:'shareMsg', role : 'shareMsg', shareID:{$gt:0}, WXOnly:{$in: [null, false]} ,
+    var condition = {role:'shareMsg', shareID:{$gt:0}, WXOnly:{$in: [null, false]} ,
              touser: new RegExp('^'+ person +'\\||\\|'+ person +'\\||\\|'+ person +'$') };
 
     if(shareID) condition.shareID = shareID;

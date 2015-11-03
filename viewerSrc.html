@@ -1172,13 +1172,57 @@ div.selectivity-dropdown{
     margin: 20px;
     z-index: 9999999999999;
 }
-.searchBtn:before{
+.searchBtn:before,
+.drawIcon>a
+{
     font: normal normal normal 14px/1 FontAwesome;
     text-rendering: auto;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     content: "\f002";
     font-size: 2em;
+}
+.drawIcon{
+    display: none;
+    position: absolute;
+    display: table;
+    color:#ccc;
+    top: 0;
+    left: 0;
+    right: 0;
+    margin: 20px auto;
+    padding: 10px;
+    z-index: 9999999999999;
+    width: 320px;
+    background-color: rgba(255,255,255,0.9);
+}
+
+.drawIcon>a{
+  display: table-cell;
+  text-decoration: none;
+  color:#999;
+}
+.drawIcon>a.HL{
+    color: #060652;
+    text-shadow: 0px 0px 2px blue;
+}
+.drawIcon>a.btnUndo:before{
+    content: "\f0a8";
+}
+.drawIcon>a.btnRedo:before{
+    content: "\f0a9";
+}
+.drawIcon>a.btnHand:before{
+    content: "\f256";
+}
+.drawIcon>a.btnExit:before{
+    content: "\f057";
+}
+.drawIcon>a.btnDel:before{
+    content: "\f014";
+}
+.drawIcon>a.btnSave:before{
+    content: "\f0c7";
 }
 
 #closeFindBar:before{
@@ -1204,6 +1248,16 @@ div.selectivity-dropdown{
 <div class="searchBtn">
 
 </div>
+
+<div class="drawIcon">
+  <a href="javascript:;" class="button btnExit" data-onclick="quitCanvas()" title="取消"></a>
+  <a href="javascript:;" class="button btnUndo" data-onclick="OPHistory.undo()" title="还原"></a>
+  <a href="javascript:;" class="button btnHand" data-onclick="toggleGrab()" title="手形"></a>
+  <a href="javascript:;" class="button btnRedo" data-onclick="OPHistory.redo()" title="重做"></a>
+  <a href="javascript:;" class="button btnDel" data-onclick="deleteEl()" title="删除"></a>
+  <a href="javascript:;" class="button btnSave" data-onclick="saveCanvas(); setStage('viewer')" title="保存"></a>
+</div>
+
 
 <div class="findbar hidden doorHanger" id="findbar">
   <label for="findInput" class="toolbarLabel" data-l10n-id="find_label">Find:</label>
@@ -1284,8 +1338,10 @@ div.selectivity-dropdown{
   <a href="javascript:;" class="button btnRect" data-onclick="setTool('rect')">矩形</a>
   <a href="javascript:;" class="button btnCircle" data-onclick="setTool('circle')">圆形</a>
   <a href="javascript:;" class="button btnText" data-onclick="setTool('text')">文字</a>
+  <!-- 
   <a href="javascript:;" class="button btnOperation" data-onclick="removeActive(); addActive(this); switchOption('#drawTool', 'operation')">操作</a>
   <a href="javascript:;" class="button" data-onclick="saveCanvas(); setStage('viewer')">保存</a>
+  -->
 
 </div>
 

@@ -747,7 +747,7 @@ var PageObj = (function(){
 
 
 $(document).add($(window)).on('touchmove', function(e) {
-    if(window.curStage=='remark')e.preventDefault();
+    if(window.curStage=='remark' && !$('a.btnHand').hasClass('HL') )e.preventDefault();
   }
 );
 
@@ -1199,6 +1199,7 @@ var svgns = "http://www.w3.org/2000/svg";
 
 
     function downFunc (e) {
+    	if($('.grab-to-pan-grab').length) return;
       setTimeout(function(){ $('.colorCon').hide(); }, 200);
       var evt = /touch/.test(e.type) ? e.touches[0] : e;
       var canvas = $(evt.target).closest('.drawerLayer')
@@ -1351,7 +1352,7 @@ var svgns = "http://www.w3.org/2000/svg";
 
     function moveFunc(e)
     {
-
+    	if($('.grab-to-pan-grab').length) return;
       var evt = /touch/.test(e.type) ? e.touches[0] : e;
 
       var buttonDown = ( !isMobile? e.which>0 : e.touches.length>0 );
@@ -1614,6 +1615,7 @@ var svgns = "http://www.w3.org/2000/svg";
     }
 
     function upFunc (e) {
+    	if($('.grab-to-pan-grab').length) return;
 
       if(!curContext) return;
 
@@ -3926,12 +3928,28 @@ function beginSign(el){
 }
 
 
+function toggleGrab () {
+
+	HandTool.handTool.toggle(); 
+	$('a.btnHand').toggleClass('HL'); 
+	var isHand = $('a.btnHand').hasClass('HL');
+
+	curStage = isHand?'viewer':'remark';
+	if(isMobile) $('#viewerContainer').css({overflow: isHand?'auto':'hidden'});
+	$('.botmenu').css('visibility', isHand?'hidden':'visible');
+}
+
 function setStage (stat) {
 
   $('.active').removeClass('active');
   $('.select2DIV').hide();
 
   function resetState () {
+  	if( $('a.btnHand').hasClass('HL') ){
+  		toggleGrab();
+  	}
+  	$('.searchBtn').show();
+  	$('.drawIcon').hide();
     $('.subtool').hide();
     $('.botmenu').hide();
     $('.signImg').show();
@@ -3944,17 +3962,19 @@ function setStage (stat) {
 
 	switch (stat){
 		case 'remark':
-        resetState();
-      		$('.signImg').hide();
-			   showCanvas();
+	    	resetState();
+	  		$('.signImg').hide();
+		   showCanvas();
          $('#inputViewer').find('.textCon').remove();
   			/** Disable Mouse Scrolling when in remark mode **/
         if(isMobile) $('#viewerContainer').css({overflow:'hidden'});
         // $('#inputViewer').hide();
   			svgHistory.update('force');
+  			$('.drawIcon').show();
+  			$('.searchBtn').hide();
 			break;
 		case 'viewer':
-        resetState();
+        	resetState();
           $('#inputViewer').show();
 		      $('#drawViewer').hide();
 		      $('#drawTool').hide();

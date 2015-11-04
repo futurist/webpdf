@@ -975,6 +975,11 @@ var svgns = "http://www.w3.org/2000/svg";
       }
       curTool = tool;
 
+      var isSelMode = $('a.btnSelection').hasClass('HL');
+      if(!noUpdateHistory && isSelMode){
+        toggleSelectionMode();
+      }
+
       if(!options) options={};
 
       $('.maintool>.button').removeClass('stepOn');
@@ -1324,9 +1329,9 @@ var svgns = "http://www.w3.org/2000/svg";
             downTimer = window.setTimeout(function() {
               selecting=true;
               $('svg.canvas',context).addClass('selectState');
-            },300);
+            },100);
           }
-        }, 300);
+        }, 100);
 
       }
 

@@ -336,6 +336,9 @@ var DrawView  = (function () {
 
 window.addEventListener('scalechange', function scalechange(evt) {
 
+	var pageView = PDFViewerApplication.pdfViewer.getPageView(0);
+	window.curScale = pageView.viewport.scale;
+
   setStage('viewer');
   //$('#inputViewer').hide();
 
@@ -391,6 +394,8 @@ function RERenderDrawerLayer(pageIndex){
 
   $('#drawerLayer'+ page).css({width: ~~pageView.width, height: ~~pageView.height  });
   $('#inputLayer'+ page).css({width: ~~pageView.width, height: ~~pageView.height  });
+  	console.log(pageIndex)
+
 
 	copyDrawerLayerData(pageIndex);
 
@@ -1370,7 +1375,7 @@ var svgns = "http://www.w3.org/2000/svg";
     {
       var isSelMode = $('a.btnSelection').hasClass('HL');
       var isHandMode = $('a.btnHand').hasClass('HL');
-      
+
       if(isHandMode) return;
       var evt = /touch/.test(e.type) ? e.touches[0] : e;
 
@@ -1636,7 +1641,7 @@ var svgns = "http://www.w3.org/2000/svg";
     function upFunc (e) {
       var isSelMode = $('a.btnSelection').hasClass('HL');
       var isHandMode = $('a.btnHand').hasClass('HL');
-      
+
       if(isHandMode) return;
 
       if(!curContext) return;
@@ -1917,7 +1922,7 @@ var svgns = "http://www.w3.org/2000/svg";
               } else {
                 inputText.data('person', null);
               }
-              
+
             }
 
          }
@@ -3953,15 +3958,15 @@ function beginSign(el){
 
 
 function toggleSelectionMode () {
-  $('a.btnSelection').toggleClass('HL'); 
+  $('a.btnSelection').toggleClass('HL');
   var isSelMode = $('a.btnSelection').hasClass('HL');
-  
+
 }
 
 function toggleGrab () {
 
-	HandTool.handTool.toggle(); 
-	$('a.btnHand').toggleClass('HL'); 
+	HandTool.handTool.toggle();
+	$('a.btnHand').toggleClass('HL');
 	var isHand = $('a.btnHand').hasClass('HL');
 
 	curStage = isHand?'viewer':'remark';
@@ -4506,8 +4511,10 @@ $(function initPage () {
   function quitCanvas (){
     confirm('确认不保存退出吗？',
       function(ok){
-        console.log(ok);
-        if(ok) {restoreCanvas(true);setStage('viewer');}
+        if(ok) {
+        	setStage('viewer');
+        	restoreCanvas(true);
+    	}
     });
   }
 

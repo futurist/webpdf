@@ -1190,7 +1190,7 @@ div.selectivity-dropdown{
     top: 0;
     left: 0;
     right: 0;
-    margin: 20px auto;
+    margin: 10px auto;
     padding: 10px;
     z-index: 9999999999999;
     width: 320px;
@@ -1201,6 +1201,7 @@ div.selectivity-dropdown{
   display: table-cell;
   text-decoration: none;
   color:#999;
+  text-align: center;
 }
 .drawIcon>a.HL{
     color: #060652;
@@ -1223,6 +1224,9 @@ div.selectivity-dropdown{
 }
 .drawIcon>a.btnSave:before{
     content: "\f0c7";
+}
+.drawIcon>a.btnSelection:before{
+    content: "\f096";
 }
 
 #closeFindBar:before{
@@ -1251,6 +1255,7 @@ div.selectivity-dropdown{
 
 <div class="drawIcon">
   <a href="javascript:;" class="button btnExit" data-onclick="quitCanvas()" title="取消"></a>
+  <a href="javascript:;" class="button btnSelection" data-onclick="toggleSelectionMode()" title="选择"></a>
   <a href="javascript:;" class="button btnUndo" data-onclick="OPHistory.undo()" title="还原"></a>
   <a href="javascript:;" class="button btnHand" data-onclick="toggleGrab()" title="手形"></a>
   <a href="javascript:;" class="button btnRedo" data-onclick="OPHistory.redo()" title="重做"></a>

@@ -1199,7 +1199,10 @@ var svgns = "http://www.w3.org/2000/svg";
 
 
     function downFunc (e) {
-    	if($('.grab-to-pan-grab').length) return;
+      var isSelMode = $('a.btnSelection').hasClass('HL');
+      var isHandMode = $('a.btnHand').hasClass('HL');
+
+    	if(isHandMode) return;
       setTimeout(function(){ $('.colorCon').hide(); }, 200);
       var evt = /touch/.test(e.type) ? e.touches[0] : e;
       var canvas = $(evt.target).closest('.drawerLayer')
@@ -1281,7 +1284,6 @@ var svgns = "http://www.w3.org/2000/svg";
 
       //** DOUBLE CLICK event on canvas or element
       //******************************************
-      var enableSelection = isAndroid ? false : true;
 
       if( e.timeStamp - prevTime<500 && prevEl && $(prevEl).data('id') == $(targetEl).data('id')  ){
         prevTime = 0;
@@ -1301,30 +1303,39 @@ var svgns = "http://www.w3.org/2000/svg";
       prevEl = targetEl;
       prevTime = e.timeStamp;
 
-      // long click to trigger dragging mode && selecting mode
-      if(enableSelection &&!selecting && !dragging && !drawing )
-      downTimer = window.setTimeout(function() {
-        //we are longclick on shape
-        if( isShape || isText ){
+      if(isSelMode && !(isShape || isText) ){
 
-          addSelectionList( targetEl );
-          //beginDrag();
+          selecting=true;
+          $('svg.canvas',context).addClass('selectState');
 
-        }else{
-          //we are longclick on SVG, selection mode
-          downTimer = window.setTimeout(function() {
-            selecting=true;
-            $('svg.canvas',context).addClass('selectState');
-          },300);
-        }
-      }, 300);
+      } else {
+
+        // long click to trigger dragging mode && selecting mode
+        if(!selecting && !dragging && !drawing )
+        downTimer = window.setTimeout(function() {
+          //we are longclick on shape
+          if( isShape || isText ){
+
+            addSelectionList( targetEl );
+            //beginDrag();
+
+          }else{
+            //we are longclick on SVG, selection mode
+            downTimer = window.setTimeout(function() {
+              selecting=true;
+              $('svg.canvas',context).addClass('selectState');
+            },300);
+          }
+        }, 300);
+
+      }
 
 
-
-      // if( $(targetEl).data('hl') || (isText) ){
       if( isShape || isText ){
 
-        $('[data-hl]').data('hl', null);
+        if(! $(targetEl).data('hl') ) {
+          $('[data-hl]').data('hl', null);
+        }
         addSelectionList( targetEl );
         beginDrag();
 
@@ -1352,7 +1363,10 @@ var svgns = "http://www.w3.org/2000/svg";
 
     function moveFunc(e)
     {
-    	if($('.grab-to-pan-grab').length) return;
+      var isSelMode = $('a.btnSelection').hasClass('HL');
+      var isHandMode = $('a.btnHand').hasClass('HL');
+      
+      if(isHandMode) return;
       var evt = /touch/.test(e.type) ? e.touches[0] : e;
 
       var buttonDown = ( !isMobile? e.which>0 : e.touches.length>0 );
@@ -1615,7 +1629,10 @@ var svgns = "http://www.w3.org/2000/svg";
     }
 
     function upFunc (e) {
-    	if($('.grab-to-pan-grab').length) return;
+      var isSelMode = $('a.btnSelection').hasClass('HL');
+      var isHandMode = $('a.btnHand').hasClass('HL');
+      
+      if(isHandMode) return;
 
       if(!curContext) return;
 
@@ -3096,6 +3113,7 @@ function GetScrollPositions () {
     return [scrollLeft, scrollTop];
 }
 
+
 function makeColorPicker () {
 
 	var letters = '0369CF'.split('');
@@ -3202,6 +3220,7 @@ function copyDrawerLayerData(pageIndex){
 
 $(window).on('resize', function  () {
    $('#drawViewer, #inputViewer').width( $('#viewer').width() );
+   $('.drawIcon').width( Math.min($(this).width(), 380) );
 });
 
 
@@ -3928,6 +3947,12 @@ function beginSign(el){
 }
 
 
+function toggleSelectionMode () {
+  $('a.btnSelection').toggleClass('HL'); 
+  var isSelMode = $('a.btnSelection').hasClass('HL');
+  
+}
+
 function toggleGrab () {
 
 	HandTool.handTool.toggle(); 
@@ -3936,7 +3961,10 @@ function toggleGrab () {
 
 	curStage = isHand?'viewer':'remark';
 	if(isMobile) $('#viewerContainer').css({overflow: isHand?'auto':'hidden'});
-	$('.botmenu').css('visibility', isHand?'hidden':'visible');
+	$('.botmenu,.btnSelection,.btnUndo,.btnRedo,.btnDel').css('visibility', isHand?'hidden':'visible');
+  if(isHand){
+    $('.shape,.textWrap').data('hl',null);
+  }
 }
 
 function setStage (stat) {
@@ -4347,6 +4375,7 @@ function confirm (msg) {
 
 $(function initPage () {
 
+  $(window).resize();
   makeColorPicker();
   makeTemplatePicker();
   setStage('viewer');

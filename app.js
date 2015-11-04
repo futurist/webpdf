@@ -1269,7 +1269,7 @@ app.post("/upfile", function (req, res) {
 
       } else {
 
-         var overAllPath = util.format('<a href="%s#path=%s&shareID=%d&openMessage=0">%s</a>', TREE_URL, ret.key, shareID, ret.shareName ) ;
+         var overAllPath = util.format('<a href="%s#path=%s&shareID=%d&openMessage=0">%s</a>', TREE_URL, ret.key, shareID, getShareName(data, true) ) ;
 
           var msg = {
            "touser": data.toPerson.concat(data.fromPerson).map(function(v){return v.userid}).join('|'),
@@ -1279,7 +1279,7 @@ app.post("/upfile", function (req, res) {
              "content":
              util.format('%s 在%s 上传了文件：%s',
               data.fromPerson[0].name,
-              ret.shareName,
+              getShareName(data, true),
                util.format('<a href="%s#path=%s&shareID=%d&openMessage=0">%s</a>', TREE_URL, ret.key, shareID, ret.title )
              )
            },

@@ -34,12 +34,18 @@ var handlebars = require('express-handlebars');
 var flash = require('connect-flash');
 
 
-var redis = require("redis"),
+var redis = require("redis");
+var redisq = require('redisq');
+var he = require('he');
+
+redisWSQ=null;
 redisClient = redis.createClient(6379, '127.0.0.1', {});
 
 qiniu.conf.ACCESS_KEY = '2hF3mJ59eoNP-RyqiKKAheQ3_PoZ_Y3ltFpxXP0K';
 qiniu.conf.SECRET_KEY = 'xvZ15BIIgJbKiBySTV3SHrAdPDeGQyGu_qJNbsfB';
 QiniuBucket = 'bucket01';
+
+FINGER_TTL = 365;
 
 FILE_HOST = 'http://7xkeim.com1.z0.glb.clouddn.com/';
 TREE_URL = "http://1111hui.com/pdf/client/tree.html";
@@ -47,6 +53,7 @@ VIEWER_URL = "http://1111hui.com/pdf/webpdf/viewer.html";
 SHARE_MSG_URL = "http://1111hui.com/pdf/client/sharemsg.html";
 IMAGE_UPFOLDER = 'uploads/' ;
 var regex_image= /(gif|jpe?g|png|bmp)$/i;
+
 
 
 var fileStorage = multer.diskStorage({
@@ -76,6 +83,44 @@ function replaceConsole () {
 }
 replaceConsole();
 
+
+var htmlEscapeMap = {
+	'"': '&quot;',
+	// '&': '&amp;',
+	'\'': '&#x27;',
+	'/': '&#x002F;', //'&#x47;',
+	'\n': '<br>',
+	'<': '&lt;',
+	// See https://mathiasbynens.be/notes/ambiguous-ampersands: in HTML, the
+	// following is not strictly necessary unless it’s part of a tag or an
+	// unquoted attribute value. We’re only escaping it to support those
+	// situations, and for XML support.
+	'>': '&gt;',
+	// In Internet Explorer ≤ 8, the backtick character can be used
+	// to break out of (un)quoted attribute values or HTML comments.
+	// See http://html5sec.org/#102, http://html5sec.org/#108, and
+	// http://html5sec.org/#133.
+	'`': '&#x60;'
+};
+var htmlEscapeMapInvert = _.invert(htmlEscapeMap);
+String.prototype.toHTML = function() {
+	//return this && he.escape(this).replace(/\n/g,'<br>').replace(/\//g, '&#47;');
+    //return this && he.encode(this).replace(/\n/g,'<br>').replace(/\//g, '&#47;');
+    //.replace(/&/g,'&amp;')
+    //return this && this.replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>').replace(/\//g, '&#47;');
+    return this&& this.replace(new RegExp( _.keys(htmlEscapeMap).join('|'), 'g'), function($0) {
+    	return htmlEscapeMap[$0];
+    });
+}
+
+String.prototype.toTEXT = function() {
+    //return this && he.decode(this, {isAttributeValue:false}).replace(/<br>/g,'\n').replace(/&#47;/g, '/');
+    //.replace(/&/g,'&amp;')
+    //return this && this.replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/<br>/g,'\n').replace(/&#47;/g, '/');
+    return this&& this.replace(new RegExp( _.keys(htmlEscapeMapInvert).join('|'), 'g'), function($0) {
+    	return htmlEscapeMapInvert[$0];
+    });
+}
 
 function safeEval (str) {
   try{
@@ -114,7 +159,8 @@ futurist.array_remove_item = function(array, item) {
 };
 
 function NewID () {
-  return +new Date()+'_'+Math.random().toString().slice(2,5);
+  // return +new Date()+'_'+Math.random().toString().slice(2,5);
+  return Math.random().toString(36).slice(-15);
 }
 
 function qiniu_getUpToken() {
@@ -208,7 +254,43 @@ redisClient.on('error', function (err) {
 
 redisClient.on('connect', function(err){
   console.log('Connected to Redis server' + err);
+
+  initRedisQ();
+
 });
+
+function initRedisQ () {
+
+	redisq.options({redis:redisClient});
+	redisWSQ = redisq.queue('websocketMsgQueue');
+
+	redisWSQ.process(function  (task, cb) {
+
+	    var key = task.clientName+ task.from +':'+task.msg.msgID;
+
+	    var client = WSCLIENT[task.clientName+task.from];
+
+	    if(!client || !client.ws){
+	    	delete REDISQ_CB[key];
+	    	return cb();
+	    }
+
+	    client.ws.send( JSON.stringify(task.msg)  );
+	    REDISQ_CB[key] = cb;
+
+		setTimeout( function  () {
+		    var cb = REDISQ_CB[key];
+		    redisWSQ.stats(function(err, stat){ console.log('wssend', cb?'timeout':'success', key, stat.counters); });
+			if(cb){
+				cb('timeout');
+				delete REDISQ_CB[key];
+			}
+		}, 3000 );
+
+	}, 1);
+
+	// redisWSQ.push(obj) function in ws Message event--->
+}
 
 
 
@@ -231,6 +313,7 @@ var wss = new WebSocketServer({ port: 3000 });
 var JOBS = {};  // store printer jobs same format as WSMSG
 var WSMSG = {}; // store client persistent message
 var WSCLIENT = {};
+var REDISQ_CB = {};
 wss.on('connection', function connection(ws) {
 
   // https://github.com/websockets/ws/issues/361
@@ -271,10 +354,28 @@ wss.on('connection', function connection(ws) {
       // msg format: { clientName:clientName, clientRole:'printer', clientOrder:1 }
       var suffix = (msg.from? ':'+msg.from: '');
       var clientFullName = msg.clientName+suffix;
-      if(WSCLIENT[clientFullName]) return;
+
+      if(msg.timeStamp && WSCLIENT[clientFullName+msg.timeStamp] && WSCLIENT[clientFullName+msg.timeStamp].ws) {
+      	WSCLIENT[clientFullName+msg.timeStamp].ws.send( JSON.stringify({ role:'exitApp' }) );
+      	return;
+      }
+
+
+      if(WSCLIENT[clientFullName] && WSCLIENT[clientFullName].ws ) {
+        var prevTimeStamp = WSCLIENT[clientFullName].timeStamp;
+        if( prevTimeStamp && prevTimeStamp != msg.timeStamp ){
+
+          WSCLIENT[clientFullName+prevTimeStamp] = WSCLIENT[clientFullName];
+          WSCLIENT[clientFullName+prevTimeStamp].ws.send( JSON.stringify({ role:'exitApp' }) );
+
+        } else {
+          return;
+        }
+
+      }
 
       console.log( 'client up', clientFullName );
-      WSCLIENT[clientFullName] = _.extend( msg, {ws:ws, timeStamp:+new Date()} );
+      WSCLIENT[clientFullName] = _.extend( msg, {ws:ws} );
 
       if(msg.clientRole == 'printer') {
 
@@ -298,6 +399,17 @@ wss.on('connection', function connection(ws) {
       return;
     }
 
+    if(msg.type=='msgDone' && msg.msgID) {
+    	var from = msg.from ? ':'+msg.from : '';
+    	var clientName = msg.clientName;
+    	var key = clientName+ from+':'+msg.msgID;
+    	var cb = REDISQ_CB[key];
+    	if(cb){
+    		cb();
+    		delete REDISQ_CB[key];
+    	}
+    }
+
     var msgid = msg.msgid;
     if(msgid){
         delete msg.msgid;
@@ -314,14 +426,27 @@ wss.on('connection', function connection(ws) {
 });
 
 function wsSendClient (clientName, msg) {
-  console.log('wssend', clientName);
+	if(!clientName) return;
   var lastClient;
   ['',':mobile',':pc'].forEach(function sendToClient (v) {
     var client = WSCLIENT[clientName+v];
     if(!client || !client.ws) return true;
     msg.clientName = clientName;
+    if(!msg.msgID) msg.msgID = NewID();
 
-    client.ws.send( JSON.stringify(msg)  );
+    if(redisWSQ){
+    	// if we have redis queue startup, using queue to send
+    	console.log(v, clientName, msg.msgID);
+
+		redisWSQ.push( {msg:msg, clientName:clientName, from:v } );
+
+    } else {
+
+    	// no redis queue, send directly
+		client.ws.send( JSON.stringify(msg)  );
+
+    }
+
     lastClient = client;
   });
 
@@ -353,10 +478,33 @@ function wsSendPrinter (msg, printerName, res) {
 
 }
 
+function getShareAllPeople(data){
+
+    if(data.fromPerson && data.toPerson){
+      data.allPeople = _.uniq( _.flatten( data.fromPerson.concat(data.toPerson).map(function(v){return v.userid}) ) );
+    }
+    return data;
+}
+
 
 function wsBroadcast(data) {
-  if( data.role=='upfile' ){
+  if( data.role=='upfile' || data.role=='addToShare' ){
     return wsSendClient(data.person, data);
+  }
+
+  var theData = getShareAllPeople(data.data||data);
+  
+  if(data.data){
+    data.data = theData ;
+  } else {
+    data = theData;
+  }
+
+  if( theData.allPeople ) {
+    theData.allPeople.forEach(function(v){
+      wsSendClient(v, data);
+    });
+    return;
   }
 
   wss.clients.forEach(function each(client) {
@@ -610,7 +758,7 @@ app.post("/getFinger", function (req, res) {
   var reqData = getWsData(msgid);
   if(!reqData) return res.send('');
   var finger = reqData.finger;
-  var condition = {finger:finger, role:'finger', status:{$ne:-1}, date:{$gt: new Date(moment().subtract(14, 'days')) } };
+  var condition = {finger:finger, role:'finger', status:{$ne:-1}, date:{$gt: new Date(moment().subtract(FINGER_TTL, 'days')) } };
 
   res.cookie('finger', finger);
 
@@ -783,7 +931,12 @@ app.post("/getJSTicket", function (req, res) {
 
 
 function getShareName ( colShare, addSlash ) {
-  var a= (colShare.isSign?'流程':'共享')+colShare.shareID+ (colShare.msg?'['+colShare.msg+']':'' ) + '('+colShare.fromPerson.concat(colShare.toPerson).map(function(v){return v.name}).join(',')+')' ;
+  var toArray = (colShare.isSign? [].concat.apply([], colShare.toPerson).filter(function(v){return v.userid!=colShare.fromPerson[0].userid}) : colShare.selectRange);
+  var toStr = toArray.slice(0,3).map(function(v){ return v.userid?v.name:'【'+v.name+'】' }).join(',');
+  var a= (colShare.isSign?'流程':'共享')+colShare.shareID;
+  a += '('+ colShare.fromPerson[0].name + '-'+toStr+ (toArray.length>3?'...':'') +')' ;
+  a += (colShare.msg?''+colShare.msg+'':'' );
+
   if(addSlash) a='/'+a+'/';
   return a;
 }
@@ -997,7 +1150,7 @@ function uploadWXImage(req, res) {
   var shareID = safeEval( req.query.shareID );
   var isInMsg = safeEval(req.query.isInMsg);
   var path = req.query.path;
-  var text = req.query.text;
+  var text = req.query.text&&req.query.text.toHTML();
 
   api.getMedia(mediaID, function(err, buffer, httpRes){
     if(err) {console.log(err); return res.send('');}
@@ -1269,7 +1422,15 @@ app.post("/upfile", function (req, res) {
 
       } else {
 
-         var overAllPath = util.format('<a href="%s#path=%s&shareID=%d&openMessage=0">%s</a>', TREE_URL, ret.key, shareID, getShareName(data, true) ) ;
+          var overAllPath = util.format('<a href="%s#path=%s&shareID=%d&openMessage=0">%s</a>', TREE_URL, ret.key, shareID, getShareName(data, true) ) ;
+          var isPDF = /\.pdf$/i.test(ret.key);
+          var url = util.format('<a href="%s#%s&shareID=%d&isSign=%d">%s</a>',
+                      isPDF? VIEWER_URL : TREE_URL,
+                      isPDF? 'file='+FILE_HOST+ encodeURIComponent(ret.key) : 'path='+ encodeURIComponent( getShareName(data, true)+ret.key),
+                      shareID,
+                      data.isSign,
+                      ret.title
+               );
 
           var msg = {
            "touser": data.toPerson.concat(data.fromPerson).map(function(v){return v.userid}).join('|'),
@@ -1280,7 +1441,7 @@ app.post("/upfile", function (req, res) {
              util.format('%s 在%s 上传了文件：%s',
               data.fromPerson[0].name,
               getShareName(data, true),
-               util.format('<a href="%s#path=%s&shareID=%d&openMessage=0">%s</a>', TREE_URL, ret.key, shareID, ret.title )
+              url
              )
            },
             "safe":"0",
@@ -1481,7 +1642,7 @@ app.post("/exitMember", function (req, res) {
     var personName = data.personName ;
 
 
-    col.findOneAndUpdate({role:'share', shareID:shareID }, { $pull: { 'toPerson': { userid: person }  }  }, {returnOriginal:false},
+    col.findOneAndUpdate({role:'share', shareID:shareID }, { $pull: { 'toPerson': { userid: person }, 'allPeople': person } }, {returnOriginal:false},
         function(err, result) {
 
           if(err) return res.send('');
@@ -1526,7 +1687,11 @@ app.post("/addMember", function (req, res) {
     var stuffs = data.stuffs ;
     var personName = data.personName ;
 
-    col.findOneAndUpdate({role:'share', shareID:shareID }, { $addToSet: { 'toPerson': { $each: stuffs }  }  }, {returnOriginal:false},
+    var stuffIds = stuffs.filter(function(v){return v.userid}).map(function(v){
+      return v.userid;
+    });
+
+    col.findOneAndUpdate({role:'share', shareID:shareID }, { $addToSet: { 'toPerson': { $each: stuffs }, 'allPeople': { $each: stuffIds }  }  }, {returnOriginal:false},
         function(err, result) {
 
           if(err) return res.send('');
@@ -1720,7 +1885,7 @@ app.post("/signInWeiXin", function (req, res) {
 
             var colShare = result;
             var flowName = colShare.flowName;
-            var msg = colShare.msg;
+            var msg = colShare.msg&&colShare.msg.toHTML();
             var isSign = colShare.isSign;
 
             var curFlowPos = colShare.curFlowPos;
@@ -1913,6 +2078,7 @@ function placerholderToUser (fromUserId, placeholder, getFullInfo) {
 app.post("/applyTemplate2", function (req, res) {
 
 	var data = req.body;
+  var flowTitle = data.flowTitle;
 	var path = data.path;
   	var userid = data.userid;
   var info = data.info;
@@ -1949,13 +2115,14 @@ app.post("/applyTemplate2", function (req, res) {
   			signIDS: signIDS || doc.signIDS,
   			inputData:doc.inputData|| {} ,
   			hash: +new Date()+Math.random().toString().slice(2,5)+'_'+'',
-  			order:0
+  			order:0,
+      		isTemplate : info.isTemplate
   		};
 
   		var data = {};
       data.role = 'share';
-      data.flowName = doc.title;
-      data.msg = '';
+      data.flowName = doc.title&&doc.title.toHTML();
+      data.msg = flowTitle&&flowTitle.toHTML();
       data.isSign = true;
       data.date = new Date();
       data.files = [fileInfo];
@@ -2015,7 +2182,7 @@ app.post("/applyTemplate2", function (req, res) {
 app.post("/getTemplateFiles", function (req, res) {
   // find signIDS.length > 0
   // http://stackoverflow.com/questions/7811163/how-to-query-for-documents-where-array-size-is-greater-than-one-1-in-mongodb/15224544#15224544
-  col.find( { role:'upfile', isTemplate:true, status:{$ne:-1}, 'signIDS.0':{$exists:true} } , {limit:2000,fields:{drawData:0,inputData:0,signIDS:0} } ).sort({title:1,date:-1}).toArray(function(err, docs){
+  col.find( { role:'upfile', isTemplate:{$gt:0}, status:{$ne:-1}, 'signIDS.0':{$exists:true} } , {limit:2000,fields:{drawData:0,inputData:0,signIDS:0} } ).sort({title:1,date:-1}).toArray(function(err, docs){
     if(err) {
       return res.send('error');
     }
@@ -2237,7 +2404,7 @@ app.post("/saveCanvas", function (req, res) {
             var file = colShare.files.filter(function(v){ return v.key==filename; })[0];
             var fileKey = file.key;
             var flowName = colShare.flowName;
-            var msg = colShare.msg;
+            var msg = colShare.msg&&colShare.msg.toHTML();
             var isSign = colShare.isSign;
             var overAllPath = util.format('%s#file=%s&shareID=%d&isSign=%d', VIEWER_URL, FILE_HOST+ encodeURIComponent(fileKey), shareID, isSign?1:0 ) ;
             var content =
@@ -2284,6 +2451,8 @@ app.post("/saveInputData", function (req, res) {
   var textID = req.body.textID;
   var value = req.body.value;
   var file = req.body.file;
+  var html = req.body.html;
+  var flowPos = req.body.flowPos;
   var shareID = parseInt( req.body.shareID );
   try{
     var filename = file.replace(FILE_HOST, '');
@@ -2291,17 +2460,31 @@ app.post("/saveInputData", function (req, res) {
     return res.send("");
   }
   if(!shareID){
-    var obj = {};
-    obj['inputData.'+textID.replace(/\./g, '\uff0e')] = value;
-    col.update({role:'upfile', 'key':filename }, { $set: obj  }, function(err, result){
+    var rootKey = 'inputData.'+textID.replace(/\./g, '\uff0e');
+
+    var obj1 = {};
+    obj1[rootKey+'.html'] = html;
+
+    var obj2 = {};
+    obj2[rootKey+'.val'] = value;
+
+    col.update({role:'upfile', 'key':filename }, { $set:obj1, $push: obj2 }, function(err, result){
     	return res.send("OK");
     });
   } else {
   	// have to replace keys that contains dot(.) in keyname,
   	// http://stackoverflow.com/questions/12397118/mongodb-dot-in-key-name
-    var obj = {};
-    obj['files.$.inputData.'+textID.replace(/\./g, '\uff0e')] = value;
-    col.update({ role:'share', shareID:shareID, 'files.key':filename }, { $set: obj  }, function(err, result){
+    var rootKey = 'files.$.inputData.'+textID.replace(/\./g, '\uff0e');
+
+    var obj1= {};
+    obj1[rootKey+'.html'] = html;
+
+    var obj2 = {};
+    obj2[rootKey+'.val'] = value;
+
+    col.updateOne({ role:'share', shareID:shareID, 'files.key':filename, curFlowPos:flowPos, isFinish:{$in:[null,'',false]} }, 
+                  { $set:obj1, $push: obj2  }, function(err, result){
+      if(err || !result.result.nModified) return res.send("ERR_NOPERMISSION");
     	return res.send("OK");
     });
   }
@@ -2550,10 +2733,10 @@ app.post("/getShareFrom", function (req, res) {
     return res.send('');
   }, 15000);
 
-  var condition = { 'fromPerson.userid': person, role:'share' };
+  var condition = { 'fromPerson.userid': person, role:'share', status:{$ne:-1} };
   if(startShareID) condition.shareID = {$lt: startShareID };
 
-  col.find( condition , {limit:50, fields:{ fileIDS:0, filePathS:0, selectRange:0, 'files.drawData':0,'files.inputData':0,'files.signIDS':0}, timeout:true} ).sort({shareID:-1}).toArray(function(err, docs){
+  col.find( condition , {limit:50, fields:{ fileIDS:0, filePathS:0, 'files.drawData':0,'files.inputData':0,'files.signIDS':0}, timeout:true} ).sort({shareID:-1}).toArray(function(err, docs){
       clearTimeout(connInter); if(timeout)return;
       if(err || !docs) {
         return res.send('error');
@@ -2573,10 +2756,10 @@ app.post("/getShareTo", function (req, res) {
   }, 15000);
   //col.aggregate([ {$match:{role:'share'}}, {$unwind:'$toPerson'}, { $match: {'toPerson.userid': person} } ] ).sort({shareID:-1}).toArray(function(err, docs){
   //col.find( { 'toPerson.userid': person, role:'share' } , {limit:500, timeout:true} ).sort({shareID:-1}).toArray(function(err, docs){
-  var condition = { $or:[ {'toPerson.userid':person}, { 'toPerson':{$elemMatch: {$elemMatch:{'userid': person } } } } ], role:'share' };
+  var condition = { $or:[ {'toPerson.userid':person}, { 'toPerson':{$elemMatch: {$elemMatch:{'userid': person } } } } ], role:'share', status:{$ne:-1} };
   if(startShareID) condition.shareID = {$lt: startShareID };
 
-  col.find( condition , {limit:50, fields:{fileIDS:0, filePathS:0, selectRange:0, 'files.drawData':0,'files.inputData':0,'files.signIDS':0},  timeout:true} ).sort({shareID:-1}).toArray(function(err, docs){
+  col.find( condition , {limit:50, fields:{fileIDS:0, filePathS:0, 'files.drawData':0,'files.inputData':0,'files.signIDS':0},  timeout:true} ).sort({shareID:-1}).toArray(function(err, docs){
       clearTimeout(connInter); if(timeout)return;
       if(err || !docs) {
         return res.send('error');
@@ -2593,7 +2776,7 @@ app.post("/getShareMsg", function (req, res) {
   var toPerson = req.body.toPerson;
   var shareID = parseInt(req.body.shareID);
   var hash = req.body.hash;
-  var keyword = req.body.keyword;
+  var keyword = req.body.keyword&&req.body.keyword.toHTML();
 
   var condition = {  role:'shareMsg' };
   if(shareID) condition.shareID = parseInt(shareID,10);
@@ -2971,7 +3154,7 @@ app.post("/finishSign", function (req, res) {
                        "content":
                        util.format('%s 文件 %s 增加了新的签名：%s, <a href="%s">查看文件</a>',
 
-                          (colShare.isSign?'流程':'共享') + colShare.shareID + '('+ colShare.fromPerson[0].name + ' '+ (colShare.isSign?colShare.flowName : colShare.msg) +')',
+                          getShareName(colShare, true),
 
                           colShare.files[fileIdx].title,
 
@@ -3006,7 +3189,7 @@ app.post("/finishSign", function (req, res) {
 
                   var fileKey = file.key;
                   var flowName = colShare.flowName;
-                  var msg = colShare.msg;
+                  var msg = colShare.msg&&colShare.msg.toHTML();
                   var title = getSubStr( '流程'+shareID+flowName+ (msg), 50);
                   var overAllPath = util.format('%s#file=%s&shareID=%d&isSign=1', VIEWER_URL, FILE_HOST+ encodeURIComponent(fileKey), shareID ) ;
 
@@ -3499,7 +3682,7 @@ app.post("/getSignHistory", function (req, res) {
 
 function SendShareMsg(req, res) {
   var person = req.body.person;
-  var text = req.body.text;
+  var text = req.body.text&&req.body.text.toHTML();
   var status = req.body.status;
   var shareID = parseInt(req.body.shareID);
   var path = req.body.path;
@@ -3521,7 +3704,7 @@ function SendShareMsg(req, res) {
           return res.send('');	//此共享已删除
         }
 
-      var users = data.fromPerson.concat(data.toPerson).filter(function(v){return v.userid==person});
+      var users = _.flatten( data.fromPerson.concat(data.toPerson) ).filter(function(v){return v.userid==person});
       if(!users.length){
         return res.send('');	//没有此组权限
       }
@@ -3536,7 +3719,7 @@ function SendShareMsg(req, res) {
         var pathName = [];
         path.forEach(function(v,i){
           var a = '/'+path.slice(0,i+1).join('/')+'/';
-          pathName.push( util.format('<a href="%s#path=%s&shareID=%d">%s</a>', TREE_URL, encodeURIComponent(a), shareID, v) );
+          pathName.push( util.format('<a href="%s#path=%s&shareID=%d">%s</a>', TREE_URL, encodeURIComponent(a), shareID, getShareName(data, true) ) );
         });
         if(fileHash) {
           var a =  '/'+path.join('/')+'/' + fileHash;
@@ -3552,15 +3735,15 @@ function SendShareMsg(req, res) {
         }
     } else {
 
-      var link = getShareName(data, true);
     }
 
+      var link = getShareName(data, true);
 
-     var overAllPath = util.format('<a href="%s#path=%s&shareID=%d&openMessage=1">%s</a>', TREE_URL, encodeURIComponent(link), shareID, a ) ;
+     var overAllPath = util.format('<a href="%s#path=%s&shareID=%d&openMessage=1">%s</a>', TREE_URL, encodeURIComponent(link), shareID, link ) ;
 
       var msg = {
-       "touser": data.toPerson.concat(data.fromPerson).map(function(v){return v.userid}).join('|'),
-       "touserName": data.toPerson.concat(data.fromPerson).map(function(v){return v.name}).join('|'),
+       "touser": _.flatten( data.fromPerson.concat(data.toPerson) ).map(function(v){return v.userid}).join('|'),
+       "touserName": _.flatten( data.fromPerson.concat(data.toPerson) ).map(function(v){return v.name}).join('|'),
        "msgtype": "text",
        "text": {
          "content":
@@ -3625,6 +3808,7 @@ app.post("/shareFile", function (req, res) {
       v.path = data.filePathS[ v.key.replace(/\./g, '\uff0e') ];
     });
     data.files = files;
+    data.msg = data.msg&&data.msg.toHTML();
 
       if(data.existShareID){
 
@@ -3636,7 +3820,7 @@ app.post("/shareFile", function (req, res) {
           res.send(colShare);
 
           var shareID = colShare.shareID;
-          var shareName = util.format('共享%d(%s)[%s]', shareID, colShare.msg, colShare.toPerson.map(function(v){return v.name}).join(',') );
+          var shareName = getShareName(colShare, true);
 
             var overAllPath = util.format('%s#path=%s&shareID=%d', TREE_URL, encodeURIComponent( shareName+data.files[0].key ), shareID ) ;
             var wxmsg = {
@@ -3645,20 +3829,21 @@ app.post("/shareFile", function (req, res) {
              "msgtype": "text",
              "text": {
                "content":
-               util.format('/%s/添加了新文件：%s; 操作者：%s%s <a href="%s">查看共享</a>',
+               util.format('%s在 %s添加了新文件：%s; 操作者：%s%s',
+                  data.fromPerson[0].depart+'-'+data.fromPerson[0].name,
                   shareName,
                   data.files.map(function(v){
-                    return util.format('<a href="%s#file=%s&shareID=%d&isSign=%d">%s</a>',
-                      VIEWER_URL,
-                      FILE_HOST+ encodeURIComponent(v.key),
+                    var isPDF = /\.pdf$/i.test(v.key);
+                    return util.format('<a href="%s#%s&shareID=%d&isSign=%d">%s</a>',
+                      isPDF? VIEWER_URL : TREE_URL,
+                      isPDF? 'file='+FILE_HOST+ encodeURIComponent(v.key) : 'path='+ encodeURIComponent( shareName+v.key),
                       shareID,
                       colShare.isSign?1:0,
                       v.title
                        )
                   }).join(','),
                   data.fromPerson[0].name,
-                  data.msg? ', 附言：'+data.msg : '',
-                  overAllPath  // if we need segmented path:   pathName.join('-'),
+                  data.msg? ', 附言：'+data.msg : ''
                 )
              },
              "safe":"0",
@@ -3674,7 +3859,31 @@ app.post("/shareFile", function (req, res) {
 
       } else {
 
-        insertShareData(data, res);
+
+
+        data.isTopic = data.isTopic===undefined? false: data.isTopic;
+        data.allPeople = _.uniq( _.flatten( data.fromPerson.concat(data.toPerson).map(function(v){return v.userid}) ) );
+        
+        if(data.isTopic){
+
+          col.findOne({role:'share', isTopic:true, allPeople:{ $all:data.allPeople } }, function  (err, result) {
+            if(err) return res.end();
+
+            if(!result) insertShareData(data, res);
+            else {
+
+              return res.send(result);
+
+            }
+
+          });
+
+        } else {
+
+          insertShareData(data, res);
+
+        }
+
 
 
       }
@@ -3699,14 +3908,16 @@ app.post("/shareFile", function (req, res) {
 });
 
 
-function insertShareData (data, res, showTab){
 
+
+function insertShareData (data, res, showTab){
 
             col.findOneAndUpdate({role:'config'}, {$inc:{ shareID:1 } }, function  (err, result) {
 
               var shareID = result.value.shareID+1;
               data.shareID = shareID;
               data.role = 'share';
+              data.msg = data.msg&&data.msg.toHTML();
 
               col.insert(data, {w:1}, function(err, r){
                 //res.send( {err:err, insertedCount: r.insertedCount } );
@@ -3715,7 +3926,7 @@ function insertShareData (data, res, showTab){
                   if(!data.isSign){
 
                     // it's not empty topic ,it's file share
-                    if( data.files.length ){
+                    if( data.files.length ) {
 
                       var treeUrl = TREE_URL + '#path=' + data.files[0].key +'&shareID='+ shareID;
                       var content = util.format('%s创建了/共享%d%s/，相关文档：%s，收件人：%s\n%s',
@@ -3745,15 +3956,14 @@ function insertShareData (data, res, showTab){
 
                   } else {
                     var treeUrl = makeViewURL(data.files[0].key, shareID, 1);
-                    var content = util.format('/流程%d %s/发起了流程：%s，文档：%s，经办人：%s%s\n%s',
+                    var content = util.format('/流程%d %s/发起了流程：%s，文档：%s，经办人：%s%s',
                         shareID,
                         data.fromPerson.map(function(v){return '【'+v.depart + '-' + v.name+'】'}).join('|'),
                         data.flowName,
-                        data.files.map(function(v){return ''+v.title+''}).join('，'),
-                        data.selectRange.map(function(v){
+                        data.files.map(function(v){return '<a href="'+ treeUrl +'">'+v.title+'</a>'}).join('，'),
+                        data.selectRange.map(function(v) {
                           return v.depart? ''+v.depart+'-'+v.name+'' : '【'+v.name+'】' }).join('；'),
-                        data.msg ? '，附言：\n'+data.msg : '',
-                        '<a href="'+ treeUrl +'">查看文件</a>'
+                        data.msg ? '，附言：\n'+data.msg : ''
                       );
                   }
                   var msg = {
@@ -3774,6 +3984,7 @@ function insertShareData (data, res, showTab){
                   data.openShare = false;
                   data.openMessage = false;
                   data.showTab = showTab;
+
                   wsBroadcast(data);
 
                 }
@@ -3786,8 +3997,19 @@ function insertShareData (data, res, showTab){
 
 
 function sendWXMessage (msg, fromUser) {
+/*
 
-  var wxMsg = JSON.parse(JSON.stringify(msg));
+SEND MSG TEST STRING:
+gwej
+jeiogj<p>fd</p>dfjo
+javascript:alert('aieof');
+console.log(sdfj<10);
+
+
+*/
+
+  var wxMsg = JSON.parse( JSON.stringify(msg) );
+
   var sharePath = JSON.stringify(msg).replace(/<[^>]+>/g,'').match(/\/[^/]+\//);
   sharePath = sharePath? sharePath.pop() : '';
 
@@ -3812,7 +4034,7 @@ function sendWXMessage (msg, fromUser) {
 
     if(sharePath && msg.shareID){
       if(wxMsg.text) {
-        wxMsg.text.content += '\n\n<a href="'+ SHARE_MSG_URL +'#path='+ sharePath +'&shareID='+ msg.shareID +'&msgID='+ (msg.msgID||'') +'">打开会话</a>';
+        wxMsg.text.content = wxMsg.text.content.toTEXT() + '\n\n<a href="'+ SHARE_MSG_URL +'#path='+ sharePath +'&shareID='+ msg.shareID +'&msgID='+ (msg.msgID||'') +'">打开会话</a>';
       }
       if(wxMsg.news) {
         wxMsg.news.articles.forEach(function(v){
@@ -4375,11 +4597,13 @@ function updateCompanyTree () {
             return _.where(departs, { id: depID} )[0].name;
           });
 
-          s.pId = s.department[0];
+          s.pId = v.id;
           s.departmentNames = namedDep;
-          s.depart = namedDep?namedDep[0]:'';
-          companyTree.push(s);
-          if( ! _.where(stuffList, {userid:s.userid }).length ) stuffList.push(s);
+          s.depart = namedDep? v.name :'';
+          if(s.status==1){
+	          companyTree.push(s);
+	          if( ! _.where(stuffList, {userid:s.userid }).length ) stuffList.push(s);
+          }
 
         });
         if(i==departs.length){

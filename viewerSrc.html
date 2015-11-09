@@ -1137,7 +1137,8 @@ div.selectivity-dropdown{
 #findbar{
   position: absolute;
   z-index: 9999999999999;
-  top:15px;
+  top: 9px;
+  height: 46px;
 }
 .findbar.doorHanger:after, .findbar.doorHanger:before{
   display: none;
@@ -1149,6 +1150,21 @@ div.selectivity-dropdown{
 
 #findInput{
   width: 100px;
+  height: 30px;
+}
+html[dir='ltr'] .toolbarButton.findPrevious::before{
+	font:18px FontAwesome;
+	content: "\f053";
+}
+html[dir='ltr'] .toolbarButton.findNext::before{
+	font:18px FontAwesome;
+	content: "\f054";
+}
+html[dir='ltr'] .splitToolbarButton {
+    margin: 11px 2px 4px 0;
+}
+.findbar, .secondaryToolbar{
+	padding-right: 2px;
 }
 .toolbarLabel, #findHighlightAll{
   display: none;
@@ -1309,18 +1325,29 @@ div.selectivity-dropdown{
 
 <div id="mainMenu" class="botmenu noselect">
 
-  <div class="maintool">
+  <div class="maintool maintoolTyep1">
     <a href="javascript:;" class="button" data-onclick="backCabinet()">文件柜</a>
     <a href="javascript:;" class="button" data-onclick="setStage('remark')">标注</a>
     <a href="javascript:;" class="button btnSign" data-onclick="showSign()">签署</a>
     <a href="javascript:;" class="button btnShowStep" data-onclick="showStep(this)">流程</a>
     <a href="javascript:;" class="button plusSign" data-onclick="PDFViewerApplication.zoomOut()">-</a>
     <a href="javascript:;" class="button plusSign" data-onclick="PDFViewerApplication.zoomIn()">+</a>
-    <a href="javascript:;" class="button" data-onclick="switchOption('#mainMenu', 'rotate')">旋转</a>
-    <a href="javascript:;" class="button" data-onclick="setStage('share')">分享</a>
+    <a href="javascript:;" class="button btnRotate" data-onclick="switchOption('#mainMenu', 'rotate')">旋转</a>
+    <a href="javascript:;" class="button btnShare" data-onclick="setStage('share')">分享</a>
     <a href="javascript:;" class="button btnMessage" data-onclick="setStage('message')" style="display:none;">消息</a>
     <a href="javascript:;" class="button btnPrint" data-onclick="setStage('print')">打印</a>
     <a href="javascript:;" class="button btnFinish" data-onclick="finishTemplate()">完成</a>
+
+  </div>
+
+  <div class="maintool maintoolTyep2" style="display:none">
+    <a href="javascript:;" class="button" data-onclick="backCabinet()">文件柜</a>
+    <a href="javascript:;" class="button" data-onclick="setStage('remark')">标注</a>
+    <a href="javascript:;" class="button plusSign" data-onclick="PDFViewerApplication.zoomOut()">-</a>
+    <a href="javascript:;" class="button plusSign" data-onclick="PDFViewerApplication.zoomIn()">+</a>
+    <a href="javascript:;" class="button btnSave" data-onclick="">保存</a>
+    <a href="javascript:;" class="button btnMessage" data-onclick="" style="display:none;">码单</a>
+    <a href="javascript:;" class="button btnPrint" data-onclick="setStage('print')">打印</a>
 
   </div>
 

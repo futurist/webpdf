@@ -72,6 +72,7 @@ window.curFile = urlQuery.file;
 window.shareID = urlQuery.shareID;
 window.isSign = urlQuery.isSign;
 window.isTemplate = urlQuery.isTemplate;
+window.templateType = urlQuery.templateType;
 window.signID = urlQuery.signID;
 window.signPos = urlQuery.pos;
 window.curSignData = {};
@@ -819,29 +820,29 @@ var svgns = "http://www.w3.org/2000/svg";
     // the preset toolset
     var ToolSet = {
       curve:{
-        "stroke-width": 2,
+        "stroke-width": 4,
         "stroke":"#f00",
         "autoClose":0,
         "arrow":0,
       },
       line:{
-        "stroke-width": 2,
+        "stroke-width": 4,
         "stroke":"#f00",
         "autoClose":0,
         "highLight":false,
         "arrow":0,
       },
       rect:{
-        "stroke-width": 2,
+        "stroke-width": 4,
         "stroke":"#f00",
       },
       circle:{
-        "stroke-width": 2,
+        "stroke-width": 4,
         "stroke":"#f00",
       },
       text:{
         "font-family": "Arial",
-        "stroke-width": 12,
+        "stroke-width": 16,
         "stroke":"#f00",
       }
     }
@@ -1207,6 +1208,11 @@ var svgns = "http://www.w3.org/2000/svg";
 
         }
 
+    function dec ( num )
+    {
+        return (Math.round(num*100)/100).toFixed(2);
+    }
+
 
     function downFunc (e) {
       var isSelMode = $('a.btnSelection').hasClass('HL');
@@ -1227,6 +1233,9 @@ var svgns = "http://www.w3.org/2000/svg";
 
       var x = evt.pageX- getRealOffset($(canvas)).left;
       var y = evt.pageY-getRealOffset($(canvas)).top;
+
+      x=dec(x);
+      y=dec(y);
 
       if(0&&isText){
         var viewBW = getViewPortWH();
@@ -1388,6 +1397,8 @@ var svgns = "http://www.w3.org/2000/svg";
       var x = evt.pageX-getRealOffset($(curContext)).left;
       var y = evt.pageY-getRealOffset($(curContext)).top;
 
+      x=dec(x);
+      y=dec(y);
 
       var canvas = $(evt.target).closest('.drawerLayer');
       var context = $(canvas).closest('.drawerLayer').get(0);
@@ -1658,6 +1669,8 @@ var svgns = "http://www.w3.org/2000/svg";
 
       var x = evt.pageX-getRealOffset($(curContext)).left;
       var y = evt.pageY-getRealOffset($(curContext)).top;
+      x=dec(x);
+      y=dec(y);
 
       if(0&&isText && !dragging){
         var viewBW = getViewPortWH();
@@ -2530,11 +2543,11 @@ var svgns = "http://www.w3.org/2000/svg";
           var p=rPath[i];
 
           if ( 0 == i ) {
-            d = "M" + p[0] + "," + p[1];
+            d = "M" + dec(p[0]) + "," + dec(p[1]);
           } else if ( 1 == i ) {
-            d += " R" + p[0] + "," + p[1];
+            d += " R" + dec(p[0]) + "," + dec(p[1]);
           } else {
-            d += " " + p[0] + "," + p[1];
+            d += " " + dec(p[0]) + "," + dec(p[1]);
           }
         }
 
@@ -2544,16 +2557,16 @@ var svgns = "http://www.w3.org/2000/svg";
 
         if( (options.autoClose&0x1)!=0 ){ // && calcDist(startP, p)<50
           //drawing rect LineTo way.
-          d+=" M" + p[0] + "," + p[1];
+          d+=" M" + dec(p[0]) + "," + dec(p[1]);
           d+=" L" + startP[0] + "," + startP[1];
         } else if( (options.autoClose&0x2)!=0) {
 
           //drawing circle Curve way.
 
           var _interpo = calcInterpo(rPath, 10);
-          d+=" C"+_interpo[1][0]+","+_interpo[1][1];
-          d+=" "+_interpo[1][0]+","+_interpo[1][1];
-          d+=" "+_interpo[2][0]+","+_interpo[2][1];
+          d+=" C"+dec(_interpo[1][0])+","+dec(_interpo[1][1]);
+          d+=" "+dec(_interpo[1][0])+","+dec(_interpo[1][1]);
+          d+=" "+dec(_interpo[2][0])+","+dec(_interpo[2][1]);
 
           newPath = rPath.concat( _interpo.slice(1) );
             //d += calcInterpo(rPath, 10);
@@ -3265,22 +3278,36 @@ function copyInputLayerData(pageIndex){
       }
 
       text.get(0).style.cssText = v.style.cssText;
+
       if( $(v).find('.text').size() )
       	text.find('textarea').get(0).style.cssText = $(v).find('.text').get(0).style.cssText;
+
       var t = parseTemplate( $(v).text(), v );
 
-      t = savedInputData[id] || t;
-      setInputTextValue(id, t);
+      if(!savedInputData[id]) savedInputData[id]={val:[], html: text[0].outerHTML };
+      t = savedInputData[id]&&futurist.array_last_item(savedInputData[id].val) || t;
+
+      // setupInputText
+      text.find('textarea,select').val( t );
 
       function saveInputData() {
         var val =  $(this).val();
-        var id = $(this).parent().data('input-id')+'';
-        if( savedInputData[id]==val ) return;
-        savedInputData[id] = val;
+        var $parent = $(this).parent();
+        var id = $parent.data('input-id')+'';
+
+        if( futurist.array_last_item(savedInputData[id].val) ==val ) return;
+        var html = $parent[0].outerHTML;
+        var flowPos = shareData.curFlowPos;
+
+        savedInputData[id].val.push(val);
+
         var inter1;
         function saveInterval(){
-          $post(host+'/saveInputData', { shareID:window.shareID, file:curFile, value:val, textID: id.replace('.', '\uff0e') }, function(data){
-
+          if(isNaN(flowPos)) return;
+          $post(host+'/saveInputData', { shareID:window.shareID, file:curFile, flowPos:flowPos, html:html, value:val, textID: id.replace('.', '\uff0e') }, function(data){
+            if( data== 'ERR_NOPERMISSION'){
+              return;
+            }
             if(data!='OK'){
               clearTimeout(inter1);
               inter1 = setTimeout(function(){saveInterval()}, 1000);
@@ -3292,6 +3319,7 @@ function copyInputLayerData(pageIndex){
 
       text.find('textarea').off().on('keyup', $.debounce(1000, saveInputData) );
       text.find('textarea').on('change', saveInputData );
+      text.find('textarea').trigger('change');
 
 
       function disableInput () {
@@ -3335,11 +3363,37 @@ function copyInputLayerData(pageIndex){
 
 }
 
-function setInputTextValue(id, val) {
-  var text = $('[data-input-id="'+id+'"]');
-  text.find('textarea,select').val( val );
-  text.find('textarea').trigger('change');
-}
+// helpers
+var futurist = {};
+
+futurist.array_unique = function(array) {
+  var a = [], i, j, l, o = {};
+  for(i = 0, l = array.length; i < l; i++) {
+    if(o[JSON.stringify(array[i])] === undefined) {
+      a.push(array[i]);
+      o[JSON.stringify(array[i])] = true;
+    }
+  }
+  return a;
+};
+// remove item from array
+futurist.array_remove = function(array, from, to) {
+  var rest = array.slice((to || from) + 1 || array.length);
+  array.length = from < 0 ? array.length + from : from;
+  array.push.apply(array, rest);
+  return array;
+};
+// remove item from array
+futurist.array_remove_item = function(array, item) {
+  var tmp = array.indexOf(item)>-1;
+  return tmp !== -1 ? futurist.array_remove(array, tmp) : array;
+};
+// last array element
+futurist.array_last_item = function(array) {
+  return array.length ? array[array.length-1] : null;
+};
+
+
 
 // Template parser:
 // {param} str: [姓名]osdif[这里不会解析]oisjdofj[部门]等等
@@ -4641,6 +4695,15 @@ var appCache = window.applicationCache;
     $post( host + '/getShareData', { shareID:shareID, file:curFile.replace(FILE_HOST,'') }, function(data){
       if(data)   window.shareData = data;
       else return;
+      
+      if(data.files&&data.files.length) window.templateType = data.files[0].isTemplate;
+      if(templateType==2){
+      	$('.maintoolTyep1').remove();
+      } else {
+      	$('.maintoolTyep2').remove();
+      }
+      $('.maintool').show();
+      $('.btnMessage').css({display: 'table-cell' });
 
       savedInputData = data.files[0].inputData;
 
@@ -4671,7 +4734,7 @@ var appCache = window.applicationCache;
     } );
 
 
-    $('.btnMessage').css({display: 'table-cell' });
+    
 
   } else {
     getCanvasData();

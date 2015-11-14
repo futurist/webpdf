@@ -79,6 +79,7 @@ gulp.task('s1', function  () {
 		'draggable.js',
 		'path.js',
 		'js/selectivity-full.js',
+		'js/mithril.min.js',
 		])
 	.pipe(concat('s1.js'))
 	.pipe(uglify())

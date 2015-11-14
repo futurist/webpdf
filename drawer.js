@@ -1209,10 +1209,31 @@ var svgns = "http://www.w3.org/2000/svg";
         }
 
     function dec ( num )
-    {
-        return (Math.round(num*100)/100).toFixed(2);
+    {	
+    	var a=(Math.round(num*100)/100).toFixed(1);
+    	var b=parseInt(a.toString());
+    	if(a-b>0.5) b+=1;
+        return b;
     }
 
+    function updateTextProp (el) {
+    	var el = $(el);
+    	var obj = {
+    		id: $(el).data('id')||'',
+    		name: $(el).data('name')||'',
+    		order: $(el).data('person')||'',
+			left: $(el).css('left')||'',
+			top: $(el).css('top')||'',
+			width: $(el).css('width')||'',
+			height: $(el).css('height')||'',
+    	}
+
+    	for(var k in obj){
+    		if( k.match(/left|top|width|height/) ) obj[k] = obj[k].replace('px','');
+    		$('.textProp input[name="prop_'+ k +'"]').val(obj[k]);
+    	}
+
+    }
 
     function downFunc (e) {
       var isSelMode = $('a.btnSelection').hasClass('HL');
@@ -1361,6 +1382,7 @@ var svgns = "http://www.w3.org/2000/svg";
         if(isTemplate && isText){
           //showSelect2(targetEl, evt.clientY);
           // $('.selStuff').selectivity('val', ['AL']);
+          updateTextProp( targetEl );
         } else {
           $('.select2DIV').hide();
         }
@@ -1712,12 +1734,7 @@ var svgns = "http://www.w3.org/2000/svg";
         w/=curScale;
         h/=curScale;
 
-        var bbox = $('.editing').data('bbox') ;
-        var bboxLeft = Math.min( bbox[1][0], bbox[0][0] );
-        var bboxTop = Math.min( bbox[1][1], bbox[0][1] );
-        newBBox=[ [bboxLeft, bboxTop], [bboxLeft+w, bboxTop+h] ];
-        $('.editing').data('bbox', JSON.stringify(newBBox) ) ;
-
+        setBBoxTranslate($('.editing'), w, h);
 
         $(evt.target).removeClass('dragHandler');
         setTimeout(function(){
@@ -1757,13 +1774,31 @@ var svgns = "http://www.w3.org/2000/svg";
       if(dragging){
         dragging=false;
 
-        $(targetEl).attr('data-oldtrans', JSON.stringify( getTranslateXY(targetEl,'dragging') ) );
+        $('[data-hl]').each(function  () {
+        	if( $(this).closest('svg').length ) return true;
+        	console.log(this)
+        	var trans = getTranslateXY(this,'dragging');
+        	$(this).css('left', parseFloat($(this).css('left')) + trans[0]  );
+        	$(this).css('top', parseFloat($(this).css('top')) + trans[1]  );
+        	
+        	var bbox = $(this).data('bbox');
+        	bbox[0][0]+=trans[0];
+        	bbox[1][0]+=trans[0];
+        	bbox[0][1]+=trans[1];
+        	bbox[1][1]+=trans[1];
+        	$(this).data('bbox', JSON.stringify(bbox) );
+
+        	setTranslateXY(this, 0, 0);
+        	updateTextProp(this);
+        });
+
+        $(targetEl).attr('data-oldtrans', JSON.stringify( [0,0] ) );
 
         if(isHandler){
 
         }
 
-        if(dist) svgHistory.update();
+        if(dist) setTimeout(function(){svgHistory.update()},30);
         return;
       }
 
@@ -2230,6 +2265,15 @@ var svgns = "http://www.w3.org/2000/svg";
 
     }
 
+
+    function setBBoxTranslate(obj, x, y){
+    	var bbox = $(obj).data('bbox') ;
+		var bboxLeft = Math.min( bbox[1][0], bbox[0][0] );
+		var bboxTop = Math.min( bbox[1][1], bbox[0][1] );
+		newBBox=[ [bboxLeft, bboxTop], [bboxLeft+x, bboxTop+y] ];
+		$(obj).data('bbox', JSON.stringify(newBBox) ) ;
+    }
+
     function onTextBlur(){
 
     	function restoreViewerPosition(){
@@ -2246,6 +2290,9 @@ var svgns = "http://www.w3.org/2000/svg";
       var offset = $('.textarea').offset();
       offset.width /= curScale;
       offset.height /= curScale;
+
+      offset.width = parseFloat($('.textarea').css('width'));
+      offset.height = parseFloat($('.textarea').css('height'));
 
       $('.editing').show();
       var $text = $('.editing').find('.text');
@@ -2306,11 +2353,7 @@ var svgns = "http://www.w3.org/2000/svg";
       }
 
 
-	var bbox = $('.editing').data('bbox') ;
-	var bboxLeft = Math.min( bbox[1][0], bbox[0][0] );
-	var bboxTop = Math.min( bbox[1][1], bbox[0][1] );
-	newBBox=[ [bboxLeft, bboxTop], [bboxLeft+offset.width, bboxTop+offset.height] ];
-	$('.editing').data('bbox', JSON.stringify(newBBox) ) ;
+	setBBoxTranslate( $('.editing'), offset.width, offset.height );
 
       var options = $('.editing').data('options');
       $('.editing textarea.pre').css({  "color":options.stroke, "font-family": options['font-family'], "font-size": options['stroke-width'], width: offset.width, height:offset.height });
@@ -2348,6 +2391,10 @@ var svgns = "http://www.w3.org/2000/svg";
       var box = $(targetEl).data('bbox');
       var offset = pointsToRect(box[0], box[1], getTranslateXY(targetEl) );
       //offset.width += 30;
+      offset.left = parseFloat($(targetEl).css('left'));
+      offset.top = parseFloat($(targetEl).css('top'));
+      offset.width = parseFloat($(targetEl).css('width'));
+      offset.height = parseFloat($(targetEl).css('height'));
 
      $(curContext).find('.textCon').append('<textarea spellcheck="false" class="text textarea" wrap="hard"></textarea>');
      $(curContext).find('.textCon').append('<div class="handler"></div>');
@@ -2659,7 +2706,7 @@ var svgns = "http://www.w3.org/2000/svg";
         return zT ? [ parseInt(zT[1]), parseInt(zT[2]) ] : [0,0];
     }
     function setTranslateXY(obj, x, y){
-    	if(!(x)||!(y)) return;
+    	if(isNaN(x)||isNaN(y)) return;
        if(!obj) return [0,0];
        if(obj.size) obj=obj.get(0);
         var style = obj.style;
@@ -4435,7 +4482,22 @@ function confirm (msg) {
 }
 
 
+function initTextPropEvent () {
+	var $HL = $('[data-hl]');
+	$('.textProp input[name="prop_id"').on('change keydown', function  () {
+		$HL.data('id', this.value);
+	})
+	$('.textProp input[name="prop_name"').on('change keydown', function  () {
+		$HL.data('name', this.value);
+	})
+	$('.textProp input[name="prop_order"').on('change keydown', function  () {
+		$HL.data('order', this.value);
+	})
+	$('.textProp input[name="prop_left"').on('change keydown', function  () {
+		$HL.style('left', this.value);
+	})
 
+}
 
 $(function initPage () {
 
@@ -4443,6 +4505,12 @@ $(function initPage () {
   makeColorPicker();
   makeTemplatePicker();
   setStage('viewer');
+
+  if(isTemplate){
+  	$('.textProp').addClass('show');
+	new Draggable( $('.textProp').get(0), { filterTarget:function(v){return ! /input|textarea|select/i.test(v.tagName) } });
+	initTextPropEvent();
+  }
 
   if(isSign){
     $('.btnShowStep').css('display', 'table-cell');

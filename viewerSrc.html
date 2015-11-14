@@ -44,6 +44,7 @@
     <script src="draggable.js" type="text/javascript"></script>
     <script src="path.js"></script>
     <script src="js/selectivity-full.js"></script>
+    <script src="js/mithril.min.js"></script>
 
 <!-- endbuild -->
 
@@ -1256,7 +1257,56 @@ html[dir='ltr'] .splitToolbarButton {
     padding: 4px;
 }
 
+.textProp dl:after{
+  content:".";
+  height: 0;
+  display: block;
+  clear: both;
+  visibility: hidden;
+}
+.textProp .propHeader{
+  height: 30px;
+  background: #aaa;
+}
+.textProp dl{
+  display: table-row;
+}
+.textProp dl dt{
+  display: table-cell;
+  font-weight: bold;
+  padding: 10px 0;
+}
+.textProp dl dd{
+  display: table-cell;
+}
 
+.textProp input:focus,
+.textProp input{
+  width: 250px;
+  border:1px solid #666;
+  border-radius: 2px;
+  height: 24px;
+  font-size: 18px;
+  line-height: 24px;
+  padding: 0 4px;
+}
+.textProp.show{
+  visibility: visible;
+}
+.textProp{
+  visibility: hidden;
+  position: absolute;
+  padding: 10px;
+  top:0;
+  left: 0;
+  background: #eee;
+  border: 1px solid #999;
+  border-radius: 4px;
+  z-index: 999999999;
+  width: 300px;
+  height: auto;
+  display: table;
+}
 #closeFindBar{
   display: none;
 }
@@ -1421,7 +1471,7 @@ html[dir='ltr'] .splitToolbarButton {
 <div class="subtool subtool_text">
   <a href="javascript:;" class="button btnStrokeWidth2" data-onclick='setTool("text", {"stroke-width": "-"})'>小</a>
   <a href="javascript:;" class="button btnStrokeWidth6" data-onclick='setTool("text", {"stroke-width": "+"})'>大</a>
-  <a href="javascript:;" class="button btnColorCon" data-onclick='chooseTemplate();'>模板</a>
+  <a href="javascript:;" class="button btnTextTemplate" data-onclick='chooseTemplate();'>模板</a>
   <a href="javascript:;" class="button btnColorCon" data-onclick='chooseColor()'>颜色</a>
 </div>
 
@@ -1459,6 +1509,30 @@ html[dir='ltr'] .splitToolbarButton {
 </div>
 
 
+<div class="textProp">
+  <dl class="prop_id">
+    <dt>ID</dt>
+    <dd><input type="text" name="prop_id" value=""></dd>
+  </dl>
+  <dl class="prop_name">
+    <dt>Name</dt>
+    <dd><input type="text" name="prop_name" value=""></dd>
+  </dl>
+  <dl class="prop_order">
+    <dt>Order</dt>
+    <dd><input type="text" name="prop_order" value=""></dd>
+  </dl>
+  <dl class="prop_css">
+    <dt>CSS</dt>
+    <dd>
+      <input type="number" name="prop_top" value="">
+      <input type="number" name="prop_left" value="">
+      <input type="number" name="prop_width" value="">
+      <input type="number" name="prop_height" value="">
+    </dd>
+  </dl>
+
+</div>
 
   </body>
 </html>

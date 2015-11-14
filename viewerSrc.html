@@ -745,6 +745,8 @@ body.shareMode .userInputText textarea[readonly]{
     height: 44px;
     background: rgba(0,0,255,0.5);
     z-index: 999999;
+    transform: translate(2px,2px);
+    -webkit-transform: translate(2px,2px);
   }
   .page .textarea{
     position: absolute;
@@ -1282,13 +1284,21 @@ html[dir='ltr'] .splitToolbarButton {
 
 .textProp input:focus,
 .textProp input{
-  width: 250px;
+  width: 200px;
   border:1px solid #666;
   border-radius: 2px;
   height: 24px;
   font-size: 18px;
   line-height: 24px;
   padding: 0 4px;
+}
+.textProp .prop_dim input:focus,
+.textProp .prop_dim input{
+  width: 100px;
+}
+.textProp .prop_border input:focus,
+.textProp .prop_border input{
+  width: 50px;
 }
 .textProp.show{
   visibility: visible;
@@ -1522,15 +1532,33 @@ html[dir='ltr'] .splitToolbarButton {
     <dt>Order</dt>
     <dd><input type="text" name="prop_order" value=""></dd>
   </dl>
-  <dl class="prop_css">
-    <dt>CSS</dt>
-    <dd>
-      <input type="number" name="prop_top" value="">
-      <input type="number" name="prop_left" value="">
-      <input type="number" name="prop_width" value="">
-      <input type="number" name="prop_height" value="">
-    </dd>
+  
+  <dl class="prop_background">
+    <dt>BG</dt>
+    <dd><input type="text" name="prop_background" value=""></dd>
   </dl>
+
+  <table class="prop_dim">
+    <tr>
+      <td>X:</td><td><input type="number" name="prop_left" value=""></td>
+      <td>Y:</td><td><input type="number" name="prop_top" value=""></td>
+    </tr>
+  </div>
+
+  <table class="prop_dim">
+    <tr>
+      <td>W:</td><td><input type="number" name="prop_width" value=""></td>
+      <td>H:</td><td><input type="number" name="prop_height" value=""></td>
+    </tr>
+  </table>
+
+  <dl class="prop_border">
+    <dt>Border</dt>
+    <dd><input type="number" name="prop_border_width" value=""></dd>
+    <dd><input type="text" name="prop_border_style" value=""></dd>
+    <dd><input type="text" name="prop_border_color" value=""></dd>
+  </dl>
+
 
 </div>
 

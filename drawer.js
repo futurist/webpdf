@@ -1422,6 +1422,7 @@ var svgns = "http://www.w3.org/2000/svg";
       x=dec(x);
       y=dec(y);
 
+
       var canvas = $(evt.target).closest('.drawerLayer');
       var context = $(canvas).closest('.drawerLayer').get(0);
 
@@ -1442,7 +1443,18 @@ var svgns = "http://www.w3.org/2000/svg";
       }
 
 
+      var moveW = Math.abs(x-downX);
+      var moveH = Math.abs(y-downY);
+      if( SHIFT_KEY_DOWN&&  moveW>moveH ){
+      	y = downY;
+      }
+      if( SHIFT_KEY_DOWN&&  moveW<moveH ){
+      	x = downX;
+      }
+
+
       function checkMoveOut(){
+      	return false;
         if( !curContext || ( $(context).size() && context!=curContext )
             || ( !$(context).size() && (dragging||selecting) )
           ) {
@@ -1704,6 +1716,15 @@ var svgns = "http://www.w3.org/2000/svg";
         y/=curScale;
       }
 
+      var moveW = Math.abs(x-downX);
+      var moveH = Math.abs(y-downY);
+      if( SHIFT_KEY_DOWN&&  moveW>moveH ){
+      	y = downY;
+      }
+      if( SHIFT_KEY_DOWN&&  moveW<moveH ){
+      	x = downX;
+      }
+
 
       var dx = x-downX;
       var dy = y-downY;
@@ -1734,7 +1755,7 @@ var svgns = "http://www.w3.org/2000/svg";
         w/=curScale;
         h/=curScale;
 
-        setBBoxTranslate($('.editing'), w, h);
+        setBBoxWH($('.editing'), w, h);
 
         $(evt.target).removeClass('dragHandler');
         setTimeout(function(){
@@ -1776,17 +1797,16 @@ var svgns = "http://www.w3.org/2000/svg";
 
         $('[data-hl]').each(function  () {
         	if( $(this).closest('svg').length ) return true;
-        	console.log(this)
         	var trans = getTranslateXY(this,'dragging');
         	$(this).css('left', parseFloat($(this).css('left')) + trans[0]  );
         	$(this).css('top', parseFloat($(this).css('top')) + trans[1]  );
-        	
         	var bbox = $(this).data('bbox');
-        	bbox[0][0]+=trans[0];
-        	bbox[1][0]+=trans[0];
-        	bbox[0][1]+=trans[1];
-        	bbox[1][1]+=trans[1];
-        	$(this).data('bbox', JSON.stringify(bbox) );
+	    	bbox[0][0]+=x;
+	    	bbox[1][0]+=x;
+	    	bbox[0][1]+=y;
+	    	bbox[1][1]+=y;
+
+	    	$(this).data('bbox', JSON.stringify(bbox) );
 
         	setTranslateXY(this, 0, 0);
         	updateTextProp(this);
@@ -1891,9 +1911,32 @@ var svgns = "http://www.w3.org/2000/svg";
 
 
 
-    window.addEventListener('keydown', handleShortKey);
+    window.addEventListener('keydown', handleShortKeyDown);
+    window.addEventListener('keyup', handleShortKeyUp);
 
-    function handleShortKey (evt) {
+    var SHIFT_KEY_DOWN = 0;
+    var CTRL_KEY_DOWN = 0;
+    var META_KEY_DOWN = 0;
+
+    function handleShortKeyUp (evt) {
+      var cmd = (evt.ctrlKey ? 1 : 0) |
+            (evt.altKey ? 2 : 0) |
+            (evt.shiftKey ? 4 : 0) |
+            (evt.metaKey ? 8 : 0);
+
+	    if ( /control/i.test(evt.keyIdentifier) ) {	//ctrl key
+			CTRL_KEY_DOWN = 0;
+		}
+	    if ( /shift/i.test(evt.keyIdentifier) ) {	//ctrl key
+			SHIFT_KEY_DOWN = 0;
+		}
+
+	    if ( /meta/i.test(evt.keyIdentifier) ) {	//ctrl key
+			META_KEY_DOWN = 0;
+		}
+
+    }
+    function handleShortKeyDown (evt) {
       if( $('.editing').size() ) return;
       var handled = false;
       var isInput = false;
@@ -1914,6 +1957,9 @@ var svgns = "http://www.w3.org/2000/svg";
             (evt.shiftKey ? 4 : 0) |
             (evt.metaKey ? 8 : 0);
 
+      if (cmd === 8) { // meta
+      	META_KEY_DOWN = 1;
+      }
       if (cmd === 0) { // no control key pressed at all.
 
         // console.log(evt, evt.keyCode);
@@ -1946,6 +1992,25 @@ var svgns = "http://www.w3.org/2000/svg";
             toggleDevTools();
             handled = true;
             break;
+          case 37: // left
+          	moveHLElementByXY(-1,0);
+          	handled = true;
+	        break;
+
+	        case 38: // up
+          	moveHLElementByXY(0,-1);
+          	handled = true;
+	        break;
+
+	        case 39: // right
+          	moveHLElementByXY(1,0);
+          	handled = true;
+	        break;
+
+	        case 40: // down
+          	moveHLElementByXY(0,1);
+          	handled = true;
+	        break;
         }
 
         if(isTemplate && !isInput && !handled) {
@@ -1978,7 +2043,8 @@ var svgns = "http://www.w3.org/2000/svg";
 
       }
 
-    if (cmd === 1 || cmd === 8) {
+    if (cmd === 1 || cmd === 8) {	//ctrl key
+		CTRL_KEY_DOWN = 1;
       switch (evt.keyCode) {
         case 90:  //Ctrl+Z
           OPHistory.undo();
@@ -1987,7 +2053,36 @@ var svgns = "http://www.w3.org/2000/svg";
       }
     }
 
-    if (cmd === 5 || cmd === 12) {
+    if (cmd === 4) {	// shift
+    	SHIFT_KEY_DOWN = 1;
+
+    	switch(evt.keyCode){
+    	case 37: // left
+          	moveHLElementByXY(-10,0);
+          	handled = true;
+	        break;
+
+	        case 38: // up
+          	moveHLElementByXY(0,-10);
+          	handled = true;
+	        break;
+
+	        case 39: // right
+          	moveHLElementByXY(10,0);
+          	handled = true;
+	        break;
+
+	        case 40: // down
+          	moveHLElementByXY(0,10);
+          	handled = true;
+	        break;
+	      }
+    }
+
+    if (cmd === 5 || cmd === 12) {	// ctrl+shift
+    	SHIFT_KEY_DOWN = 1;
+    	CTRL_KEY_DOWN = 1;
+
       switch (evt.keyCode) {
         case 90:
           OPHistory.redo();
@@ -2266,11 +2361,25 @@ var svgns = "http://www.w3.org/2000/svg";
     }
 
 
-    function setBBoxTranslate(obj, x, y){
+    function setBBoxRect(obj, x, y, w, h){
+    	var bbox = $(obj).data('bbox');
+
+		var bboxLeft = Math.min( bbox[1][0], bbox[0][0] );
+		var bboxTop = Math.min( bbox[1][1], bbox[0][1] );
+		var bboxWidth = Math.abs( bbox[0][0] - bbox[1][0] );
+		var bboxHeight = Math.abs( bbox[1][1] - bbox[0][1] );
+
+		var newBBox=[ [x||bboxLeft, y||bboxTop], [bboxLeft+(w||bboxWidth), bboxTop+(h||bboxHeight)] ];
+
+    	$(obj).data('bbox', JSON.stringify(newBBox) );
+    }
+
+
+    function setBBoxWH(obj, x, y){
     	var bbox = $(obj).data('bbox') ;
 		var bboxLeft = Math.min( bbox[1][0], bbox[0][0] );
 		var bboxTop = Math.min( bbox[1][1], bbox[0][1] );
-		newBBox=[ [bboxLeft, bboxTop], [bboxLeft+x, bboxTop+y] ];
+		var newBBox=[ [bboxLeft, bboxTop], [bboxLeft+x, bboxTop+y] ];
 		$(obj).data('bbox', JSON.stringify(newBBox) ) ;
     }
 
@@ -2353,7 +2462,7 @@ var svgns = "http://www.w3.org/2000/svg";
       }
 
 
-	setBBoxTranslate( $('.editing'), offset.width, offset.height );
+	setBBoxWH( $('.editing'), offset.width, offset.height );
 
       var options = $('.editing').data('options');
       $('.editing textarea.pre').css({  "color":options.stroke, "font-family": options['font-family'], "font-size": options['stroke-width'], width: offset.width, height:offset.height });
@@ -4482,19 +4591,55 @@ function confirm (msg) {
 }
 
 
+function moveHLElementByXY (x, y) {
+	$('[data-hl]').each(function(){ 
+		var X = parseFloat( $(this).css('left') )+( x||0 );
+		var Y = parseFloat( $(this).css('top') )+( y||0 );
+		$(this).css('left', X+'px');
+		$(this).css('top', Y+'px');
+		setBBoxRect(this, X,Y );
+	} );
+}
+
+
 function initTextPropEvent () {
-	var $HL = $('[data-hl]');
-	$('.textProp input[name="prop_id"').on('change keydown', function  () {
-		$HL.data('id', this.value);
+	$('.textProp input[name="prop_id"').on('change keydown', function  (e) {
+		this.blur()
+		$('[data-hl]').data('id', this.value);
 	})
-	$('.textProp input[name="prop_name"').on('change keydown', function  () {
-		$HL.data('name', this.value);
+	$('.textProp input[name="prop_name"').on('change keydown', function  (e) {
+		this.blur()
+		$('[data-hl]').data('name', this.value);
 	})
-	$('.textProp input[name="prop_order"').on('change keydown', function  () {
-		$HL.data('order', this.value);
+	$('.textProp input[name="prop_order"').on('change keydown', function  (e) {
+		this.blur()
+		$('[data-hl]').data('order', this.value);
 	})
-	$('.textProp input[name="prop_left"').on('change keydown', function  () {
-		$HL.style('left', this.value);
+	$('.textProp input[name="prop_left"').on('change keydown', function  (e) {
+		this.blur()
+		var val = parseFloat(this.value);
+		$('[data-hl]').css('left', val+'px');
+		$('[data-hl]').each(function(){ setBBoxRect(this, val ) } );
+	})
+	$('.textProp input[name="prop_top"').on('change keydown', function  (e) {
+		this.blur()
+		var val = parseFloat(this.value);
+		$('[data-hl]').css('top', this.value+'px');
+		$('[data-hl]').each(function(){ setBBoxRect(this, null, val ) } );
+	})
+	$('.textProp input[name="prop_width"').on('change keydown', function  (e) {
+		this.blur()
+		var val = parseFloat(this.value);
+		$('[data-hl]').css('width', this.value+'px');
+		$('[data-hl]').find('.bbox,.text').css('width keydown', this.value+'px');
+		$('[data-hl]').each(function(){ setBBoxRect(this, null,null, val ) } );
+	})
+	$('.textProp input[name="prop_height"').on('change keydown', function  (e) {
+		this.blur()
+		var val = parseFloat(this.value);
+		$('[data-hl]').css('height', this.value+'px');
+		$('[data-hl]').find('.bbox,.text').css('height', this.value+'px');
+		$('[data-hl]').each(function(){ setBBoxRect(this, null, null,null, val ) } );
 	})
 
 }

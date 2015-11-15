@@ -118,7 +118,7 @@ var DEBUG= eval(urlQuery.debug||0);
 
 var rootPerson = {};
 
-if(window.navigator.userAgent == "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_4) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/42.0.2311.152 Safari/537.36"
+if(window.navigator.userAgent == "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/46.0.2490.80 Safari/537.36"
   || window.navigator.userAgent == "Mozilla/5.0 (Windows NT 5.1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/45.0.2454.99 Safari/537.36"
   || window.navigator.userAgent == "Mozilla/5.0 (Windows NT 5.1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/33.0.1750.117 Safari/537.36"
   ) DEBUG=1;
@@ -1208,12 +1208,15 @@ var svgns = "http://www.w3.org/2000/svg";
 
         }
 
+    function dec2 ( num ){
+      return num;
+    }
     function dec ( num )
-    {	
+    {
     	var a=(Math.round(num*100)/100).toFixed(1);
     	var b=parseInt(a.toString());
     	if(a-b>0.5) b+=1;
-        return b;
+      return b;
     }
 
     function updateTextProp (el) {
@@ -1239,7 +1242,9 @@ var svgns = "http://www.w3.org/2000/svg";
       var isSelMode = $('a.btnSelection').hasClass('HL');
       var isHandMode = $('a.btnHand').hasClass('HL');
 
-    	if(isHandMode) return;
+      if(isHandMode) return;
+    	if(selecting) return;
+
       setTimeout(function(){ $('.colorCon').hide(); }, 200);
       var evt = /touch/.test(e.type) ? e.touches[0] : e;
       var canvas = $(evt.target).closest('.drawerLayer')
@@ -1255,8 +1260,8 @@ var svgns = "http://www.w3.org/2000/svg";
       var x = evt.pageX- getRealOffset($(canvas)).left;
       var y = evt.pageY-getRealOffset($(canvas)).top;
 
-      x=dec(x);
-      y=dec(y);
+      x=(x);
+      y=(y);
 
       if(0&&isText){
         var viewBW = getViewPortWH();
@@ -1419,8 +1424,8 @@ var svgns = "http://www.w3.org/2000/svg";
       var x = evt.pageX-getRealOffset($(curContext)).left;
       var y = evt.pageY-getRealOffset($(curContext)).top;
 
-      x=dec(x);
-      y=dec(y);
+      x=(x);
+      y=(y);
 
 
       var canvas = $(evt.target).closest('.drawerLayer');
@@ -1526,6 +1531,7 @@ var svgns = "http://www.w3.org/2000/svg";
         prevTime = 0;
         clearTimeout(downTimer);
       }
+
 
 
       if( !isText && dist>10  )  disableSelection($('.textarea'));
@@ -1703,8 +1709,8 @@ var svgns = "http://www.w3.org/2000/svg";
 
       var x = evt.pageX-getRealOffset($(curContext)).left;
       var y = evt.pageY-getRealOffset($(curContext)).top;
-      x=dec(x);
-      y=dec(y);
+      x=(x);
+      y=(y);
 
       if(0&&isText && !dragging){
         var viewBW = getViewPortWH();
@@ -1795,30 +1801,36 @@ var svgns = "http://www.w3.org/2000/svg";
       if(dragging){
         dragging=false;
 
-        $('[data-hl]').each(function  () {
-        	if( $(this).closest('svg').length ) return true;
-        	var trans = getTranslateXY(this,'dragging');
-        	$(this).css('left', parseFloat($(this).css('left')) + trans[0]  );
-        	$(this).css('top', parseFloat($(this).css('top')) + trans[1]  );
-        	var bbox = $(this).data('bbox');
-	    	bbox[0][0]+=x;
-	    	bbox[1][0]+=x;
-	    	bbox[0][1]+=y;
-	    	bbox[1][1]+=y;
+        if(dist>1){
 
-	    	$(this).data('bbox', JSON.stringify(bbox) );
+          // update trans position of text
+          $('[data-hl]').each(function  () {
+            if( $(this).closest('svg').length ) return true;
+            var trans = getTranslateXY(this,'dragging');
+            $(this).css('left', parseFloat($(this).css('left')) + trans[0]  );
+            $(this).css('top', parseFloat($(this).css('top')) + trans[1]  );
+            var bbox = $(this).data('bbox');
+            bbox[0][0]+=trans[0];
+            bbox[1][0]+=trans[0];
+            bbox[0][1]+=trans[1];
+            bbox[1][1]+=trans[1];
+            $(this).data('bbox', JSON.stringify(bbox) );
 
-        	setTranslateXY(this, 0, 0);
-        	updateTextProp(this);
-        });
+            setTranslateXY(this, 0, 0);
+            updateTextProp(this);
+          });
 
-        $(targetEl).attr('data-oldtrans', JSON.stringify( [0,0] ) );
+          $(targetEl).attr('data-oldtrans', JSON.stringify( [0,0] ) );
 
-        if(isHandler){
+          if(isHandler){
+
+          }
+
+          setTimeout(function(){svgHistory.update()},30);
+
 
         }
 
-        if(dist) setTimeout(function(){svgHistory.update()},30);
         return;
       }
 
@@ -2366,10 +2378,13 @@ var svgns = "http://www.w3.org/2000/svg";
 
 		var bboxLeft = Math.min( bbox[1][0], bbox[0][0] );
 		var bboxTop = Math.min( bbox[1][1], bbox[0][1] );
-		var bboxWidth = Math.abs( bbox[0][0] - bbox[1][0] );
+		var bboxWidth = Math.abs( bbox[1][0] - bbox[0][0] );
 		var bboxHeight = Math.abs( bbox[1][1] - bbox[0][1] );
 
-		var newBBox=[ [x||bboxLeft, y||bboxTop], [bboxLeft+(w||bboxWidth), bboxTop+(h||bboxHeight)] ];
+    bboxLeft = x||bboxLeft;
+    bboxTop = y||bboxTop;
+
+		var newBBox=[ [bboxLeft, bboxTop], [bboxLeft+(w||bboxWidth), bboxTop+(h||bboxHeight)] ];
 
     	$(obj).data('bbox', JSON.stringify(newBBox) );
     }
@@ -2400,8 +2415,8 @@ var svgns = "http://www.w3.org/2000/svg";
       offset.width /= curScale;
       offset.height /= curScale;
 
-      offset.width = parseFloat($('.textarea').css('width'));
-      offset.height = parseFloat($('.textarea').css('height'));
+      offset.width = parseInt($('.textarea').css('width'));
+      offset.height = parseInt($('.textarea').css('height'));
 
       $('.editing').show();
       var $text = $('.editing').find('.text');
@@ -2462,7 +2477,8 @@ var svgns = "http://www.w3.org/2000/svg";
       }
 
 
-	setBBoxWH( $('.editing'), offset.width, offset.height );
+	     setBBoxWH( $('.editing'), offset.width, offset.height );
+       updateTextProp($('.editing'));
 
       var options = $('.editing').data('options');
       $('.editing textarea.pre').css({  "color":options.stroke, "font-family": options['font-family'], "font-size": options['stroke-width'], width: offset.width, height:offset.height });
@@ -2559,12 +2575,16 @@ var svgns = "http://www.w3.org/2000/svg";
         path.attr("data-id", curShapeID );
       }
 
+      startPoint[0] = dec(startPoint[0]);
+      startPoint[1] = dec(startPoint[1]);
+      endPoint[0] = dec(endPoint[0]);
+      endPoint[1] = dec(endPoint[1]);
+
       path = $(path);
       var x = Math.min(startPoint[0], endPoint[0]);
       var y = Math.min(startPoint[1], endPoint[1]);
       var w = Math.abs( startPoint[0] - endPoint[0] );
       var h = Math.abs( startPoint[1] - endPoint[1] );
-
 
       var text = $(path).find('.text');
 
@@ -2592,13 +2612,13 @@ var svgns = "http://www.w3.org/2000/svg";
       $bbox.css({"left":0, "top":0, "width":w, "height":h});
 
 
+        path.attr("data-options", JSON.stringify( options ) );
+
+      if(isCeate){
         path.attr("data-bbox", JSON.stringify( [ [x,y], [x+w, y+h] ] ) );
         path.attr("data-tool", 'text' );
         path.attr("data-startpoint", JSON.stringify( startPoint ) );
         path.attr("data-endpoint", JSON.stringify( endPoint ) );
-        path.attr("data-options", JSON.stringify( options ) );
-
-      if(isCeate){
         if(!initText) textEditMode(path);
       } else {
 
@@ -2699,11 +2719,11 @@ var svgns = "http://www.w3.org/2000/svg";
           var p=rPath[i];
 
           if ( 0 == i ) {
-            d = "M" + dec(p[0]) + "," + dec(p[1]);
+            d = "M" + dec2(p[0]) + "," + dec2(p[1]);
           } else if ( 1 == i ) {
-            d += " R" + dec(p[0]) + "," + dec(p[1]);
+            d += " R" + dec2(p[0]) + "," + dec2(p[1]);
           } else {
-            d += " " + dec(p[0]) + "," + dec(p[1]);
+            d += " " + dec2(p[0]) + "," + dec2(p[1]);
           }
         }
 
@@ -2713,16 +2733,16 @@ var svgns = "http://www.w3.org/2000/svg";
 
         if( (options.autoClose&0x1)!=0 ){ // && calcDist(startP, p)<50
           //drawing rect LineTo way.
-          d+=" M" + dec(p[0]) + "," + dec(p[1]);
+          d+=" M" + dec2(p[0]) + "," + dec2(p[1]);
           d+=" L" + startP[0] + "," + startP[1];
         } else if( (options.autoClose&0x2)!=0) {
 
           //drawing circle Curve way.
 
           var _interpo = calcInterpo(rPath, 10);
-          d+=" C"+dec(_interpo[1][0])+","+dec(_interpo[1][1]);
-          d+=" "+dec(_interpo[1][0])+","+dec(_interpo[1][1]);
-          d+=" "+dec(_interpo[2][0])+","+dec(_interpo[2][1]);
+          d+=" C"+dec2(_interpo[1][0])+","+dec2(_interpo[1][1]);
+          d+=" "+dec2(_interpo[1][0])+","+dec2(_interpo[1][1]);
+          d+=" "+dec2(_interpo[2][0])+","+dec2(_interpo[2][1]);
 
           newPath = rPath.concat( _interpo.slice(1) );
             //d += calcInterpo(rPath, 10);
@@ -4592,12 +4612,25 @@ function confirm (msg) {
 
 
 function moveHLElementByXY (x, y) {
-	$('[data-hl]').each(function(){ 
-		var X = parseFloat( $(this).css('left') )+( x||0 );
-		var Y = parseFloat( $(this).css('top') )+( y||0 );
-		$(this).css('left', X+'px');
-		$(this).css('top', Y+'px');
-		setBBoxRect(this, X,Y );
+	$('[data-hl]').each(function(){
+    var isSVG = $(this).closest('svg').length;
+    if( isSVG ){
+
+      var trans = getTranslateXY( this );
+      var X = trans[0]+( x||0 );
+      var Y = trans[1]+( y||0 );
+      setTranslateXY( this, X,Y );
+      setBBoxRect(this, X,Y );
+
+    } else {
+      var X = parseFloat( $(this).css('left') )+( x||0 );
+      var Y = parseFloat( $(this).css('top') )+( y||0 );
+      $(this).css('left', X+'px');
+      $(this).css('top', Y+'px');
+      setBBoxRect(this, X,Y );
+      updateTextProp(this);
+
+    }
 	} );
 }
 
@@ -4908,7 +4941,7 @@ var appCache = window.applicationCache;
     $post( host + '/getShareData', { shareID:shareID, file:curFile.replace(FILE_HOST,'') }, function(data){
       if(data)   window.shareData = data;
       else return;
-      
+
       if(data.files&&data.files.length) window.templateType = data.files[0].isTemplate;
       if(templateType==2){
       	$('.maintoolTyep1').remove();
@@ -4947,7 +4980,7 @@ var appCache = window.applicationCache;
     } );
 
 
-    
+
 
   } else {
     getCanvasData();

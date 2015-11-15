@@ -1430,7 +1430,7 @@ html[dir='ltr'] .splitToolbarButton {
   <a href="javascript:;" class="button btnRect" data-onclick="setTool('rect')">矩形</a>
   <a href="javascript:;" class="button btnCircle" data-onclick="setTool('circle')">圆形</a>
   <a href="javascript:;" class="button btnText" data-onclick="setTool('text')">文字</a>
-  <!-- 
+  <!--
   <a href="javascript:;" class="button btnOperation" data-onclick="removeActive(); addActive(this); switchOption('#drawTool', 'operation')">操作</a>
   -->
   <a href="javascript:;" class="button" data-onclick="saveCanvas(); setStage('viewer')">保存</a>
@@ -1521,43 +1521,57 @@ html[dir='ltr'] .splitToolbarButton {
 
 <div class="textProp">
   <dl class="prop_id">
-    <dt>ID</dt>
-    <dd><input type="text" name="prop_id" value=""></dd>
+    <dt>标识</dt>
+    <dd><input type="text" name="prop_id" value="" readonly="readonly"></dd>
   </dl>
   <dl class="prop_name">
-    <dt>Name</dt>
+    <dt>名称</dt>
     <dd><input type="text" name="prop_name" value=""></dd>
   </dl>
   <dl class="prop_order">
-    <dt>Order</dt>
+    <dt>顺序</dt>
     <dd><input type="text" name="prop_order" value=""></dd>
   </dl>
-  
+
   <dl class="prop_background">
-    <dt>BG</dt>
+    <dt>背景</dt>
     <dd><input type="text" name="prop_background" value=""></dd>
   </dl>
 
   <table class="prop_dim">
     <tr>
-      <td>X:</td><td><input type="number" name="prop_left" value=""></td>
-      <td>Y:</td><td><input type="number" name="prop_top" value=""></td>
+      <td>左：</td><td><input type="number" name="prop_left" value=""></td>
+      <td>上：</td><td><input type="number" name="prop_top" value=""></td>
     </tr>
   </div>
 
   <table class="prop_dim">
     <tr>
-      <td>W:</td><td><input type="number" name="prop_width" value=""></td>
-      <td>H:</td><td><input type="number" name="prop_height" value=""></td>
+      <td>宽：</td><td><input type="number" name="prop_width" value=""></td>
+      <td>高：</td><td><input type="number" name="prop_height" value=""></td>
     </tr>
   </table>
 
-  <dl class="prop_border">
-    <dt>Border</dt>
-    <dd><input type="number" name="prop_border_width" value=""></dd>
-    <dd><input type="text" name="prop_border_style" value=""></dd>
-    <dd><input type="text" name="prop_border_color" value=""></dd>
-  </dl>
+
+  <table class="prop_border">
+    <tr>
+      <td>边框</td>
+      <td><input type="number" name="prop_border_width" title="边框粗细" value=""></td>
+      <td><input type="text" name="prop_border_style" title="边框样式" value=""></td>
+      <td><input type="color" name="prop_border_color" title="边框颜色" value="#FF0000"></td>
+     </tr>
+  </table>
+
+
+  <table class="prop_border">
+    <tr>
+      <td>字体</td>
+      <td><input type="number" name="prop_font_size" title="文字大小" value=""></td>
+      <td><input type="text" name="prop_font_family" title="字体" value=""></td>
+      <td><input type="color" name="prop_font_color" title="文字颜色" value=""></td>
+     </tr>
+  </table>
+
 
 
 </div>

@@ -4700,6 +4700,15 @@ function setHLElementByWH (w, h) {
 
 }
 
+function updateElementOptions (obj, propObj ) {
+  $(obj).each(function(){
+    var options = $(this).data('options');
+    options= $.extend(options, propObj );
+    $(this).data('options', JSON.stringify(options)) ;
+  });
+  return obj;
+}
+
 function moveHLElementByXY (x, y) {
   if( isInputElementActive() ) return;
 	$('[data-hl]').each(function(){
@@ -4829,6 +4838,7 @@ function initTextPropEvent () {
     if(e.keyCode==13||e.keyCode==27)this.blur()
     var val = parseFloat(this.value);
       if(val<5)val=this.value=5;
+      updateElementOptions( $('[data-hl]'), {'stroke-width': val} );
     $('[data-hl]').find('.text').css('font-size', this.value+'px');
       delayUpdateHistory();
   })
@@ -4836,6 +4846,7 @@ function initTextPropEvent () {
   $('.textProp input[name="prop_fontFamily"').on('change keydown', function  (e) {
     if(e.keyCode==13||e.keyCode==27)this.blur()
     var val = (this.value);
+      updateElementOptions( $('[data-hl]'), {'font-family': val} );
     $('[data-hl]').find('.text').css('font-family', this.value);
       delayUpdateHistory();
   })
@@ -4843,6 +4854,7 @@ function initTextPropEvent () {
   $('.textProp input[name="prop_color"').on('change keydown', function  (e) {
     if(e.keyCode==13||e.keyCode==27)this.blur()
     var val = (this.value);
+      updateElementOptions( $('[data-hl]'), {'stroke': val} );
     $('[data-hl]').find('.text').css('color', this.value);
       delayUpdateHistory();
   })

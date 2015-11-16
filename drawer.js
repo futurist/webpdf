@@ -1918,6 +1918,23 @@ var svgns = "http://www.w3.org/2000/svg";
     var CTRL_KEY_DOWN = 0;
     var META_KEY_DOWN = 0;
 
+    function isInputElementActive(){
+
+      var isInput = false;
+      // Some shortcuts should not get handled if a control/input element
+      // is selected.
+      var curElement = document.activeElement || document.querySelector(':focus');
+
+      var curElementTagName = curElement && curElement.tagName.toUpperCase();
+      if (curElementTagName === 'INPUT' ||
+          curElementTagName === 'TEXTAREA' ||
+          curElementTagName === 'SELECT') {
+
+        isInput = true;
+      }
+      return isInput;
+    }
+
     function handleShortKeyUp (evt) {
       var cmd = (evt.ctrlKey ? 1 : 0) |
             (evt.altKey ? 2 : 0) |
@@ -1936,22 +1953,11 @@ var svgns = "http://www.w3.org/2000/svg";
 		}
 
     }
+
     function handleShortKeyDown (evt) {
       if( $('.editing').size() ) return;
       var handled = false;
-      var isInput = false;
-      // Some shortcuts should not get handled if a control/input element
-      // is selected.
-      var curElement = document.activeElement || document.querySelector(':focus');
-
-      var curElementTagName = curElement && curElement.tagName.toUpperCase();
-      if (curElementTagName === 'INPUT' ||
-          curElementTagName === 'TEXTAREA' ||
-          curElementTagName === 'SELECT') {
-
-        isInput = true;
-      }
-
+      var isInput = isInputElementActive();
 
       var cmd = (evt.ctrlKey ? 1 : 0) |
             (evt.altKey ? 2 : 0) |
@@ -2046,8 +2052,43 @@ var svgns = "http://www.w3.org/2000/svg";
       }
 
     if (cmd === 1 || cmd === 8) {	//ctrl key
-		CTRL_KEY_DOWN = 1;
+		  CTRL_KEY_DOWN = 1;
       switch (evt.keyCode) {
+
+        case 68:  //Ctrl+D
+          $('[data-hl]').each(function(){
+            var node = $(this).clone()
+            node.data('id', NewID())
+            $(this).parent().append( node );
+            $(this).data('hl', null);
+            setTimeout(function(){
+              moveHLElementByXY(5,5)
+            });
+          });
+          handled = true;
+          break;
+
+          case 37: // ctrl+left
+            setHLElementByWH(-1,0);
+            handled = true;
+          break;
+
+          case 38: // ctrl+up
+            setHLElementByWH(0,-1);
+            handled = true;
+          break;
+
+          case 39: // ctrl+right
+            setHLElementByWH(1,0);
+            handled = true;
+          break;
+
+          case 40: // ctrl+down
+            setHLElementByWH(0,1);
+            handled = true;
+          break;
+
+
         case 90:  //Ctrl+Z
           OPHistory.undo();
             handled = true;
@@ -2086,6 +2127,29 @@ var svgns = "http://www.w3.org/2000/svg";
     	CTRL_KEY_DOWN = 1;
 
       switch (evt.keyCode) {
+
+
+          case 37: // ctrl+left
+            setHLElementByWH(-10,0);
+            handled = true;
+          break;
+
+          case 38: // ctrl+up
+            setHLElementByWH(0,-10);
+            handled = true;
+          break;
+
+          case 39: // ctrl+right
+            setHLElementByWH(10,0);
+            handled = true;
+          break;
+
+          case 40: // ctrl+down
+            setHLElementByWH(0,10);
+            handled = true;
+          break;
+
+
         case 90:
           OPHistory.redo();
             handled = true;
@@ -4614,7 +4678,30 @@ function rgb2hex(rgb){
 var delayUpdateHistory = $.debounce(1000, function(){ svgHistory.update(); });
 
 
+function setHLElementByWH (w, h) {
+
+  w=w||0
+  h=h||0
+  $('[data-hl]').each(function(){ 
+    var val = parseFloat($(this).css('width') );
+    val+=w;
+    $(this).css('width', val+'px');
+    $(this).find('.bbox,.text').css('width', val+'px');
+    setBBoxRect(this, null, null, val )
+
+    val = parseFloat($(this).css('height') );
+    val+=h;
+    $(this).css('height', val+'px');
+    $(this).find('.bbox,.text').css('height', val+'px');
+    setBBoxRect(this, null, null, null, val )
+
+
+  } );
+
+}
+
 function moveHLElementByXY (x, y) {
+  if( isInputElementActive() ) return;
 	$('[data-hl]').each(function(){
     var isSVG = $(this).closest('svg').length;
     if( isSVG ){
@@ -4719,18 +4806,22 @@ function initTextPropEvent () {
 		if(e.keyCode==13||e.keyCode==27)this.blur()
 		var val = parseFloat(this.value);
       if(val<0)val=this.value=0;
-		$('[data-hl]').css('width', this.value+'px');
-		$('[data-hl]').find('.bbox,.text').css('width keydown', this.value+'px');
-		$('[data-hl]').each(function(){ setBBoxRect(this, null,null, val ) } );
+		$('[data-hl]').css('width', val+'px');
+    $('[data-hl]').each(function(){ 
+      $(this).find('.bbox,.text').css('width', val+'px');
+      setBBoxRect(this, null, null, val ) 
+    } );
     	delayUpdateHistory();
 	})
 	$('.textProp input[name="prop_height"').on('change keydown', function  (e) {
 		if(e.keyCode==13||e.keyCode==27)this.blur()
 		var val = parseFloat(this.value);
       if(val<0)val=this.value=0;
-		$('[data-hl]').css('height', this.value+'px');
-		$('[data-hl]').find('.bbox,.text').css('height', this.value+'px');
-		$('[data-hl]').each(function(){ setBBoxRect(this, null, null,null, val ) } );
+		$('[data-hl]').css('height', val+'px');
+    $('[data-hl]').each(function(){ 
+  		$(this).find('.bbox,.text').css('height', val+'px');
+      setBBoxRect(this, null, null,null, val ) 
+    } );
     	delayUpdateHistory();
 	})
 

@@ -1219,24 +1219,6 @@ var svgns = "http://www.w3.org/2000/svg";
       return b;
     }
 
-    function updateTextProp (el) {
-    	var el = $(el);
-    	var obj = {
-    		id: $(el).data('id')||'',
-    		name: $(el).data('name')||'',
-    		order: $(el).data('person')||'',
-			left: $(el).css('left')||'',
-			top: $(el).css('top')||'',
-			width: $(el).css('width')||'',
-			height: $(el).css('height')||'',
-    	}
-
-    	for(var k in obj){
-    		if( k.match(/left|top|width|height/) ) obj[k] = obj[k].replace('px','');
-    		$('.textProp input[name="prop_'+ k +'"]').val(obj[k]);
-    	}
-
-    }
 
     function downFunc (e) {
       var isSelMode = $('a.btnSelection').hasClass('HL');
@@ -1387,8 +1369,10 @@ var svgns = "http://www.w3.org/2000/svg";
         if(isTemplate && isText){
           //showSelect2(targetEl, evt.clientY);
           // $('.selStuff').selectivity('val', ['AL']);
+          $('.textProp').addClass('show');
           updateTextProp( targetEl );
         } else {
+        	$('.textProp').removeClass('show');
           $('.select2DIV').hide();
         }
 
@@ -1399,8 +1383,12 @@ var svgns = "http://www.w3.org/2000/svg";
 
         if(!e.shiftKey)
         $('[data-hl]').each(function(i,v){
+          // deselect el
           $(v).data('hl',null);
         });
+
+    	// hide prop editor
+    	$('.textProp').removeClass('show');
 
       }
 
@@ -1955,6 +1943,7 @@ var svgns = "http://www.w3.org/2000/svg";
       // Some shortcuts should not get handled if a control/input element
       // is selected.
       var curElement = document.activeElement || document.querySelector(':focus');
+
       var curElementTagName = curElement && curElement.tagName.toUpperCase();
       if (curElementTagName === 'INPUT' ||
           curElementTagName === 'TEXTAREA' ||
@@ -1978,6 +1967,7 @@ var svgns = "http://www.w3.org/2000/svg";
         switch (evt.keyCode) {
           case 8:  //backspace key : Delete the shape
           case 46:  //delete key : Delete the shape
+
             if(isInput) break;
             if(curStage=='sign'){
 
@@ -2802,6 +2792,7 @@ var svgns = "http://www.w3.org/2000/svg";
       }else{
         $(el).data('hl', null);
       }
+
       updateToolBox();
     }
 
@@ -4611,6 +4602,18 @@ function confirm (msg) {
 }
 
 
+function rgb2hex(rgb){
+ var re = rgb.match(/^rgb\s*\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)\s*$/);
+ return !re? rgb : "#" +
+  ("0" + parseInt(re[1],10).toString(16)).slice(-2) +
+  ("0" + parseInt(re[2],10).toString(16)).slice(-2) +
+  ("0" + parseInt(re[3],10).toString(16)).slice(-2);
+}
+
+
+var delayUpdateHistory = $.debounce(1000, function(){ svgHistory.update(); });
+
+
 function moveHLElementByXY (x, y) {
 	$('[data-hl]').each(function(){
     var isSVG = $(this).closest('svg').length;
@@ -4632,48 +4635,181 @@ function moveHLElementByXY (x, y) {
 
     }
 	} );
+  delayUpdateHistory();
+}
+
+
+function updateTextProp (el) {
+	var el = $(el);
+	var obj = {
+		id: $(el).data('id')||'',
+		name: $(el).data('name')||'',
+		order: $(el).data('person')||'',
+		left: $(el).css('left')||'',
+		top: $(el).css('top')||'',
+		width: $(el).css('width')||'',
+		height: $(el).css('height')||'',
+
+		borderWidth: $(el).css('border-width')||'',
+		borderStyle: $(el).css('border-style')||'',
+		borderColor: $(el).css('border-color')||'',
+
+		fontSize: $(el).find('.text').css('font-size')||'',
+		fontFamily: $(el).find('.text').css('font-family')||'',
+		color: $(el).find('.text').css('color')||'',
+
+		fontWeight: $(el).find('.text').css('font-weight')||'',
+		fontStyle: $(el).find('.text').css('font-style')||'',
+		textAlign: $(el).find('.text').css('text-align')||'',
+
+	}
+
+	for(var k in obj) {
+		if( k.match(/left|top|width|height|size/i) ) obj[k] = obj[k].replace(/px\s*$/i,'');
+		$('.textProp input[name="prop_'+ k +'"]').val( rgb2hex(obj[k]) );
+
+    var btn = $('.textProp button.switchIcon[name="prop_'+ k +'"]');
+    btn.each(function  () {
+      if( $(this).data('targetval')==obj[k] ){
+        $(this).addClass('active '+obj[k]);
+      }else{
+        $(this).removeClass('active '+obj[k]);
+      }
+      
+    });
+	}
+
 }
 
 
 function initTextPropEvent () {
 	$('.textProp input[name="prop_id"').on('change keydown', function  (e) {
-		this.blur()
+		if(e.keyCode==13||e.keyCode==27)this.blur()
 		$('[data-hl]').data('id', this.value);
+    delayUpdateHistory();
 	})
 	$('.textProp input[name="prop_name"').on('change keydown', function  (e) {
-		this.blur()
+		if(e.keyCode==13||e.keyCode==27)this.blur()
 		$('[data-hl]').data('name', this.value);
+    delayUpdateHistory();
 	})
 	$('.textProp input[name="prop_order"').on('change keydown', function  (e) {
-		this.blur()
+		if(e.keyCode==13||e.keyCode==27)this.blur()
+      if(val<1)val=this.value=1;
 		$('[data-hl]').data('order', this.value);
+    delayUpdateHistory();
 	})
 	$('.textProp input[name="prop_left"').on('change keydown', function  (e) {
-		this.blur()
+		if(e.keyCode==13||e.keyCode==27)this.blur()
 		var val = parseFloat(this.value);
+      if(val<0)val=this.value=0;
 		$('[data-hl]').css('left', val+'px');
 		$('[data-hl]').each(function(){ setBBoxRect(this, val ) } );
+    delayUpdateHistory();
 	})
 	$('.textProp input[name="prop_top"').on('change keydown', function  (e) {
-		this.blur()
+		if(e.keyCode==13||e.keyCode==27)this.blur()
 		var val = parseFloat(this.value);
+      if(val<0)val=this.value=0;
 		$('[data-hl]').css('top', this.value+'px');
 		$('[data-hl]').each(function(){ setBBoxRect(this, null, val ) } );
+    delayUpdateHistory();
 	})
 	$('.textProp input[name="prop_width"').on('change keydown', function  (e) {
-		this.blur()
+		if(e.keyCode==13||e.keyCode==27)this.blur()
 		var val = parseFloat(this.value);
+      if(val<0)val=this.value=0;
 		$('[data-hl]').css('width', this.value+'px');
 		$('[data-hl]').find('.bbox,.text').css('width keydown', this.value+'px');
 		$('[data-hl]').each(function(){ setBBoxRect(this, null,null, val ) } );
+    	delayUpdateHistory();
 	})
 	$('.textProp input[name="prop_height"').on('change keydown', function  (e) {
-		this.blur()
+		if(e.keyCode==13||e.keyCode==27)this.blur()
 		var val = parseFloat(this.value);
+      if(val<0)val=this.value=0;
 		$('[data-hl]').css('height', this.value+'px');
 		$('[data-hl]').find('.bbox,.text').css('height', this.value+'px');
 		$('[data-hl]').each(function(){ setBBoxRect(this, null, null,null, val ) } );
+    	delayUpdateHistory();
 	})
+
+  $('.textProp input[name="prop_fontSize"').on('change keydown', function  (e) {
+    if(e.keyCode==13||e.keyCode==27)this.blur()
+    var val = parseFloat(this.value);
+      if(val<5)val=this.value=5;
+    $('[data-hl]').find('.text').css('font-size', this.value+'px');
+      delayUpdateHistory();
+  })
+
+  $('.textProp input[name="prop_fontFamily"').on('change keydown', function  (e) {
+    if(e.keyCode==13||e.keyCode==27)this.blur()
+    var val = (this.value);
+    $('[data-hl]').find('.text').css('font-family', this.value);
+      delayUpdateHistory();
+  })
+
+  $('.textProp input[name="prop_color"').on('change keydown', function  (e) {
+    if(e.keyCode==13||e.keyCode==27)this.blur()
+    var val = (this.value);
+    $('[data-hl]').find('.text').css('color', this.value);
+      delayUpdateHistory();
+  })
+
+
+  $('.textProp input[name="prop_borderWidth"').on('change keydown', function  (e) {
+    if(e.keyCode==13||e.keyCode==27)this.blur()
+    var val = parseFloat(this.value);
+      if(val<0)val=this.value=0;
+    $('[data-hl]').css('border-width', this.value+'px');
+      delayUpdateHistory();
+  })
+
+  $('.textProp input[name="prop_borderStyle"').on('change keydown', function  (e) {
+    if(e.keyCode==13||e.keyCode==27)this.blur()
+    var val = (this.value);
+    $('[data-hl]').css('border-style', this.value);
+      delayUpdateHistory();
+  })
+
+  $('.textProp input[name="prop_borderColor"').on('change keydown', function  (e) {
+    if(e.keyCode==13||e.keyCode==27)this.blur()
+    var val = (this.value);
+    $('[data-hl]').css('border-color', this.value);
+      delayUpdateHistory();
+  })
+
+
+
+  $('.textProp button.switchIcon').on('click', function  (e) {
+    var name = $(this).attr('name');
+  	var targetval = $(this).data('targetval');
+    var prop = name.replace('prop_','');
+
+    $('.textProp button.switchIcon[name="'+ name +'"]').removeClass('active');
+
+    //var isActive = $('[data-hl]').find('.text').css(prop)==targetval;
+    var isActive = $(this).hasClass('active')||$(this).hasClass(targetval);
+  	var obj = {};
+  	obj[prop] = isActive ? '' : $(this).data('targetval');
+
+  	$('[data-hl]').find('.text').css(obj );
+
+  	if(isActive) $(this).removeClass('active '+targetval);
+    else $(this).addClass('active '+targetval);
+
+  });
+
+  $('.textProp button').on('click', function  (e) {
+  	var names = $(this).data('for');
+  	if(!names) return;
+    names = names.split(',');
+    names.forEach(function  (v) {
+      if(v)$('.textProp input[name="'+v+'"').change();
+    });
+    delayUpdateHistory();
+  })
+
 
 }
 
@@ -4685,8 +4821,7 @@ $(function initPage () {
   setStage('viewer');
 
   if(isTemplate){
-  	$('.textProp').addClass('show');
-	new Draggable( $('.textProp').get(0), { filterTarget:function(v){return ! /input|textarea|select/i.test(v.tagName) } });
+	new Draggable( $('.textProp').get(0), { filterTarget:function(v){return ! /input|button|textarea|select/i.test(v.tagName) } });
 	initTextPropEvent();
   }
 

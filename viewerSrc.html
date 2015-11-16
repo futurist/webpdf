@@ -707,8 +707,15 @@ body.shareMode .userInputText textarea[readonly]{
     position: absolute;
     z-index: 99;
   }
-  .page .textWrap[data-template]{
-    border: 1px dotted red;
+  .page .textWrap[data-template] .bbox{
+    /*border: 1px dotted red;*/
+    background-color: rgba(255,0,0,0.1);
+  }
+  .page .textWrap[data-template][data-hl] .bbox:before{
+    /*border: 1px dotted red;*/
+    font:16px FontAwesome;
+    content: "\f14a";
+    opacity: 0.4;
   }
 
   body.shareMode  .page .textWrap[data-template]{
@@ -1303,6 +1310,27 @@ html[dir='ltr'] .splitToolbarButton {
 .textProp.show{
   visibility: visible;
 }
+.textProp button:active{
+	font-weight: bold;
+}
+.textProp button.switchIcon.active{
+  color: white;
+  background: #444;
+}
+.textProp button.switchIcon{
+  font:14px FontAwesome;
+  text-decoration: none;
+  background: #aaa;
+  color: #000000;
+  background: #D0D0D0;
+}
+.textProp button{
+	outline: none;
+	border: none;
+	text-decoration: underline;
+	background: none;
+	color: navy;
+}
 .textProp{
   visibility: hidden;
   position: absolute;
@@ -1534,41 +1562,52 @@ html[dir='ltr'] .splitToolbarButton {
   </dl>
 
   <dl class="prop_background">
-    <dt>背景</dt>
+    <dt><button data-for="prop_background">背景</button></dt>
     <dd><input type="text" name="prop_background" value=""></dd>
   </dl>
 
   <table class="prop_dim">
     <tr>
-      <td>左：</td><td><input type="number" name="prop_left" value=""></td>
-      <td>上：</td><td><input type="number" name="prop_top" value=""></td>
+      <td><button data-for="prop_left">左：</button></td><td><input type="number" name="prop_left" value=""></td>
+      <td><button data-for="prop_top">上：</button></td><td><input type="number" name="prop_top" value=""></td>
     </tr>
   </div>
 
   <table class="prop_dim">
     <tr>
-      <td>宽：</td><td><input type="number" name="prop_width" value=""></td>
-      <td>高：</td><td><input type="number" name="prop_height" value=""></td>
+      <td><button data-for="prop_width">宽：</button></td><td><input type="number" name="prop_width" value=""></td>
+      <td><button data-for="prop_height">高：</button></td><td><input type="number" name="prop_height" value=""></td>
     </tr>
   </table>
 
 
   <table class="prop_border">
     <tr>
-      <td>边框</td>
-      <td><input type="number" name="prop_border_width" title="边框粗细" value=""></td>
-      <td><input type="text" name="prop_border_style" title="边框样式" value=""></td>
-      <td><input type="color" name="prop_border_color" title="边框颜色" value="#FF0000"></td>
+      <td><button data-for="prop_borderWidth,prop_borderStyle,prop_borderColor,">边框</button></td>
+      <td><input type="number" name="prop_borderWidth" title="边框粗细" value=""></td>
+      <td><input type="text" name="prop_borderStyle" title="边框样式" value=""></td>
+      <td><input type="color" name="prop_borderColor" title="边框颜色" value="#FF0000"></td>
      </tr>
   </table>
 
 
   <table class="prop_border">
     <tr>
-      <td>字体</td>
-      <td><input type="number" name="prop_font_size" title="文字大小" value=""></td>
-      <td><input type="text" name="prop_font_family" title="字体" value=""></td>
-      <td><input type="color" name="prop_font_color" title="文字颜色" value=""></td>
+      <td><button data-for="prop_fontSize,prop_fontFamily,prop_color,">字体</button></td>
+      <td><input type="number" name="prop_fontSize" title="文字大小" value=""></td>
+      <td><input type="text" name="prop_fontFamily" title="字体" value=""></td>
+      <td><input type="color" name="prop_color" title="文字颜色" value=""></td>
+     </tr>
+  </table>
+
+  <table class="prop_border">
+    <tr>
+      <td>样式</td>
+      <td><button class="switchIcon" data-targetval="bold" name="prop_fontWeight" title="加粗">&#xF032</button></td>
+      <td><button class="switchIcon" data-targetval="italic" name="prop_fontStyle" title="倾斜">&#xF033</button></td>
+      <td><button class="switchIcon" data-targetval="left" name="prop_textAlign" title="左对齐">&#xf036</button></td>
+      <td><button class="switchIcon" data-targetval="center" name="prop_textAlign" title="居中对齐">&#xf037</button></td>
+      <td><button class="switchIcon" data-targetval="right" name="prop_textAlign" title="右对齐">&#xf038</button></td>
      </tr>
   </table>
 
